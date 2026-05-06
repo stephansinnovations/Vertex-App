@@ -1,0 +1,71 @@
+{
+  "name": "Build",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the build"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the build"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "In Progress",
+        "Completed",
+        "On Hold"
+      ],
+      "default": "In Progress",
+      "description": "Current status of the build"
+    },
+    "company_id": {
+      "type": "string",
+      "description": "ID of the company this build belongs to"
+    },
+    "sop_ids": {
+      "type": "array",
+      "description": "IDs of SOPs linked to this build's work order",
+      "items": {
+        "type": "string"
+      }
+    },
+    "parts": {
+      "type": "array",
+      "description": "Parts added to this build",
+      "items": {
+        "type": "object",
+        "properties": {
+          "partName": {
+            "type": "string"
+          },
+          "supplier": {
+            "type": "string"
+          },
+          "supplierLink": {
+            "type": "string"
+          },
+          "partNum": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "sheetTab": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

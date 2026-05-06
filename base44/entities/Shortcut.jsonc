@@ -1,0 +1,35 @@
+{
+  "name": "Shortcut",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Email of the user who owns this shortcut"
+    },
+    "label": {
+      "type": "string",
+      "description": "Display name of the shortcut"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Lucide icon name"
+    },
+    "path": {
+      "type": "string",
+      "description": "Navigation path this shortcut points to"
+    },
+    "grid_x": {
+      "type": "number",
+      "description": "Column position (0 or 1)"
+    },
+    "grid_y": {
+      "type": "number",
+      "description": "Row position (0-based)"
+    }
+  },
+  "required": [
+    "user_email",
+    "label",
+    "path"
+  ]
+}

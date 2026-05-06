@@ -1,0 +1,26 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "user"
+      ],
+      "default": "user"
+    },
+    "job_title": {
+      "type": "string",
+      "description": "Employee's job title"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Employee's phone number"
+    },
+    "company_id": {
+      "type": "string",
+      "description": "ID of the company this user belongs to"
+    }
+  }
+}

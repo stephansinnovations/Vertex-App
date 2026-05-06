@@ -1,0 +1,172 @@
+{
+  "name": "SOP",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Title of the SOP"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "SOP",
+        "Test Plan",
+        "Master"
+      ],
+      "default": "SOP",
+      "description": "Type of document"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of what this SOP covers"
+    },
+    "group": {
+      "type": "string",
+      "description": "Group or team this SOP belongs to"
+    },
+    "order": {
+      "type": "number",
+      "description": "Order within the group"
+    },
+    "test_number": {
+      "type": "number",
+      "description": "Test number within the test campaign (e.g. 1, 2, 3). Must be unique within the campaign."
+    },
+    "department": {
+      "type": "string",
+      "enum": [
+        "Manufacturing",
+        "Production",
+        "Install"
+      ],
+      "description": "Department this SOP is for"
+    },
+    "company_id": {
+      "type": "string",
+      "description": "ID of the company this SOP belongs to"
+    },
+    "original_sop_id": {
+      "type": "string",
+      "description": "ID of the original SOP if this is a copy linked to a work order"
+    },
+    "materials": {
+      "type": "array",
+      "description": "Materials or components required for this SOP",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "steps": {
+      "type": "array",
+      "description": "Steps in the SOP",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "number"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "caution": {
+            "type": "string"
+          },
+          "input_type": {
+            "type": "string",
+            "description": "Optional input type for this step (e.g. 'measurements')"
+          },
+          "measurements": {
+            "type": "array",
+            "description": "Measurement rows for this step",
+            "items": {
+              "type": "object",
+              "properties": {
+                "material": {
+                  "type": "string"
+                },
+                "amount": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "image_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "substeps": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "substep_number": {
+                  "type": "number"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "caution": {
+                  "type": "string"
+                },
+                "input_type": {
+                  "type": "string",
+                  "description": "Optional input type for this substep (e.g. 'measurements')"
+                },
+                "measurements": {
+                  "type": "array",
+                  "description": "Measurement rows for this substep",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "material": {
+                        "type": "string"
+                      },
+                      "amount": {
+                        "type": "string"
+                      },
+                      "unit": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                },
+                "image_urls": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "title",
+    "group"
+  ]
+}

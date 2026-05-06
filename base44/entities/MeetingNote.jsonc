@@ -1,0 +1,22 @@
+{
+  "name": "MeetingNote",
+  "type": "object",
+  "properties": {
+    "build_id": {
+      "type": "string",
+      "description": "ID of the build this note belongs to"
+    },
+    "title": {
+      "type": "string",
+      "description": "Title of the meeting note"
+    },
+    "content": {
+      "type": "string",
+      "description": "Body content of the meeting note"
+    }
+  },
+  "required": [
+    "build_id",
+    "title"
+  ]
+}

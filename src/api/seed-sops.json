@@ -1,0 +1,3056 @@
+[
+  {
+    "original_sop_id": "",
+    "company_id": "vertexvans",
+    "materials": [],
+    "description": "48v Lithionics System with wakespeed",
+    "title": "48v Lithionics System",
+    "type": "SOP",
+    "department": "",
+    "steps": [
+      {
+        "substeps": [],
+        "step_number": 1,
+        "input_type": null,
+        "description": "- Battery\n- BMS\n- 2 Distributors\n- Cerbo\n- 2 MPPTs\n- Inverter\n- Wakespeed\n- Starlink 24v stepdown\n- 2x orions\n- 2 Solar Breakers (50A)\n- Shore Breaker (50A)\n- Battery Button\n- Starlink Button",
+        "image_urls": [],
+        "title": "Place components inside cabinet ",
+        "caution": null,
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 2,
+        "input_type": null,
+        "description": "Cerbo Hole\n- Victron screen (USB & HDMI)\n- Tank level sensors x4 16awg - FERAL\n\nDistributor Hole\n- Alt: 1/0 AWG x2 (00A) - LUG\n- Ground: 1/0 AWG x1 - LUG\n\nOrion Hole\n- AMP: 4 AWG x1 (80A) - LUG\n- Breaker Panel DC out x2 4 AWG (80A) - LUG\n- Aqua Hot\n\nInverter Hole\n- AC Output: 10 AWG x3 (100A) - FERAL\n\nBreaker Hole\n- Solar Breaker: 10 AWG x4 (50A) - FERAL\n- Shore: 10 AWG x3 (50A), - FERAL\n- Wakespeed Power: 2x 16 AWG (3A)\n- Lithionics battery heater\n- Aqua Hot\n-Battery on button harness \n\n24v stepdown converter Hole\n- Starlink\n\nWakespeed hole\n- Wakespeed Connector\n- Wakespeed ignition on wire",
+        "image_urls": [],
+        "title": "Wires and Connectors from wall ",
+        "caution": null,
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 3,
+        "input_type": null,
+        "description": "To Distributor \n- Cerbo: 2x 18 AWG (3.15A)\n- Inverter: 3x 1/0 AWG (400A)\n- MPPT: 3x 6 AWG (80A)\n- BMS: 2x 1/0 AWG (400A)\n- ?Inverter Voltage Sense: 1x 16 AWG 51v??\n- Starlink 24v Stepdown: 2x 16 AWG (10A)\n\nTo Cerbo\n- Mppt VE. Direct x2\n- Inverter VE. Bus\n-  VE. Can Terminator x1\n\nCANBUS\n- M12 right angle adapter \n- x2 M12 T adapter\n- x1 M12 Terminator\n- M12 to WP Without Resistor\n- WP Y Harness to connect to wakespeed?\n- WP to RJ45\n",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/mp/public/6993c32ea9b395384e8b7f61/4ef83ac33_Screenshot2026-05-02140911.png",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/mp/public/6993c32ea9b395384e8b7f61/d3ff6ec8b_Screenshot2026-05-02153603.png"
+        ],
+        "title": "Build Wire Harness ",
+        "caution": null,
+        "measurements": []
+      }
+    ],
+    "group": "⚡️ Electrical",
+    "order": "",
+    "test_number": "",
+    "id": "69f66e50c77c12717cf76415",
+    "created_date": "2026-05-02T21:36:16.931000",
+    "updated_date": "2026-05-02T22:02:01.220000",
+    "created_by_id": "699bcbf7638f59a31fe4be78",
+    "created_by": "stephanfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "vertexvans",
+    "materials": [],
+    "description": "Assembling 12v lithionics Electrical cabinet with wakespeed",
+    "title": "12v Lithionics System",
+    "type": "SOP",
+    "department": "⚡️ Electrical",
+    "steps": [
+      {
+        "substeps": [],
+        "step_number": 1,
+        "input_type": null,
+        "description": "- Battery\n- 2 Distributors\n- Cerbo\n- 2 MPPTs\n- Inverter\n- Wakespeed\n- Starlink Buck\n- 2 Solar Breakers (50A)\n- Shore Breaker (50A)\n- Battery Button\n- Starlink Button",
+        "image_urls": [],
+        "title": "Place and Install Components",
+        "caution": "You don’t need Wakespeed if you have lithionics alternator ",
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 2,
+        "input_type": null,
+        "description": "Cerbo Hole\n- Victron screen (USB & HDMI)\n- Tank level sensors x4 16awg - FERAL\n\nDistributor Hole\n- Alt: 4/0 AWG x2 (400A) - LUG\n- Ground: 4/0 AWG x1 - lUG\n- AMP: 4 AWG x1 (80A) - LUG\n- Breaker Panel DC out x2 4 AWG (80A) - LUG\n\nInverter Hole\n- AC Output: 10 AWG x3 (100A) - FERAL\n\nBreaker Hole\n- Solar Breaker: 10 AWG x4 (50A) - FERAL\n- Shore: 10 AWG x3 (50A), - FERAL\n\nWakespeed Hole\n- Wakespeed Connector \n - Ignition on Wire",
+        "image_urls": [],
+        "title": "Wires and Connectors from wall ",
+        "caution": "",
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 3,
+        "input_type": null,
+        "description": "To Distributor \n- Cerbo: 2x 18 AWG (3.15A)\n- Inverter: 3x 4/0 AWG (400A)\n- MPPT: 3x 6 AWG (80A)\n- Battery: 2x 4/0 AWG (400A)\n- Inverter Voltage Sense: 1x 16 AWG\n- Wakespeed Ignition & Power: 2x 16 AWG (3A)\n- Starlink Converter: 2x 16 AWG (10A)\n\nTo Cerbo\n- Mppt VE. Direct x2\n- Inverter VE. Bus\n-  VE. Can Terminator x1\n\nCANBUS\n- M12 right angle adapter \n- M12 to WP with resistor \n- WP Y Harness\n- WP to RJ45",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/mp/public/6993c32ea9b395384e8b7f61/a03be54b4_12vlithionicsCerboandWakespeed.png",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/mp/public/6993c32ea9b395384e8b7f61/c99693512_Screenshot2026-05-02140911.png"
+        ],
+        "title": "Build Wire Harness",
+        "caution": "Measure wire runs then assemble on the harness board before installation.",
+        "measurements": []
+      }
+    ],
+    "group": "⚡️ Electrical",
+    "order": "",
+    "test_number": "",
+    "id": "69c781ca8dd027e3252b7780",
+    "created_date": "2026-03-28T07:22:50.741000",
+    "updated_date": "2026-05-02T21:41:08.082000",
+    "created_by_id": "699bcbf7638f59a31fe4be78",
+    "created_by": "stephanfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "vertexvans",
+    "materials": [
+      {
+        "name": "Flooring Material",
+        "image": "",
+        "location": ""
+      },
+      {
+        "name": "Sika",
+        "image": "",
+        "location": ""
+      }
+    ],
+    "description": "How to Install Floor",
+    "title": "Installing Floor",
+    "type": "SOP",
+    "department": "Interior Components ",
+    "steps": [
+      {
+        "substeps": [],
+        "step_number": 1,
+        "input_type": null,
+        "description": "",
+        "image_urls": [],
+        "title": "Cut out the flooring that will be placed on top before installing the floor.",
+        "caution": "Design: Floor rabbet joint needs to change. ",
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 2,
+        "input_type": null,
+        "description": "Tolerance: 1.19in to 1.25in.",
+        "image_urls": [],
+        "title": "Mark 1.19in from Each Corner",
+        "caution": "Cut out the flooring that will be placed on top before installing the floor.",
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 3,
+        "input_type": null,
+        "description": "Sika: 221?",
+        "image_urls": [],
+        "title": "Apply A 3/8 (10mm) Sika Bead",
+        "caution": null,
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 4,
+        "input_type": null,
+        "description": "",
+        "image_urls": [],
+        "title": "Dry fit floor make sure it fits ",
+        "caution": null,
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 5,
+        "input_type": null,
+        "description": "",
+        "image_urls": [],
+        "title": "Mark out where each floor panel goes so you know where to put sika when placing panels",
+        "caution": null,
+        "measurements": []
+      },
+      {
+        "substeps": [],
+        "step_number": 6,
+        "input_type": null,
+        "description": "",
+        "image_urls": [],
+        "title": "Place floor, press down until flush with your mark",
+        "caution": null,
+        "measurements": []
+      }
+    ],
+    "group": "Interior Components",
+    "order": "",
+    "test_number": "",
+    "id": "69a11f444f2e694a9ca87a0e",
+    "created_date": "2026-02-27T04:36:20.777000",
+    "updated_date": "2026-04-26T21:16:34.213000",
+    "created_by_id": "699bcbf7638f59a31fe4be78",
+    "created_by": "stephanfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [
+      {
+        "name": "Romex",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f4e518051_image.jpg",
+        "location": ""
+      },
+      {
+        "name": "Strain Relief ADA",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/99dd84cc0_image.jpg",
+        "location": ""
+      }
+    ],
+    "description": "",
+    "title": "Connector build ",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/c57f29caf_image.jpg"
+            ],
+            "title": "Cut to 12”",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Strip Romeo down 1 inch and expose 8mm of wire ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/166f1ad70_image.jpg"
+            ],
+            "title": "Strip ends ",
+            "caution": null
+          }
+        ],
+        "step_number": 1,
+        "title": "Prep Romex",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/85d1f2dc2_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ec18701a2_image.jpg"
+            ],
+            "title": "Slip on connecter and tighten ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/6e3dea25a_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/871371a50_image.jpg"
+            ],
+            "title": "Install housing ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/3633b6128_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/d03a7f8cf_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e966681c8_image.jpg"
+            ],
+            "title": "Install collar and clamp housing ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/50681edd7_image.jpg"
+            ],
+            "title": "Screw in",
+            "caution": null
+          }
+        ],
+        "step_number": 2,
+        "title": "Connect one end to connector ",
+        "caution": null
+      }
+    ],
+    "group": "Electrical ",
+    "order": "",
+    "test_number": "",
+    "id": "699de5fc6bd4ec521c07e8a2",
+    "created_date": "2026-02-24T17:55:08.173000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [
+      {
+        "name": "DVSCCL-153P-BI",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/985c26e7e_image.jpg",
+        "location": ""
+      },
+      {
+        "name": "1 Ft Romex male cable ",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/fd7c9fd08_image.jpg",
+        "location": ""
+      }
+    ],
+    "description": "",
+    "title": "Dimmer DVSCCL-153P-BI",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Cap this off as it will not be used ",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/006e8509e_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 1,
+        "title": "Cap red wire with white strap ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/00b68feb5_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 2,
+        "title": "Thread in female and male wire ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/3eece97ed_image.jpg"
+            ],
+            "title": "Connect solid red  to female white ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f62ec402b_image.jpg"
+            ],
+            "title": "Connect green to both grounds of female and male ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/007f6b130_image.jpg"
+            ],
+            "title": "Connect black wire to white of male side ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/41af9c296_image.jpg"
+            ],
+            "title": "Connect both blacks together for female and male ",
+            "caution": null
+          }
+        ],
+        "step_number": 3,
+        "title": "Connect wires ",
+        "caution": null
+      }
+    ],
+    "group": "Electrical ",
+    "order": "",
+    "test_number": "",
+    "id": "699dce92b3e366be3bcd64e2",
+    "created_date": "2026-02-24T16:15:14.443000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "",
+    "title": "LR23269",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a794b9b0e_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/190bba697_image.jpg"
+            ],
+            "title": "Punch out hole ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/6665fb069_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/607324198_image.jpg"
+            ],
+            "title": "Install bulkhead ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "",
+            "image_urls": [],
+            "title": "Thread in wire can connect them ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/4f68a1d64_image.jpg"
+            ],
+            "title": "Out switch all the way to 5000k",
+            "caution": null
+          }
+        ],
+        "step_number": 1,
+        "title": "AC to DC converter set up ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [],
+        "step_number": 2,
+        "title": "Connect to light ",
+        "caution": null
+      }
+    ],
+    "group": "Electrical ",
+    "order": "",
+    "test_number": "",
+    "id": "699dce18e9b7319b53cdc2e7",
+    "created_date": "2026-02-24T16:13:12.716000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "",
+    "title": "LR22632",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "With screw pry open AC to DC box hole ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2b9d6d45a_IMG_0048.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2808dd057_IMG_0049.jpeg"
+            ],
+            "title": "Remove hole in box ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Thread in bulkhead opening into hole in AC to DC converter ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/66d92013c_IMG_0050.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e772ff06a_IMG_0051.jpeg"
+            ],
+            "title": "Install opening ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "Connect each colored wire to adjacent colored wire ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/100600a14_IMG_0052.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/d007c4cae_IMG_0054.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/5c042a0f8_IMG_0056.jpeg"
+            ],
+            "title": "Thread in and connect wire with Lever Nuts",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "Slide switch all the way over to 27k",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ab2b4dab7_image.jpg"
+            ],
+            "title": "Set to 27k",
+            "caution": null
+          }
+        ],
+        "step_number": 1,
+        "title": "Set up AC to DC Converter ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/9b66d8c33_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 2,
+        "title": "Connect Light",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/cacd8d05b_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 3,
+        "title": "Test",
+        "caution": null
+      }
+    ],
+    "group": "Electrical ",
+    "order": "",
+    "test_number": "",
+    "id": "699dc4009cd2e1e0f0887dfc",
+    "created_date": "2026-02-24T15:30:08.011000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "How to wire prep LR23228\n",
+    "title": "LR23228",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Using a screw driver twist and pry open one of the holes on the front ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a9afd1e92_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/29b25d249_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/790d07f47_image.jpg"
+            ],
+            "title": "Punch out hole",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Thread in port to hole ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/60e060482_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/dd04f2c3d_image.jpg"
+            ],
+            "title": "Install port ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "Thread in male connector through port ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/96a24c0f6_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/b18f16624_image.jpg"
+            ],
+            "title": "Thread in female connector ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "Connect each wire to matching colors by pushing them into a hole until you can see the wire through the backing ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/8b14c99e7_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/15f994b9d_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f6900593b_image.jpg"
+            ],
+            "title": "Connect wires ",
+            "caution": null
+          },
+          {
+            "substep_number": 5,
+            "description": "Screw down port until it holds the wire firmly ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/7ce5fe3cd_image.jpg"
+            ],
+            "title": "Tighten port ",
+            "caution": null
+          },
+          {
+            "substep_number": 6,
+            "description": "Set switch on side of AC-DC converter to 2700k",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/1e4452cb6_image.jpg"
+            ],
+            "title": "Set switch to 2700k",
+            "caution": null
+          }
+        ],
+        "step_number": 1,
+        "title": "Wire DC to AC converter ",
+        "caution": null
+      },
+      {
+        "description": "Plug white wire to Light and verify it turns on using modified outlet ",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f47ff064d_image.jpg",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/922ce64d6_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 2,
+        "title": "Plug and test ",
+        "caution": null
+      }
+    ],
+    "group": "Electrical ",
+    "order": "",
+    "test_number": "",
+    "id": "699cc71c624667212a395faa",
+    "created_date": "2026-02-23T21:31:08.611000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "Comprehensive procedure for preparing, mixing, and dispensing Bondrok material, including temperature tracking, two-person operation roles, and quality control sampling.",
+    "title": "Bondrok Mixing Process",
+    "type": "SOP",
+    "department": "Install",
+    "steps": [
+      {
+        "description": "Standard setup for ingredients and staff roles.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "All ingredients are to be received from HQ pre-weighed into 1.5-3 gallon batches.",
+            "image_urls": [],
+            "title": "Ingredient Sourcing",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "This is a 2-person operation. Operator A controls the mixer to ensure proper blending. Operator B is responsible for timing and adding ingredients.",
+            "image_urls": [],
+            "title": "Operator Responsibilities",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "General Requirements and Personnel",
+        "caution": ""
+      },
+      {
+        "description": "Staging and tracking setup before starting the mixing process.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Stage all ingredients in the correct order, ensuring all components for the intended batch are accounted for.",
+            "image_urls": [],
+            "title": "Ingredient Staging",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Set up the temperature tracking template. Measure and note outdoor, trailer, and PVA temperatures before starting.",
+            "image_urls": [],
+            "title": "Temperature Tracking Setup",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Prep reusable caulking gun tubes by inserting pushing ends and taping them. For a 1.5 gal batch, prepare 6 tubes.",
+            "image_urls": [],
+            "title": "Tube Preparation",
+            "caution": "Ensure the ends are taped securely so they do not fall out during filling."
+          }
+        ],
+        "step_number": 2,
+        "title": "Pre-Mix Preparation",
+        "caution": ""
+      },
+      {
+        "description": "Timed addition of ingredients into the mixing bucket. Total elapsed time is tracked throughout.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Pour PVA solution into the bucket. Add Color and mix with a high shear drill bit for 10-20 seconds.",
+            "image_urls": [],
+            "title": "PVA and Color",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Start the timer and immediately add MKP. Mix for 30 seconds (Total Time: 30 Sec).",
+            "image_urls": [],
+            "title": "MKP Addition",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Add Boric Acid and mix for 1 minute 30 seconds (Total Time: 2 Min).",
+            "image_urls": [],
+            "title": "Boric Acid",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Add MgO for 30 seconds, then continue mixing for 3 minutes (Total Time: 5 Min 30 Sec).",
+            "image_urls": [],
+            "title": "MgO Addition",
+            "caution": ""
+          },
+          {
+            "substep_number": 5,
+            "description": "Add Waterglass for 15-30 seconds, then mix for 30 seconds (Total Time: 6 Min 30 Sec).",
+            "image_urls": [],
+            "title": "Waterglass Addition",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": "Add MK for 30 seconds and mix for 30-60 seconds until the mixture has a smooth texture (Total Time: 7 Min 30 Sec).",
+            "image_urls": [],
+            "title": "MK Addition",
+            "caution": ""
+          },
+          {
+            "substep_number": 7,
+            "description": "Add Fiber and mix for 1 minute (Total Time: 8 Min 30 Sec).",
+            "image_urls": [],
+            "title": "Fiber Addition",
+            "caution": ""
+          },
+          {
+            "substep_number": 8,
+            "description": "Add Sand blend in portions. Mix until the temperature reaches 18 degrees Celsius or the timer hits 10 minutes (Total Time: 9 Min 30 Sec ~ 10 Min).",
+            "image_urls": [],
+            "title": "Sand Blend",
+            "caution": "Make sure the mixture is mixed without clumping."
+          }
+        ],
+        "step_number": 3,
+        "title": "Mixing Sequence",
+        "caution": "After adding each powder ingredient, Operator B must scrape the powder stuck to the walls of the vessel into the mixture."
+      },
+      {
+        "description": "Transferring the completed mix into dispensing tubes.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Operator B turns on the funnel/vibrator and dispenses the mixture while Operator A fills the prepped caulking gun tubes.",
+            "image_urls": [],
+            "title": "Tube Filling Process",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Operator A should use two buckets: one for empty tubes and one for full tubes to facilitate easy transfer.",
+            "image_urls": [],
+            "title": "Organization Note",
+            "caution": ""
+          }
+        ],
+        "step_number": 4,
+        "title": "Dispensing and Filling",
+        "caution": "The filling process happens very quickly."
+      },
+      {
+        "description": "Creation of samples for material science testing, specifically on the second batch of the day.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Fill molds halfway and shake/vibrate. Fill the rest of the mold, vibrate again, and remove excess material.",
+            "image_urls": [],
+            "title": "Molding Samples",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Cure cubes outside the trailer at outdoor temperature. Mark cubes with DATE and MIX# before returning to HQ.",
+            "image_urls": [],
+            "title": "Curing and Delivery",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Quality Control (Crush Samples)",
+        "caution": ""
+      },
+      {
+        "description": "Final distribution and cleaning tasks.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Operator A delivers tubes to installers and collects dirty tubes and nozzles.",
+            "image_urls": [],
+            "title": "Distribution",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Operator B cleans the mixing equipment and preps for the next batch.",
+            "image_urls": [],
+            "title": "Cleaning",
+            "caution": ""
+          }
+        ],
+        "step_number": 6,
+        "title": "Post-Process and Cleanup",
+        "caution": "Working time for material is about 15 minutes depending on outdoor temperature."
+      }
+    ],
+    "group": "Miscellaneous (Install)",
+    "order": "",
+    "test_number": "",
+    "id": "699bbdd44bbd08ab58096f33",
+    "created_date": "2026-02-23T02:39:16.466000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "anonymous",
+    "created_by": "anonymous",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": "",
+    "description": "This Test plan covers how to dismantle and clean vessel B ",
+    "title": "Cleaning vessel B ",
+    "type": "SOP",
+    "department": "Production",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Disconnect 5 hoses from the manifold behind the lid and the water glass hose at the top right of the mixing head.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/1edcef6e9_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e9500bf06_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/afc14b93a_image.jpg"
+            ],
+            "title": "Disconnect all hoses",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Take off 4 clamps holding the lid and disconnect the pin on the lid's right side near the dry chute.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/916c2c0be_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/57c48c464_image.jpg"
+            ],
+            "title": "Remove Clamps and Pin",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Disconnect the hose clamp on the transfer tube ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/9b892f494_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/5c00cfc05_image.jpg"
+            ],
+            "title": "Remove transfer tube ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "Take off the tape and disconnect the hose clamp after the reducer, where it connects to the 3D printed nozzle ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ac24e2ebf_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f5b153377_image.jpg"
+            ],
+            "title": "Disconnect dry chute ",
+            "caution": null
+          }
+        ],
+        "step_number": 1,
+        "title": "Disconnect lid ",
+        "caution": null
+      },
+      {
+        "description": "At the break out box on the bathroom wall turn off and LOTO the breaker that says “mixer A”",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2ae8eca10_image.jpg",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/aa4759750_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 2,
+        "title": "LOTO out A ",
+        "caution": "Failure to LOTO may cause harm or death "
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Make sure pneumatics handle is toggled down to raise lid ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f16256168_image.jpg"
+            ],
+            "title": "Toggle handle ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Press both green buttons at once to raise lid, pay attention that nothing gets caught ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/3aaef5d75_image.jpg"
+            ],
+            "title": "Press green buttons ",
+            "caution": null
+          }
+        ],
+        "step_number": 3,
+        "title": "Raise Vessel B lid ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Make sure pneumatics handle is toggled down to raise lid ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/fc4c606d3_sop-image-1771474315678.jpg"
+            ],
+            "title": "Toggle handle ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Press both green buttons at once to raise lid, pay attention that nothing gets caught ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a7536e91d_sop-image-1771474307178.jpg"
+            ],
+            "title": "Press green buttons ",
+            "caution": null
+          }
+        ],
+        "step_number": 4,
+        "title": "Lower Lid ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Reconnect 6 hoses: 5 CIP hoses to the manifold, 1 water glass hose to the right of the mixer head.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/905f418a6_image.jpg"
+            ],
+            "title": "Reconnect Hoses",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Reconnect transfer tube ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2bc47363f_image.jpg"
+            ],
+            "title": "Reconnect Transfer Tube ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "Reconnect and tape dry chute",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/dee81adfd_image.jpg"
+            ],
+            "title": "Reconnect Dry Chute ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "Use 4 clamps to secure the lid and reinsert the pin.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/65bacda65_image.jpg"
+            ],
+            "title": "Clamp & Pin Lid",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Reconnecting Lid ",
+        "caution": null
+      }
+    ],
+    "group": "Mixing",
+    "order": "2",
+    "test_number": "",
+    "id": "6995dfebed95566317c1f80a",
+    "created_date": "2026-02-18T15:51:07.315000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "anonymous",
+    "created_by": "anonymous",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": "",
+    "description": "This document outlines the essential pre-flight setup and verification steps for Vessel A, Vessel B, and the production table to ensure equipment readiness and operational safety.",
+    "title": "Pre Flight Checklist",
+    "type": "SOP",
+    "department": "Production",
+    "steps": [
+      {
+        "description": "Verification of mechanical components, connections, and control systems for Vessel A.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Clamp Vessel A lid with 4 clamps.",
+            "image_urls": [],
+            "title": "Secure Clamps",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Tape all quick release clamps on the dry chute to stop powder from spilling.",
+            "image_urls": [],
+            "title": "Tape Quick Release Clamps",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Ensure the blade is positioned correctly, moves freely, and amperage is below 2 at full power.",
+            "image_urls": [],
+            "title": "Blade Check",
+            "caution": "Keep amperage under 2 at 100%."
+          },
+          {
+            "substep_number": 4,
+            "description": "Connect 4 pipes to vessels (CIP, WG, CW) and ensure the A to B chute is connected.",
+            "image_urls": [],
+            "title": "Fluid and Transfer Connections",
+            "caution": ""
+          },
+          {
+            "substep_number": 5,
+            "description": "Connect the CBAir tube to the vibrator.",
+            "image_urls": [],
+            "title": "Pneumatics Are connected ",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": " Confirm HMI touchscreens are in working order.",
+            "image_urls": [],
+            "title": "Very Working HMI screen ",
+            "caution": null
+          },
+          {
+            "substep_number": 7,
+            "description": "Confirm all breakers are in the ON position.",
+            "image_urls": [],
+            "title": "Power Status",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Vessel A Pre-Flight",
+        "caution": ""
+      },
+      {
+        "description": "Comprehensive inspection of Vessel B lids, piping, utility loops, and safety controls.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Pin the lid and fasten all 4 clamps.",
+            "image_urls": [],
+            "title": "Secure Lid on Vessel B",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Verify blade is in position and the dry material chute is connected and taped.",
+            "image_urls": [],
+            "title": "Mixing and Transfer Components",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Connect 6 pipes to vessels (CIP, WG, CW) and verify air utility via the nozzle.",
+            "image_urls": [],
+            "title": "Pipe and Utility Connections",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Turn on the chiller and ensure 2x waste pumps are operational and set to Auto.",
+            "image_urls": [],
+            "title": "Cooling and Waste Systems",
+            "caution": ""
+          },
+          {
+            "substep_number": 5,
+            "description": "Confirm HMI touchscreens are functional and verify PVA and Chilled water recirculating loops are open.",
+            "image_urls": [],
+            "title": "Interface and Recirculation",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": "Verify the Swivel Chute spins freely and screeding tools are available.",
+            "image_urls": [],
+            "title": "Manual Tools and Hardware",
+            "caution": ""
+          },
+          {
+            "substep_number": 7,
+            "description": "Verify breakers are ON and ensure the dispense button is set to closed.",
+            "image_urls": [],
+            "title": "Safety and Power",
+            "caution": "The dispense button must be closed during the pre-flight phase."
+          }
+        ],
+        "step_number": 2,
+        "title": "Vessel B Pre-Flight",
+        "caution": ""
+      },
+      {
+        "description": "Preparation of the vibration table and molding equipment for the production cycle.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Ensure the vibe table is in the 'UP' position and the mold is securely clamped.",
+            "image_urls": [],
+            "title": "Vibe Table Setup",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Cover the mold with the Tarp Lid and verify the scrim is ready.",
+            "image_urls": [],
+            "title": "Mold Preparation",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Check that the air hose used for cleaning molds is functional.",
+            "image_urls": [],
+            "title": "Cleaning Utilities",
+            "caution": ""
+          }
+        ],
+        "step_number": 3,
+        "title": "Table and Mold Pre-Flight",
+        "caution": ""
+      }
+    ],
+    "group": "Mixing",
+    "order": "0",
+    "test_number": "",
+    "id": "6995483b65bf4ad271f671c8",
+    "created_date": "2026-02-18T05:03:55.562000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": "",
+    "description": "Standard operating procedure for mold preparation and the selection, inspection, and placement of steel struts into the mold.",
+    "title": "STRUT",
+    "type": "SOP",
+    "department": "Production",
+    "steps": [
+      {
+        "description": "Prepare the mold surfaces to ensure a clean release and debris-free environment.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Thoroughly clean mold to remove debris.",
+            "image_urls": [],
+            "title": "Clean Mold",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Apply nonstick to mold surfaces and 3D printed inserts.",
+            "image_urls": [],
+            "title": "Apply Nonstick",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Mold Preparation",
+        "caution": ""
+      },
+      {
+        "description": "Verify the correct materials are used and inspect for defects before placement.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Match mold strut type with labeled steel strut. Each Steel strut has a label printed on the beam.",
+            "image_urls": [],
+            "title": "Select Steel Strut",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Confirm Green painted dot. Check for holes in inner beam; if found cover with tape.",
+            "image_urls": [],
+            "title": "Inspect Steel Strut",
+            "caution": "Holes in the inner beam must be covered with tape if identified."
+          }
+        ],
+        "step_number": 2,
+        "title": "Steel Strut Selection and Inspection",
+        "caution": ""
+      },
+      {
+        "description": "Install the steel struts into the mold according to the specified orientation.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Align into mold with outer bolt hole connections face down on beam.",
+            "image_urls": [],
+            "title": "Place Steel Struts",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Check each face; ensure none stick up over mold top.",
+            "image_urls": [],
+            "title": "Align Struts",
+            "caution": "Ensure no part of the strut sticks up over the mold top after placement."
+          }
+        ],
+        "step_number": 3,
+        "title": "Strut Placement and Alignment",
+        "caution": ""
+      }
+    ],
+    "group": "Mixing",
+    "order": "2",
+    "test_number": "",
+    "id": "6995411fd49ad2de18f484bb",
+    "created_date": "2026-02-18T04:33:35.373000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": "",
+    "description": "Standard operating procedure for preparing molds and assembling inner and outer anchors with a batch size of 7 gallons.",
+    "title": "ANCHORS",
+    "type": "SOP",
+    "department": "Production",
+    "steps": [
+      {
+        "description": "Initial preparation of the mold and 3D printed components to ensure cleanliness and ease of release.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Thoroughly clean mold to remove debris.",
+            "image_urls": [],
+            "title": "Clean Mold",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Apply nonstick to mold surfaces and 3D printed inserts.",
+            "image_urls": [],
+            "title": "Apply Nonstick",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Mold Prep",
+        "caution": ""
+      },
+      {
+        "description": "Assembly process for the inner anchor section, including bolt placement and HTP pad alignment.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Place one I-bolt barely into mold hole.",
+            "image_urls": [],
+            "title": "Insert I-Bolt",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Once filled with Georock, place 3D printed Insert.",
+            "image_urls": [],
+            "title": "Place Insert",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Place HTP over mold; insert I-bolts in holes. Align indent on 3D part if needed.",
+            "image_urls": [],
+            "title": "HTP Pad",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Ensure 3D printed insert lies flat in Georock.",
+            "image_urls": [],
+            "title": "Verify insert",
+            "caution": "If the insert does not lie flat, carefully weigh it down."
+          }
+        ],
+        "step_number": 2,
+        "title": "Sub-Mold (Inner Anchors)",
+        "caution": ""
+      },
+      {
+        "description": "Installation of hardware and steel components for the outer anchor section.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Thread two 2\" 3/8\" bolts into mold’s back side until flush with front, no protrusion.",
+            "image_urls": [],
+            "title": "Insert Bolts (Bottom Side)",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Tape third threaded hole between bolts.",
+            "image_urls": [],
+            "title": "Tape Third Hole (Bottom Side)",
+            "caution": "This is critical to prevent Georock entry into the threaded hole."
+          },
+          {
+            "substep_number": 3,
+            "description": "After filling mold with Georock, pivot/roll steel from flat edge down onto bottom.",
+            "image_urls": [],
+            "title": "Lower Steel",
+            "caution": "Perform this slowly to avoid air bubbles."
+          },
+          {
+            "substep_number": 4,
+            "description": "Verify edges of steel are properly aligned with mold.",
+            "image_urls": [],
+            "title": "Verify Alignment",
+            "caution": ""
+          }
+        ],
+        "step_number": 3,
+        "title": "Sub-Mold (Outer Anchors)",
+        "caution": ""
+      }
+    ],
+    "group": "Mixing",
+    "order": "1",
+    "test_number": "",
+    "id": "699540263a4e8a237efd2a58",
+    "created_date": "2026-02-18T04:29:26.041000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": "",
+    "description": "Standard Operating Procedure (Version 1.2) for the preparation and assembly of Megamold hubs. This process includes mold cleaning, nonstick application, hardware installation, and steel alignment. Standard batch sizes for CI, BO, CO, DO, DI, and BI are 7 GAL.",
+    "title": "HUBS",
+    "type": "SOP",
+    "department": "Production",
+    "steps": [
+      {
+        "description": "Initial cleaning and preparation of the mold to ensure a clean surface for casting.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Thoroughly clean mold to remove debris.",
+            "image_urls": [],
+            "title": "Clean Mold",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Apply nonstick to mold surfaces and 3D printed inserts.",
+            "image_urls": [],
+            "title": "Apply Nonstick",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Confirm there are at least 2 nub guides per piece.",
+            "image_urls": [],
+            "title": "Confirm Nub Guides",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Mold Prep",
+        "caution": ""
+      },
+      {
+        "description": "Securing the mold hardware and placing the steel components into the mold.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Tape center threaded hole on bottom side to prevent Georock entry.",
+            "image_urls": [],
+            "title": "Tape Center Hole",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Thread six 2-inch 3/8-inch bolts halfway into mold’s back side.",
+            "image_urls": [],
+            "title": "Insert Bottom Bolts",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Thread six 2-inch 3/8-inch bolts into mold’s front side until they meet backside bolts.",
+            "image_urls": [],
+            "title": "Insert Top Bolts",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "After filling mold, pivot/roll steel from edge down onto bottom to avoid air bubbles.",
+            "image_urls": [],
+            "title": "Bump Steel",
+            "caution": "When re-bumping a previously bumped steel piece, confirm you’re pairing an x’I’ (x-inner) with an x’O’ (x-outer)."
+          },
+          {
+            "substep_number": 5,
+            "description": "Verify edges of steel are properly aligned with mold.",
+            "image_urls": [],
+            "title": "Verify Alignment",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Hardware Assembly and Steel Placement",
+        "caution": "When re-bumping a previously bumped steel piece, confirm you’re pairing an x’I’ (x-inner) with an x’O’ (x-outer). For example, bump a CI with a CO."
+      }
+    ],
+    "group": "Mixing",
+    "order": "1",
+    "test_number": "",
+    "id": "69953e57c1806f152289b79a",
+    "created_date": "2026-02-18T04:21:43.665000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "Daily Preventative Maintenance Checks that are required to be preformed before any mixing occurs every day. ",
+    "title": "Daily PM's",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Inspect inside Vessel A through the lid for GeoRock buildup on the vessel or blade.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/8cd977c57_IMG_0047.jpeg"
+            ],
+            "title": "Check Vessel A Cleanliness",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Use a mallet to hit the dry chute of vessel A to remove extra powder. This will add powder to vessel A, but it will be cleaned during the CIP later.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/efbb31971_image.jpg"
+            ],
+            "title": "Check Vessel A Dry Chute",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Check Vessel A ",
+        "caution": ""
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Unclamp and remove tape from the pipe clamp above the reducer.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e5f82ad68_image.jpg"
+            ],
+            "title": "Remove Pipe Clamp on Vessel B Chute",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Gently pull out the dry chute from Vessel B. Removing the second pipe clamp from the reducer to the 3D nozzle may help.",
+            "image_urls": [],
+            "title": "Take Out Dry Chute from Vessel B",
+            "caution": "Don't drop the 3D part into Vessel B when removing the second clamp; you’ll need to LOTO to get it back."
+          },
+          {
+            "substep_number": 3,
+            "description": "Inspect the dry chute hole to ensure Vessel B is debris-free.",
+            "image_urls": [],
+            "title": "Check Vessel Cleanliness",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Inspect the reducer and 3D printed nozzle. Clean until debris is gone.",
+            "image_urls": [],
+            "title": "Check Reducer Cleanliness",
+            "caution": ""
+          },
+          {
+            "substep_number": 5,
+            "description": "Check the dry chute for extra material. Use a mallet to hit the side and remove debris into a bucket.",
+            "image_urls": [],
+            "title": "Check Dry Chute for Debris",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": "Install the reducer and 3D printed nozzle together. Do NOT install the nozzle first; it will break. You can raise the mixer a few inches for more space if needed.\n",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/c2e9b2310_image.jpg"
+            ],
+            "title": "Put dry chute back together",
+            "caution": null
+          }
+        ],
+        "step_number": 2,
+        "title": "Check Vessel B Cleanliness",
+        "caution": null
+      },
+      {
+        "description": "Verify E-stop works at Station A.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "In the Mixer Area Screen, click Motor A, switch to Hand mode, and set speed to 5%.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a376687ef_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e50e75df9_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/5977b3709_image.jpg"
+            ],
+            "title": "Set Motor A to 5%",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "In the Mixing Screen, click Motor B, switch to Hand mode, and set speed to 5%.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/702d855b7_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/9e09bc27a_image.jpg"
+            ],
+            "title": "Set Motor B to 5%",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "Press E stop at A station to engage it and verify that both motors stop spinning ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/0498754f7_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/27cade2a5_image.jpg"
+            ],
+            "title": "Hit E stop ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "Unlock E stop by twisting it counterclockwise, and press the blue reset button below estop ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/424850e9c_image.jpg"
+            ],
+            "title": "Reconfigure ",
+            "caution": null
+          },
+          {
+            "substep_number": 5,
+            "description": "In the Mixing Screen, click Motor A and switch to Auto mode.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/0ab93c6ce_image.jpg"
+            ],
+            "title": "Set Motor A to Auto",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": "In the Mixing Screen, click Motor B and switch to Auto mode.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a9f39daf9_image.jpg"
+            ],
+            "title": "Set Motor A to Auto",
+            "caution": null
+          }
+        ],
+        "step_number": 3,
+        "title": "Check E-stop at Station A",
+        "caution": ""
+      },
+      {
+        "description": "Perform CIP on Mixer A and ensure AMPs are under 2.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Access the Utility Screen and click 'Perform out of sequence CIP on A'.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/7ce17b2d9_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/8f18f85d6_image.jpg"
+            ],
+            "title": "Perform CIP on A",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Once CIP begins, ensure AMPs are around  2. ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/b23b43295_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/980d40897_image.jpg"
+            ],
+            "title": "Check AMPs",
+            "caution": "Amp screen is located on bathroom wall to the left of the dust collector"
+          },
+          {
+            "substep_number": 3,
+            "description": "Go to the sequence Screen, and press Acknowledged to drain CIP ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/eb37d22fb_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/329295ad7_image.jpg"
+            ],
+            "title": "Finish CIP ",
+            "caution": null
+          }
+        ],
+        "step_number": 4,
+        "title": "Check Mixer A Rotation",
+        "caution": ""
+      },
+      {
+        "description": "Perform CIP on Mixer B; ensure AMPs are under 2.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Access the Utility Screen and click 'Perform out of sequence CIP on B'.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/74de8c7f3_image.jpg"
+            ],
+            "title": "Perform CIP on B",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Perform CIP on Mixer B; ensure AMPs are around 5-6 ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e86332ca9_image.jpg"
+            ],
+            "title": "Check Amps",
+            "caution": "Amp screen is located on bathroom wall to the left of the dust collector"
+          },
+          {
+            "substep_number": 3,
+            "description": "Go to the sequence Screen, and press Acknowledged to drain CIP ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/9d5ddad42_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/01d8dcd8d_image.jpg"
+            ],
+            "title": "Finish CIP ",
+            "caution": null
+          }
+        ],
+        "step_number": 5,
+        "title": "Check Mixer B Rotation",
+        "caution": ""
+      }
+    ],
+    "group": "Maintenance ",
+    "order": "",
+    "test_number": "",
+    "id": "6995198915d46cb681bbd38f",
+    "created_date": "2026-02-18T01:44:41.447000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "Adding finial HTP Tips and lining to finished PU mold ",
+    "title": "Final PU Mold prep",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cut 6 strips of HTPE, 2.5\" wide, long enough to cover all the inserts. (2 per corner)",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/c43304144_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/da5d4b330_image.jpg"
+            ],
+            "title": "Cut HTPE Strips",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Angle one end of each strip to make a corner.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/e6bd61bff_image.jpg"
+            ],
+            "title": "HTPE corner  Angles",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Mark drill and countersink spots. Use 1/4-20 x 1\" hex head bolts to thread in.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/254d5d1d4_image.jpg"
+            ],
+            "title": "Mark and Drill Hole Locations",
+            "caution": "Use a thread chaser to clear PU from inserts if needed."
+          },
+          {
+            "substep_number": 4,
+            "description": "Predrill 2 holes in each tip and secure with 1 1/4” screws.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/0d2274b58_image.jpg"
+            ],
+            "title": "Drill HTPE Tips",
+            "caution": ""
+          },
+          {
+            "substep_number": 5,
+            "description": "Cut a square to cover the tip, then trace lines along the tip's angle. The cut ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/9b1b3f860_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ac9a561b5_IMG_0014.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/7279763c6_image.jpg"
+            ],
+            "title": "Cut tip cover",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": "Predrill with a countersink bit, then attach the top to the sides using 1 1/4” screws.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/43b367072_IMG_0015.jpeg"
+            ],
+            "title": "Attach Top",
+            "caution": ""
+          },
+          {
+            "substep_number": 7,
+            "description": "Use a 5/16 inch bit to drill a center hole for the bolt and insert.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/fe63b7fbf_image.jpg"
+            ],
+            "title": "Drill Center Hole",
+            "caution": "Do not drill completely through; only enough for the insert."
+          },
+          {
+            "substep_number": 8,
+            "description": "Apply Gorilla Glue to the insert's exterior and thread it in using a #6 Alan key",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/34d9b03bd_IMG_0017.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/db3b4e445_IMG_0016.jpeg"
+            ],
+            "title": "Thread Insert",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Building HTP corners  ",
+        "caution": null
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cut a couple long pieces of 1/2” HTPE 1 1/4” wide. And pre drill with a counter sink approximately every 9” ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/36d64a3c8_image.jpg"
+            ],
+            "title": "Cut HTPE Strips ",
+            "caution": null
+          },
+          {
+            "substep_number": 2,
+            "description": "Mount one piece at a time with 1” screws and cut the ends to follow th angle of the backing ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/8248d9831_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/af0a129d6_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/496d6d980_image.jpg"
+            ],
+            "title": "Mount and cut ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "Cut two HTPE strips, place on top, and predrill holes centered on the particle board seam. Drill with one inch screws and cut ends to align with angle. ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/fb0b6c505_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/631b0ea45_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/d9e519ca0_image.jpg"
+            ],
+            "title": "Add top HTPE strip",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Use router with x bit along the entire HTPE edge. ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/6bda0946d_IMG_0046.jpeg"
+            ],
+            "title": "Router edges ",
+            "caution": null
+          }
+        ],
+        "step_number": 2,
+        "title": "Add HTPE siding ",
+        "caution": null
+      },
+      {
+        "description": "In middle of the top center frame drill two holes to bolt in D-Ring ",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/5ed1a9393_image.jpg",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a027b6b5a_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 3,
+        "title": "Add D-Ring ",
+        "caution": null
+      },
+      {
+        "description": "Use a 2 1/8” hole saw to drill 2 rows of holes for sliding a bar through the mold. Ensure the bar is perpendicular to the tip.",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/8e58ed5bf_image.jpg",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/198be1170_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 4,
+        "title": "Drill Bar Holes",
+        "caution": ""
+      },
+      {
+        "description": "",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Screw air fitting into bushing, then into NPT bulkhead. Use thread tape on all joints.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/fd940f1f8_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/353b27974_image.jpg"
+            ],
+            "title": "Prepare Initial Stack",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Drill a 1 1/8” hole in bottom left corner of mold backing and thread in bulkhead ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/5cf40d4c6_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f797e647b_image.jpg"
+            ],
+            "title": "Drill Hole for Initial stack up ",
+            "caution": null
+          },
+          {
+            "substep_number": 3,
+            "description": "Apply thread tape and install elbow to open end of bulkhead ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/3bebb0698_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/edcc094a0_image.jpg"
+            ],
+            "title": "Install first elbow ",
+            "caution": null
+          },
+          {
+            "substep_number": 4,
+            "description": "Drill 2 holes slightly bigger than a half in to funnel air tube through ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2f275cfa6_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/dba792c20_image.jpg"
+            ],
+            "title": "Drill 2 holes for air tube ",
+            "caution": null
+          },
+          {
+            "substep_number": 5,
+            "description": "Connect the air tube to 90-degree fitting and funnel it through the first hole. Cut it in the middle of the backing. The add a quick release Y fitting to the open end of the line ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/c49bc73c9_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/9677c7739_image.jpg"
+            ],
+            "title": "Attach Air Tube",
+            "caution": ""
+          },
+          {
+            "substep_number": 6,
+            "description": "Use a hole saw to partially drill two 1\" holes, one in the center and one at the tip, about 1/2\" deep.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/745bdd836_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/f54b52a54_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/24df3a5ed_image.jpg"
+            ],
+            "title": "Partially drill 1\" holes",
+            "caution": ""
+          },
+          {
+            "substep_number": 7,
+            "description": "Drill a 1/8” hole in the center of the two 1\" holes for air release.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/401fb16e0_image.jpg"
+            ],
+            "title": "Drill 1/8\" Air Hole",
+            "caution": ""
+          },
+          {
+            "substep_number": 8,
+            "description": "Screw 2 elbows into 2 bushings, then attach the stack to the 1-inch backing holes.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/627457910_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/14cc919d2_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/46b0d8c51_image.jpg"
+            ],
+            "title": "Install Elbows and Bushings",
+            "caution": ""
+          },
+          {
+            "substep_number": 9,
+            "description": "Insert final tubing into back holes connecting to installed elbows.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/86a092dd6_image.jpg"
+            ],
+            "title": "Install Final Tubing",
+            "caution": ""
+          },
+          {
+            "substep_number": 10,
+            "description": "Attach 3 clamps near the elbows using 1-inch screws to prevent whipping.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/d50f15caf_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2b40ca395_image.jpg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/50a7fa9d8_image.jpg"
+            ],
+            "title": "Install 2 clamps",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Install Air remolding system ",
+        "caution": null
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "6",
+    "test_number": "",
+    "id": "6994abd75bad5d1dbb26f28e",
+    "created_date": "2026-02-17T17:56:39.722000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "This SOP details the process for mixing and pouring Polyurethane (PU) to create a new mold, including ratio requirements, staffing roles, and curing procedures.",
+    "title": "PU Pouring Side B",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Establish the correct ratio and gather the necessary material quantities for the PU mix.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Maintain a PU ratio of 1:1.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/72dfe887d_IMG_0028.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/95b258851_IMG_0027.jpeg"
+            ],
+            "title": "PU Ratio",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Prepare 2 buckets of Part A and 2 buckets of Part B.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ff1b225cc_IMG_0029.jpeg"
+            ],
+            "title": "Component Quantities",
+            "caution": "Do not fill any bucket over 7.5kg that is the max- if more is needed start another bucket "
+          }
+        ],
+        "step_number": 1,
+        "title": "Material Preparation",
+        "caution": ""
+      },
+      {
+        "description": "Organize a three-person team to handle the synchronized pouring and mixing tasks.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Assign one person to pour Part B into Part A, one person to operate the mixer, and one person to pour the final mixture into the mold.",
+            "image_urls": [],
+            "title": "Role Assignment",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Staffing Requirements",
+        "caution": ""
+      },
+      {
+        "description": "Perform the mixing process using a drill and mixing head, followed by immediate pouring.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Start mixing the Part A bucket with the drill. Have a second person pour Part B in quickly (but not all at once). Mix thoroughly for 1 minute and 30 seconds.",
+            "image_urls": [],
+            "title": "Mixing Procedure",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Either start mixing the second batch immediately after the first, or start them together if possible.",
+            "image_urls": [],
+            "title": "Batch Timing",
+            "caution": ""
+          }
+        ],
+        "step_number": 3,
+        "title": "Mixing and Initial Pouring",
+        "caution": "Mixing must be extremely thorough and pouring must happen immediately after mixing is complete."
+      },
+      {
+        "description": "Fill the mold to the specified level and integrate the wooden backing.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Fill the A-side mold until the PU is approximately X inches from the top of the Teflon border.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ecc55a491_IMG_0041.jpeg"
+            ],
+            "title": "Filling Height",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Using 3 people, carefully place the PU backing into the wet PU and finish emptying the remaining PU onto the wooden backing.",
+            "image_urls": [],
+            "title": "Backing Placement",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Scrape PU into all gaps to cover the wood as much as possible.",
+            "image_urls": [],
+            "title": "Gap Filling",
+            "caution": ""
+          }
+        ],
+        "step_number": 4,
+        "title": "Mold Filling and Backing Application",
+        "caution": ""
+      },
+      {
+        "description": "Allow the material to set before removing the mold from the master.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Let the assembly sit undisturbed for 2 hours.",
+            "image_urls": [],
+            "title": "Curing Time",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Remove the Teflon border and very carefully remove the PU mold from the master.",
+            "image_urls": [],
+            "title": "Removal",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Curing and Demolding",
+        "caution": "Exercise extreme care when removing the PU mold from the master to avoid damage."
+      },
+      {
+        "description": "Perform a final check on the completed mold.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Inspect the new PU mold for any defects or unmixed material on the face.",
+            "image_urls": [],
+            "title": "Defect Check",
+            "caution": ""
+          }
+        ],
+        "step_number": 6,
+        "title": "Quality Inspection",
+        "caution": ""
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "5",
+    "test_number": "",
+    "id": "699499d925c1f55e1aa252ec",
+    "created_date": "2026-02-17T16:39:53.439000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "Standard operating procedure for mixing and pouring Polyurethane (PU) to create side A of a mold, covering material ratios, staffing requirements, mixing techniques, and final inspection.",
+    "title": "PU Pouring Side A",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Prepare the required PU components and organize the production team.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Ensure the ratio for PU is 1:1.",
+            "image_urls": [],
+            "title": "Verify Ratio",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Pour 2 buckets of Part A and 2 buckets of Part B.",
+            "image_urls": [],
+            "title": "Prepare Materials",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Assign three people to the task: one to pour Part B into Part A, one to operate the mixer, and one to pour the mixture into the mold.",
+            "image_urls": [],
+            "title": "Organize Personnel",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Preparation and Material Setup",
+        "caution": ""
+      },
+      {
+        "description": "Execute the mixing process using a drill-mounted mixing head and begin the pour.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Using a mixing head on a drill, start mixing the Part A bucket. Have an assistant pour Part B quickly but not all at once. Mix thoroughly for exactly one minute and 30 seconds.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/440c740df_IMG_0062.jpeg"
+            ],
+            "title": "Mixing Procedure",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Either start mixing the second batch immediately after the first or, if personnel allow, start them together.",
+            "image_urls": [],
+            "title": "Batch Management",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Pour the mixture immediately into the mold after mixing.",
+            "image_urls": [],
+            "title": "Initial Pour",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Mixing and Pouring",
+        "caution": "Mix extremely thoroughly and pour immediately to prevent premature setting."
+      },
+      {
+        "description": "Complete the filling of the mold to the required depth.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Fill the Side A mold until the PU is level with the teflon border.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/b9e0d8c76_IMG_0063.jpeg"
+            ],
+            "title": "Fill Mold",
+            "caution": ""
+          }
+        ],
+        "step_number": 3,
+        "title": "Mold Filling and Leveling",
+        "caution": ""
+      },
+      {
+        "description": "Allow the material to set and carefully remove the mold.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Let the mold sit undisturbed for 2 hours.",
+            "image_urls": [],
+            "title": "Curing Time",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Remove the teflon border from the setup.",
+            "image_urls": [],
+            "title": "Remove Border",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Very carefully remove the PU mold from the master.",
+            "image_urls": [],
+            "title": "Demold",
+            "caution": ""
+          }
+        ],
+        "step_number": 4,
+        "title": "Curing and Demolding",
+        "caution": "Exercise extreme care when removing the mold to avoid damage."
+      },
+      {
+        "description": "Perform a final check on the completed mold.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Inspect the new PU mold for any defections or unmixed material on the face.",
+            "image_urls": [],
+            "title": "Visual Inspection",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Quality Inspection",
+        "caution": ""
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "2",
+    "test_number": "",
+    "id": "699499b173e0165d49e76b0c",
+    "created_date": "2026-02-17T16:39:13.064000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "This SOP provides instructions for preparing the Side B mold master, including wood backing protection, teflon border construction, and PU backing placement.",
+    "title": "PU Side B Master Prep",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Prepare the wood backing and position the mold master correctly.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cover the wood backing with pads to protect the master side A when you place it on the wood backing.",
+            "image_urls": [],
+            "title": "Backing Protection",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Center the Mold master with the B side facing up on the wood backing.",
+            "image_urls": [],
+            "title": "Master Centering",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Initial Setup and Placement",
+        "caution": "Ensure the master side A is fully protected before placement."
+      },
+      {
+        "description": "Measure and cut the required teflon strips for the border construction.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cut 6 Teflon strips of 1/2 inch teflon to 2 inches wide and the specified 'X' length.",
+            "image_urls": [],
+            "title": "Primary Strip Cutting",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Cut 3 teflon strips of 'X' teflon to 2 inches wide and the specified 'X' length.",
+            "image_urls": [],
+            "title": "Secondary Strip Cutting",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Teflon Strip Preparation",
+        "caution": ""
+      },
+      {
+        "description": "Surround the master with teflon strips to create a secure border.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Wrap the master with 1/2\" HTPE, then 1/8\" HTPE, then 1/2\" HTPE, sandwiching the 1/8\".",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/93a7e008e_IMG_0021.jpeg"
+            ],
+            "title": "HTPE Sandwich Layering",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Pre-drill the strips approximately every 9 inches with an 'X' counter sink through the teflon stack into the wood backing and screw in with 1 5/8” screws.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/0ec4cb5e2_IMG_0020.jpeg"
+            ],
+            "title": "Drilling and Fastening",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Tighten strips on the master and cut ends to form tips.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/442df94d1_IMG_0019.jpeg"
+            ],
+            "title": "Trim and Tighten Strips",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "After screwing in the teflon border, tape the seams with 1.5” masking tape.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/b00b2753e_IMG_0018.jpeg"
+            ],
+            "title": "Seam Sealing",
+            "caution": "No gaps for PU to leak."
+          }
+        ],
+        "step_number": 3,
+        "title": "Teflon Border Assembly",
+        "caution": "Ensure the border is as tight as possible and seams are sealed to prevent PU leaks."
+      },
+      {
+        "description": "Position the PU backing and secure it using teflon corner strips.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Place the PU backing onto the master and center it perfectly; align edges and use a pencil or creases to mark master corners.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/1ca703729_IMG_0022.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/62fd8414b_IMG_0023.jpeg"
+            ],
+            "title": "Positioning",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Cut 6 strips of 1/2 inch HTPE, reaching the wood indent and 1 inch high to secure the PU backing.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/c2004f857_IMG_0025.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/d18f4dc81_IMG_0024.jpeg"
+            ],
+            "title": "Prepare Corner Strips",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Using a counter sink, pre-drill the HTPE strips and screw them into the HTPE sandwich holding the master in. ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/755d7cb30_IMG_0026.jpeg"
+            ],
+            "title": "Securing Backing",
+            "caution": ""
+          }
+        ],
+        "step_number": 4,
+        "title": "PU Backing Installation",
+        "caution": ""
+      },
+      {
+        "description": "Prepare the final gaps for the PU pouring process.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cut 6 1/2 inch teflon strips according to the length of the gap in the PU border. ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/28b4df640_IMG_0030.jpeg"
+            ],
+            "title": "Gap Strip Cutting",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Stack 2 strips in each gap and use a counter sink to drill the pieces into the edge of the master. ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ce688995b_IMG_0033.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/0b4dcba8e_IMG_0031.jpeg"
+            ],
+            "title": "Final Gap Construction",
+            "caution": "Leave a 1/8 inch gap around the PU backing so that PU can be added to the gap when pouring."
+          }
+        ],
+        "step_number": 5,
+        "title": "Gap Preparation and Final Assembly",
+        "caution": "A specific gap must be maintained for the pouring material."
+      },
+      {
+        "description": "Apply puddy to joints, caulk borders, and smooth with finger.",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2dacc063a_IMG_0034.jpeg",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/bc20fe570_IMG_0036.jpeg",
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/064202d78_IMG_0038.jpeg"
+        ],
+        "substeps": [],
+        "step_number": 6,
+        "title": "Apply Puddy and Caulking",
+        "caution": "Ensure PU cannot leak."
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "4",
+    "test_number": "",
+    "id": "6994995514df43a4868d7108",
+    "created_date": "2026-02-17T16:37:41.853000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "Procedures for preparing Side A of the Mold Master, including leveling, mounting to wood backing, installing Teflon borders, and final surface treatment.",
+    "title": "PU Side A Master Prep",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Perform initial height measurements and install spacers on the B side of the master.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Flip the Mold Master so that the B side is facing up, and using a level get the measurement of the height from the Grabbo holders to the edge of the master.",
+            "image_urls": [],
+            "title": "Height Measurement",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Cut and tape 5” teflon spacers to the grabo holders on the B side of the mold master.",
+            "image_urls": [],
+            "title": "Spacer Installation",
+            "caution": "This is important because it will keep the masters from flexing within PU is poured."
+          }
+        ],
+        "step_number": 1,
+        "title": "Initial Base Preparation",
+        "caution": ""
+      },
+      {
+        "description": "Prepare the wood backing by tracing the master and pre-drilling mounting holes.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Center the Mold master with the A side facing up on wood backing. Trace the Master onto the wood backing with a pencil and remove the master.",
+            "image_urls": [],
+            "title": "Alignment and Tracing",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "With a X” bit Pre drill 12 holes ½” in from the traced line of the master. Evenly space 4 holes on each edge. Flip the wood backing so that you can countersink the back side of each hole.",
+            "image_urls": [],
+            "title": "Drilling and Countersinking",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Wood Backing Layout",
+        "caution": ""
+      },
+      {
+        "description": "Securely mount the master to the wood backing.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Once completely flip the wood back in the correct orientation and re center the master on the wood backing.",
+            "image_urls": [],
+            "title": "Re-centering",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Using a X” bit go through the poredrilled holes so that you can predrill the master in the correct spots, then using a x” screw, screw the master to the wood backing from the bottom.",
+            "image_urls": [],
+            "title": "Bottom Mounting",
+            "caution": ""
+          }
+        ],
+        "step_number": 3,
+        "title": "Master Securement",
+        "caution": ""
+      },
+      {
+        "description": "Install and seal Teflon strips around the master to create a border.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cut 3 strips X” long X” height of ½” Teflon. With a X” countersink predrill the teflon strips approximately every 9”.",
+            "image_urls": [],
+            "title": "Strip Preparation",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Line the 1st of the teflon strips along the master and using a small piece of ½” teflon to make sure the strips are spaced exactly ½” from the master. Using a X” bit go through the predrilled hole on the teflon strips and pree drill the wood backing then screw in with a X” screw. Repeat this with the 2nd and 3rd strips.",
+            "image_urls": [],
+            "title": "Strip Mounting",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Get the corners as close as you can. Once all the strips are in use, putty to fill in any gaps or holes in the teflon border.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/c1c712c49_IMG_0059.jpeg"
+            ],
+            "title": "Gap Sealing",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Apply caulking to the perimeter of the borders ",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/381017906_IMG_0063.jpeg"
+            ],
+            "title": "Caulking ",
+            "caution": null
+          }
+        ],
+        "step_number": 4,
+        "title": "Teflon Border Construction",
+        "caution": ""
+      },
+      {
+        "description": "Clean the master surface and apply anti-stick agent.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Clean the master with a micro fiber cloth and 70% IPA. Wipe until dust and oil marks are removed.",
+            "image_urls": [],
+            "title": "Cleaning",
+            "caution": "Do not use 90% IPA as it will ruin the master finish. Make sure to be extremely cautious when wiping; don't focus too much on any area just lightly wipe."
+          },
+          {
+            "substep_number": 2,
+            "description": "Thoroughly spray with anti stick.",
+            "image_urls": [],
+            "title": "Anti-stick Application",
+            "caution": "Make sure there is no pooling of antistick in any area."
+          }
+        ],
+        "step_number": 5,
+        "title": "Final Surface Preparation",
+        "caution": ""
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "3",
+    "test_number": "",
+    "id": "699498e5463914d6bf7eb26f",
+    "created_date": "2026-02-17T16:35:49.183000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [
+      {
+        "name": "Pipe",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a2eca58c8_sop-image-1771474307178.jpg",
+        "location": "location"
+      },
+      {
+        "name": "pipe",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ed252029e_sop-image-1771474307178.jpg",
+        "location": "location "
+      },
+      {
+        "name": "pipe location ",
+        "image": "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/6cffba8e6_sop-image-1771474307178.jpg",
+        "location": "lokajb"
+      }
+    ],
+    "description": "This SOP provides instructions for measuring, cutting, routing, and assembling a triangular wood backing from 3/4\" particle board.",
+    "title": "PU Mold Base",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Gather materials and determine dimensions for the triangle halves.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Acquire one 4’ by 8’ sheet of ¾” particle board.",
+            "image_urls": [],
+            "title": "Acquire Materials",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Measure each half of the triangle utilizing 2 of the factory cut edges.",
+            "image_urls": [],
+            "title": "Measure Dimensions",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Preparation and Measurement",
+        "caution": ""
+      },
+      {
+        "description": "Cut the boards and ensure they align correctly.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Line up the track saw to make your cuts.",
+            "image_urls": [],
+            "title": "Saw Alignment and Cutting",
+            "caution": "Always place the track on the piece you are going to use so that you don't need to account for the thickness of the blade."
+          },
+          {
+            "substep_number": 2,
+            "description": "Verify that both pieces match up once cutting is complete.",
+            "image_urls": [],
+            "title": "Fit Verification",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Cutting and Verification",
+        "caution": ""
+      },
+      {
+        "description": "Use a router to cut a joining line on the inside factory edge of the 2 pieces.",
+        "image_urls": [],
+        "substeps": [],
+        "step_number": 3,
+        "title": "Routing Joining Lines",
+        "caution": "Cut through the bottom with the router but there is no need to cut all the way through the tip; it is okay to stop within 6” from the tip."
+      },
+      {
+        "description": "Assemble the pieces using adhesive and a thin board insert.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Pick one of the pieces and carefully fill the newly made router line with glue.",
+            "image_urls": [],
+            "title": "Apply Glue to First Piece",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Place the “thin board” into the line filled with glue. Use a mallet or a block of wood to firmly but carefully whack the “thin board” in.",
+            "image_urls": [],
+            "title": "Insert Thin Board",
+            "caution": "Be careful not to smash the edge."
+          },
+          {
+            "substep_number": 3,
+            "description": "Take the 2nd half of the triangle and fill its router line with glue.",
+            "image_urls": [],
+            "title": "Prepare Second Piece",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Take the newly glued 2nd half and join it to the 1st half via router line and “thin wood.” Do this quickly utilizing 3 long carpentry clamps.",
+            "image_urls": [],
+            "title": "Joining and Clamping",
+            "caution": "Take note of the jig used to hold the pieces together when clamping so that the clamps don't slide off."
+          }
+        ],
+        "step_number": 4,
+        "title": "Gluing and Assembly",
+        "caution": ""
+      },
+      {
+        "description": "Allow the assembly to set or move it to a different location.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Preferably let this sit for 20 minutes.",
+            "image_urls": [],
+            "title": "Setting Time",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Once clamped and glued, it is technically okay to remove clamps to move the newly built triangle immediately.",
+            "image_urls": [],
+            "title": "Immediate Movement",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Curing and Handling",
+        "caution": ""
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "0",
+    "test_number": "",
+    "id": "6994984e88ad3bf4065fe1e5",
+    "created_date": "2026-02-17T16:33:18.763000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  },
+  {
+    "original_sop_id": "",
+    "company_id": "699bc3c65ff184d7ed8449e5",
+    "materials": [],
+    "description": "A procedure for the fabrication and assembly of triangular particle board backings, including routing for joints, assembly with glue, and installation of Teflon inserts and spacers.",
+    "title": "PU Mold Backings",
+    "type": "SOP",
+    "department": "Manufacturing ",
+    "steps": [
+      {
+        "description": "Gather materials and mark out the dimensions for the triangular backings.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Acquire x1 4' by 8' sheet of 3/4\" particle board.",
+            "image_urls": [],
+            "title": "Material Acquisition",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Measure each half of the triangle utilizing 2 of the factory cut edges.",
+            "image_urls": [],
+            "title": "Layout and Measurement",
+            "caution": ""
+          }
+        ],
+        "step_number": 1,
+        "title": "Material Preparation and Measurement",
+        "caution": ""
+      },
+      {
+        "description": "Cut the particle board into triangular sections using a track saw.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Line up the track saw and make the cuts based on the measurements.",
+            "image_urls": [],
+            "title": "Cut Board",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Verify that both pieces match up once cutting is complete.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/a2fa69524_image.jpg"
+            ],
+            "title": "Verify Fit",
+            "caution": ""
+          }
+        ],
+        "step_number": 2,
+        "title": "Cutting and Verification",
+        "caution": "Always place the track on the piece you are going to use so that you don't need to account for the thickness of the blade."
+      },
+      {
+        "description": "Using the router, cut a joining line on the inside factory edge of the 2 pieces. Cut through the bottom but there is no need to cut all the way through the tip; it is okay to stop within 6\" from the tip.",
+        "image_urls": [
+          "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/66bc89e4c_image.jpg"
+        ],
+        "substeps": [],
+        "step_number": 3,
+        "title": "Routing Joining Lines",
+        "caution": ""
+      },
+      {
+        "description": "Join the two halves of the triangle together using glue, a thin board insert, and clamps.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Pick one of the pieces and carefully fill the newly made router line with glue.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/d2199f075_image.jpg"
+            ],
+            "title": "Apply Glue to First Piece",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Place a 1 1/8” strip of Masonite  into the line filled with glue. Use a mallet or a block of wood to firmly but carefully whack the thin board in.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/7cad5011e_image.jpg"
+            ],
+            "title": "Insert Thin Board",
+            "caution": "Do not smash the edge."
+          },
+          {
+            "substep_number": 3,
+            "description": "Take the 2nd half of the triangle and fill its router line with glue.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ca602939f_image.jpg"
+            ],
+            "title": "Prepare Second Piece",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Join the 2nd half to the 1st half via the router line and \"thin wood\". Do this quickly utilizing 3 long carpentry clamps to bring both pieces together.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/470fa0183_image.jpg"
+            ],
+            "title": "Join Halves",
+            "caution": "Take note of the jig used to hold pieces together when clamping so that the clamps don't slide off."
+          },
+          {
+            "substep_number": 5,
+            "description": "Preferably let this sit for 20 minutes, but once clamped and glued it is technically okay to remove clamps to move the newly built triangle immediately.",
+            "image_urls": [],
+            "title": "Curing Time",
+            "caution": ""
+          }
+        ],
+        "step_number": 4,
+        "title": "Gluing and Assembly",
+        "caution": "Be careful not to smash the edge of the boards during assembly."
+      },
+      {
+        "description": "Fabricate 12 Teflon inserts required for the backing.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "Cut x12 half inch thick teflon to 3/4\" tall by 2 inches long.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/89715d25b_IMG_0010.jpeg"
+            ],
+            "title": "Cut Teflon",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Using a small N0.8 counter sink bit, drill 2 holes on either side.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/6f92a8160_IMG_0011.jpeg"
+            ],
+            "title": "Drill Outer Holes",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Using a 3/8\" bit, drill a big hole in the middle.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/ad9fd0873_IMG_0013.jpeg"
+            ],
+            "title": "Drill Center Hole",
+            "caution": ""
+          },
+          {
+            "substep_number": 4,
+            "description": "Using a #6 allen wrench, screw in the insert into the opposite side of which the 2 side holes are indented.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/8f209a472_IMG_0007.jpeg",
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/afea44b6b_IMG_0012.jpeg"
+            ],
+            "title": "Install Insert",
+            "caution": ""
+          }
+        ],
+        "step_number": 5,
+        "title": "Create Teflon Inserts",
+        "caution": ""
+      },
+      {
+        "description": "Attach teflon insert holders and spacers to the completed backing.",
+        "image_urls": [],
+        "substeps": [
+          {
+            "substep_number": 1,
+            "description": "On each corner piece, predrill and then screw in 4 teflon insert holders with 1 5/8\" screws. Start roughly 3.5 inches from the tip and space the second holder 3 inches from the first.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/2069cf55d_IMG_0009.jpeg"
+            ],
+            "title": "Install Insert Holders",
+            "caution": ""
+          },
+          {
+            "substep_number": 2,
+            "description": "Cut and predrill 6 1/4\" teflon spacers (1/2\" wide x 1\" Long).",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/09f0836d5_IMG_0008.jpeg"
+            ],
+            "title": "Prepare Spacers",
+            "caution": ""
+          },
+          {
+            "substep_number": 3,
+            "description": "Using 3/4\" screws, drill 2 spacers in each corner on the downward facing part of the backing. Ensure they are 1\" from the edge.",
+            "image_urls": [
+              "https://base44.app/api/apps/6993c32ea9b395384e8b7f61/files/public/6993c32ea9b395384e8b7f61/14889ed12_IMG_0006.jpeg"
+            ],
+            "title": "Mount Spacers",
+            "caution": ""
+          }
+        ],
+        "step_number": 6,
+        "title": "Final Hardware Installation",
+        "caution": ""
+      }
+    ],
+    "group": "Interior Skin PU molds",
+    "order": "1",
+    "test_number": "",
+    "id": "6993e740c78d33b63ee8383b",
+    "created_date": "2026-02-17T03:57:52.438000",
+    "updated_date": "2026-03-23T06:49:33.469000",
+    "created_by_id": "6993c32ea9b395384e8b7f62",
+    "created_by": "elliottfogiel@gmail.com",
+    "is_sample": "false"
+  }
+]

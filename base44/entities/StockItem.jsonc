@@ -1,0 +1,30 @@
+{
+  "name": "StockItem",
+  "type": "object",
+  "properties": {
+    "location": {
+      "type": "string",
+      "description": "The stock zone/location name"
+    },
+    "name": {
+      "type": "string",
+      "description": "Item name"
+    },
+    "quantity": {
+      "type": "number",
+      "description": "Quantity in stock"
+    },
+    "unit": {
+      "type": "string",
+      "description": "Unit of measurement (e.g. pcs, ft, lbs)"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes"
+    }
+  },
+  "required": [
+    "location",
+    "name"
+  ]
+}
