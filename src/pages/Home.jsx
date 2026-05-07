@@ -71,38 +71,37 @@ export default function Home() {
         style={{ filter: 'invert(1) brightness(0.95)' }}
       />
 
-      {/* Bottom Bar — Instagram style */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-black/95 backdrop-blur-md border-t border-zinc-800">
-        <div className="flex items-center justify-around px-1 py-3">
-          <button onClick={() => navigate(createPageUrl('SOPList'))} className="flex flex-col items-center gap-1 px-2">
+      {/* Bottom Bar — two rows */}
+      <div className="fixed bottom-0 left-0 right-0 z-40">
+        {/* Row 1 — Vertex AI centered, transparent */}
+        <div className="flex justify-center pt-3 pb-1">
+          <button onClick={openChat} className="flex flex-col items-center gap-1">
+            <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center shadow-lg shadow-white/10 p-2.5">
+              <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-full h-full object-contain" />
+            </div>
+            <span className="text-[9px] text-white/50 font-medium">Vertex AI</span>
+          </button>
+        </div>
+
+        {/* Row 2 — nav icons with dark background */}
+        <div className="flex items-center justify-center gap-8 px-4 pb-6 pt-2 bg-black/95 backdrop-blur-md border-t border-zinc-800">
+          <button onClick={() => navigate(createPageUrl('SOPList'))} className="flex flex-col items-center gap-1">
             <FileText className="w-5 h-5 text-white/70" />
             <span className="text-[9px] text-white/50 font-medium">SOPs</span>
           </button>
-
-          <button onClick={() => navigate('/Builds')} className="flex flex-col items-center gap-1 px-2">
-            <Bus className="w-5 h-5 text-white/70" />
-            <span className="text-[9px] text-white/50 font-medium">Builds</span>
-          </button>
-
-          <button onClick={() => navigate('/Inventory')} className="flex flex-col items-center gap-1 px-2">
+          <button onClick={() => navigate('/Inventory')} className="flex flex-col items-center gap-1">
             <Package className="w-5 h-5 text-white/70" />
             <span className="text-[9px] text-white/50 font-medium">Inventory</span>
           </button>
-
-          {/* Vertex — center prominent button */}
-          <button onClick={openChat} className="flex flex-col items-center gap-1 px-2 -mt-4">
-            <div className="w-13 h-13 rounded-2xl bg-white flex items-center justify-center shadow-lg shadow-white/10 p-3">
-              <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-10 h-10 object-contain" />
-            </div>
-            <span className="text-[9px] text-white/50 font-medium mt-0.5">Vertex AI</span>
+          <button onClick={() => navigate('/Builds')} className="flex flex-col items-center gap-1">
+            <Bus className="w-5 h-5 text-white/70" />
+            <span className="text-[9px] text-white/50 font-medium">Builds</span>
           </button>
-
-          <button onClick={() => navigate('/Contacts')} className="flex flex-col items-center gap-1 px-2">
+          <button onClick={() => navigate('/Contacts')} className="flex flex-col items-center gap-1">
             <Users className="w-5 h-5 text-white/70" />
             <span className="text-[9px] text-white/50 font-medium">Contacts</span>
           </button>
-
-          <button onClick={() => navigate('/Profile')} className="flex flex-col items-center gap-1 px-2">
+          <button onClick={() => navigate('/Profile')} className="flex flex-col items-center gap-1">
             <UserCircle className="w-5 h-5 text-white/70" />
             <span className="text-[9px] text-white/50 font-medium">Profile</span>
           </button>
