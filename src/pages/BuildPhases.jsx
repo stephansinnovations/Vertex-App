@@ -7,7 +7,7 @@ const DEFAULT_PHASES = [
   { id: 'prep', name: 'Prep & Planning', tasks: [] },
   { id: 'rust', name: 'Rust Treatment & Priming', tasks: [] },
   { id: 'insulation', name: 'Insulation', tasks: [] },
-  { id: 'electrical_rough', name: 'Electrical Rough-In', tasks: [] },
+  { id: 'electrical_rough', name: 'Wiring', tasks: [] },
   { id: 'flooring', name: 'Flooring', tasks: [] },
   { id: 'walls', name: 'Wall Panels', tasks: [] },
   { id: 'ceiling', name: 'Ceiling', tasks: [] },

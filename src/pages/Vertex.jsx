@@ -231,7 +231,7 @@ export default function Vertex() {
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex items-center gap-2">
-          <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-6 h-6 object-contain invert" />
+          <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-6 h-6 object-contain rounded-xl" />
           <h1 className="text-xl font-bold text-white">Vertex AI</h1>
         </div>
       </div>
@@ -240,7 +240,7 @@ export default function Vertex() {
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
         {messages.length === 0 && (
           <div className="text-center mt-20">
-            <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-16 h-16 object-contain invert mx-auto mb-4 opacity-30" />
+            <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-16 h-16 object-contain rounded-xl mx-auto mb-4 opacity-30" />
             <p className="text-gray-500 text-lg font-medium">Vertex AI</p>
             <p className="text-gray-600 text-sm mt-1">Ask me to build SOPs, check inventory, manage builds, and more.</p>
             <div className="mt-6 flex flex-wrap gap-2 justify-center">

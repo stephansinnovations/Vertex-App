@@ -814,7 +814,7 @@ export default function VertexChat({ isOpen, onClose }) {
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2.5">
           {displayMsgs.length === 0 && (
             <div className="text-center pt-6 pb-2">
-              <img src={vertexLogo} alt="Vertex" className="w-12 h-12 object-contain mx-auto mb-3 opacity-40" />
+              <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain mx-auto mb-3 rounded-2xl opacity-80" />
               <p className="text-sm font-semibold" style={{ color: 'var(--vx-text)' }}>Vertex AI</p>
               <p className="text-xs mt-1 px-6" style={{ color: 'var(--vx-text2)' }}>{greeting}</p>
               <SuggestionGrid contextKey={contextKey} onSend={sendMessage} />

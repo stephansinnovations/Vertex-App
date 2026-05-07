@@ -13,16 +13,10 @@ export default function FloatingVertexButton() {
   return (
     <button
       onClick={open}
-      className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 w-13 h-13 rounded-full flex items-center justify-center transition-transform hover:scale-105 active:scale-95"
-      style={{
-        width: 52,
-        height: 52,
-        background: '#000',
-        border: '1px solid rgba(255,255,255,0.15)',
-        boxShadow: '0 0 24px rgba(255,255,255,0.08), 0 4px 20px rgba(0,0,0,0.6)',
-      }}
+      className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 transition-transform hover:scale-105 active:scale-95"
+      style={{ filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.5))' }}
     >
-      <img src={vertexLogo} alt="Vertex AI" className="w-7 h-7 object-contain" />
+      <img src={vertexLogo} alt="Vertex AI" className="w-14 h-14 object-contain rounded-2xl" />
     </button>
   );
 }
