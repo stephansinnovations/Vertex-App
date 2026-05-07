@@ -5,11 +5,13 @@ import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
 import { useShortcut } from '@/lib/ShortcutContext';
+import { useVertexChat } from '@/lib/VertexChatContext';
 
 const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8b7f61/0e0de3cfb_VertexBannerLogoPrint.png';
 
 export default function Home() {
   const navigate = useNavigate();
+  const { open: openChat } = useVertexChat();
 
   const [pos, setPos] = useState(() => {
     try { return JSON.parse(localStorage.getItem('settingsBtnPos')) || { x: 20, y: window.innerHeight - 80 }; }
@@ -88,7 +90,7 @@ export default function Home() {
           </button>
 
           {/* Vertex — center prominent button */}
-          <button onClick={() => navigate('/Vertex')} className="flex flex-col items-center gap-1 px-2 -mt-4">
+          <button onClick={openChat} className="flex flex-col items-center gap-1 px-2 -mt-4">
             <div className="w-13 h-13 rounded-2xl bg-white flex items-center justify-center shadow-lg shadow-white/10 p-3">
               <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-10 h-10 object-contain" />
             </div>

@@ -8,6 +8,10 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import { ShortcutProvider } from '@/lib/ShortcutContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+import { ThemeProvider } from '@/lib/ThemeContext';
+import { VertexChatProvider, useVertexChat } from '@/lib/VertexChatContext';
+import VertexChat from '@/components/VertexChat';
+import FloatingVertexButton from '@/components/FloatingVertexButton';
 import WorkOrderPage from './pages/WorkOrderPage';
 import Builds from './pages/Builds';
 import BuildDetail from './pages/BuildDetail';
@@ -120,21 +124,31 @@ const AuthenticatedApp = () => {
 };
 
 
-function App() {
+function GlobalVertexChat() {
+  const { isOpen, close } = useVertexChat();
+  return <VertexChat isOpen={isOpen} onClose={close} />;
+}
 
+function App() {
   return (
-    <AuthProvider>
-      <ShortcutProvider>
-      <QueryClientProvider client={queryClientInstance}>
-        <Router>
-          <NavigationTracker />
-          <AuthenticatedApp />
-        </Router>
-        <Toaster />
-      </QueryClientProvider>
-      </ShortcutProvider>
-    </AuthProvider>
-  )
+    <ThemeProvider>
+      <VertexChatProvider>
+        <AuthProvider>
+          <ShortcutProvider>
+            <QueryClientProvider client={queryClientInstance}>
+              <Router>
+                <NavigationTracker />
+                <AuthenticatedApp />
+                <FloatingVertexButton />
+                <GlobalVertexChat />
+              </Router>
+              <Toaster />
+            </QueryClientProvider>
+          </ShortcutProvider>
+        </AuthProvider>
+      </VertexChatProvider>
+    </ThemeProvider>
+  );
 }
 
 export default App

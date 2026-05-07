@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Vertex AI chat CSS variables — set by ThemeContext.jsx */
+:root {
+  --vx-bg:            #09090b;
+  --vx-surface:       #18181b;
+  --vx-surface2:      #27272a;
+  --vx-border:        #27272a;
+  --vx-text:          #ffffff;
+  --vx-text2:         #a1a1aa;
+  --vx-muted:         #52525b;
+  --vx-accent:        #ffffff;
+  --vx-accent-fg:     #000000;
+  --vx-bubble-ai:     #27272a;
+  --vx-bubble-ai-txt: #ffffff;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
