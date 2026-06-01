@@ -1,6 +1,5 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, FileText } from 'lucide-react';
@@ -17,12 +16,14 @@ export default function InsertMasterDialog({ open, onOpenChange, companyId, onSe
   const [search, setSearch] = useState('');
 
   const { data: masterSops = [], isLoading } = useQuery({
-    queryKey: ['master-sops', companyId],
+    queryKey: ['master-sops'],
     queryFn: async () => {
-      if (!companyId) return [];
-      return base44.entities.SOP.filter({ company_id: companyId, type: 'Master' });
+      try {
+        const all = JSON.parse(localStorage.getItem('localdb_SOP') || '[]');
+        return all.filter(s => s.type === 'Master');
+      } catch { return []; }
     },
-    enabled: open && !!companyId
+    enabled: open
   });
 
   const filtered = useMemo(() => {

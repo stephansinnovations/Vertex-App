@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
+import { getSheetTabs, getSheetCategories } from '@/api/googleSheets';
 
 function extractSpreadsheetId(url) {
   try {
@@ -29,7 +30,7 @@ let buildsFetchPromise = null;
 function getBuilds() {
   if (buildsCache) return Promise.resolve(buildsCache);
   if (!buildsFetchPromise) {
-    buildsFetchPromise = base44.entities.Build.filter()
+    buildsFetchPromise = supabase.from('builds').select('*').then(({ data }) => data || [])
       .then(data => { buildsCache = data; return data; })
       .catch(() => []);
   }
@@ -196,7 +197,7 @@ function SheetFolder({ tab, spreadsheetId }) {
     setOpen(next);
     if (next && !loaded) {
       setLoading(true);
-      base44.functions.invoke('getSheetCategories', { spreadsheetId, sheetName: tab })
+      getSheetCategories(spreadsheetId, tab)
         .then(res => {
           setCategories(res.data.categories || []);
           setLoaded(true);
@@ -250,19 +251,12 @@ export default function PartsLibrary() {
   useEffect(() => {
     const loadSheet = async () => {
       try {
-        const user = await base44.auth.me();
-        const url = user?.masterSheetUrl || localStorage.getItem('masterSheetUrl');
-        if (!url) {
-          setLoading(false);
-          return;
-        }
+        const url = localStorage.getItem('masterSheetUrl');
+        if (!url) { setLoading(false); return; }
         const id = extractSpreadsheetId(url);
-        if (!id) {
-          setLoading(false);
-          return;
-        }
+        if (!id) { setLoading(false); return; }
         setSpreadsheetId(id);
-        const res = await base44.functions.invoke('getSheetTabs', { spreadsheetId: id });
+        const res = await getSheetTabs(id);
         setSheetTabs(res.data.tabs || []);
       } catch {
         setError('Could not load sheet tabs');

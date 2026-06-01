@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Search, ArrowLeft, Plus, Folder, ExternalLink } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { getSheetTabs, getSheetCategories } from '@/api/googleSheets';
 
 function extractSpreadsheetId(url) {
   try {
@@ -79,7 +79,7 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
     const id = extractSpreadsheetId(url);
     if (!id) { setLoadingTabs(false); return; }
     setSpreadsheetId(id);
-    base44.functions.invoke('getSheetTabs', { spreadsheetId: id })
+    getSheetTabs(id)
       .then(res => setTabs(res.data.tabs || []))
       .catch(() => {})
       .finally(() => setLoadingTabs(false));
@@ -96,7 +96,7 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
     }
     setLoadingCategories(true);
     try {
-      const res = await base44.functions.invoke('getSheetCategories', { spreadsheetId, sheetName: tab });
+      const res = await getSheetCategories(spreadsheetId, tab);
       const cats = res.data.categories || [];
       categoryCache.current[tab] = cats;
       setCategories(cats);

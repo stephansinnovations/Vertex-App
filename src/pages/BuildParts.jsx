@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, Trash2, Folder, FolderOpen, ChevronRight, ChevronDown, Package } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 
 function PartRow({ part, onRemove, onUpdateQty }) {
   const [inputVal, setInputVal] = useState(String(part.quantity || 1));
@@ -101,8 +101,8 @@ export default function BuildParts() {
   const { data: build, isLoading } = useQuery({
     queryKey: ['build', buildId],
     queryFn: async () => {
-      const results = await base44.entities.Build.filter({ id: buildId });
-      return results[0];
+      const { data } = await supabase.from('builds').select('*').eq('id', buildId).single();
+      return data;
     },
     enabled: !!buildId,
   });
@@ -112,7 +112,7 @@ export default function BuildParts() {
   const removeMutation = useMutation({
     mutationFn: (index) => {
       const newParts = parts.filter((_, i) => i !== index);
-      return base44.entities.Build.update(buildId, { parts: newParts });
+      return supabase.from('builds').update({ parts: newParts }).eq('id', buildId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['build', buildId] }),
   });
@@ -120,7 +120,7 @@ export default function BuildParts() {
   const updateQtyMutation = useMutation({
     mutationFn: ({ index, qty }) => {
       const newParts = parts.map((p, i) => i === index ? { ...p, quantity: qty } : p);
-      return base44.entities.Build.update(buildId, { parts: newParts });
+      return supabase.from('builds').update({ parts: newParts }).eq('id', buildId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['build', buildId] }),
   });

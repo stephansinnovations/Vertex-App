@@ -1,6 +1,4 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
 import { useShortcut } from '@/lib/ShortcutContext';
 import { Folder, FileText, Package, Users, Layers, Bus, Minus } from 'lucide-react';
@@ -58,44 +56,43 @@ function snapToGrid(x, y) {
   };
 }
 
+function loadShortcuts() {
+  try { return JSON.parse(localStorage.getItem('homeShortcuts') || '[]'); } catch { return []; }
+}
+function saveShortcuts(s) { localStorage.setItem('homeShortcuts', JSON.stringify(s)); }
+
 export default function HomeShortcuts() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { pending, setPending } = useShortcut();
   const containerRef = useRef(null);
 
   const [editMode, setEditMode] = useState(false);
-  // Offsets within the grid container (relative px)
   const [offsets, setOffsets] = useState({});
+  const [shortcuts, setShortcuts] = useState(() => loadShortcuts());
 
   const dragging = useRef(null);
   const [dragId, setDragId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
-  const { data: user } = useQuery({ queryKey: ['me'], queryFn: () => base44.auth.me() });
+  const addMutation = { mutate: (data) => {
+    const newShortcut = { ...data, id: Date.now().toString() };
+    const updated = [...shortcuts, newShortcut];
+    saveShortcuts(updated);
+    setShortcuts(updated);
+  }};
 
-  const { data: shortcuts = [] } = useQuery({
-    queryKey: ['shortcuts', user?.email],
-    queryFn: () => base44.entities.Shortcut.filter({ user_email: user.email }),
-    enabled: !!user?.email,
-  });
+  const removeMutation = { mutate: (id) => {
+    const updated = shortcuts.filter(s => s.id !== id);
+    saveShortcuts(updated);
+    setShortcuts(updated);
+    setOffsets(prev => { const n = { ...prev }; delete n[id]; return n; });
+  }};
 
-  const addMutation = useMutation({
-    mutationFn: (data) => base44.entities.Shortcut.create(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['shortcuts'] }),
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (id) => base44.entities.Shortcut.delete(id),
-    onSuccess: (_, id) => {
-      queryClient.invalidateQueries({ queryKey: ['shortcuts'] });
-      setOffsets(prev => { const n = { ...prev }; delete n[id]; return n; });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Shortcut.update(id, data),
-  });
+  const updateMutation = { mutate: ({ id, data }) => {
+    const updated = shortcuts.map(s => s.id === id ? { ...s, ...data } : s);
+    saveShortcuts(updated);
+    setShortcuts(updated);
+  }};
 
   // Recompute offsets when shortcuts load
   useEffect(() => {
@@ -111,10 +108,10 @@ export default function HomeShortcuts() {
 
   // Auto-place pending shortcut
   useEffect(() => {
-    if (pending && user) {
+    if (pending) {
       const { x, y } = getNextSlot(shortcuts);
       addMutation.mutate({
-        user_email: user.email,
+        user_email: 'local',
         label: pending.label,
         icon: pending.icon,
         path: pending.path,
@@ -123,7 +120,7 @@ export default function HomeShortcuts() {
       });
       setPending(null);
     }
-  }, [pending, user]);
+  }, [pending]);
 
   const longPressTimers = useRef({});
 

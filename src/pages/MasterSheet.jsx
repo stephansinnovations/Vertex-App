@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Edit2, Check, X, Key } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+
 
 export default function MasterSheet() {
   const navigate = useNavigate();
@@ -14,20 +14,8 @@ export default function MasterSheet() {
   const [keyInput, setKeyInput] = useState('');
 
   useEffect(() => {
-    const loadUrl = async () => {
-      try {
-        const user = await base44.auth.me();
-        if (user?.masterSheetUrl) {
-          setSheetUrl(user.masterSheetUrl);
-          localStorage.setItem('masterSheetUrl', user.masterSheetUrl);
-          setEditing(false);
-        } else if (!localStorage.getItem('masterSheetUrl')) {
-          setEditing(true);
-        }
-      } catch {}
-      setLoading(false);
-    };
-    loadUrl();
+    if (!localStorage.getItem('masterSheetUrl')) setEditing(true);
+    setLoading(false);
   }, []);
 
   const getEmbedUrl = (url) => {
@@ -49,10 +37,6 @@ export default function MasterSheet() {
   const handleSave = async () => {
     const trimmed = inputUrl.trim();
     if (!trimmed) return;
-    setLoading(true);
-    try {
-      await base44.auth.updateMe({ masterSheetUrl: trimmed });
-    } catch {}
     setSheetUrl(trimmed);
     localStorage.setItem('masterSheetUrl', trimmed);
     setEditing(false);
