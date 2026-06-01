@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Package, Users, Bus, UserCircle, Settings } from 'lucide-react';
+import vertexLogo from '@/assets/Vertex-logo.webp';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
@@ -76,7 +77,7 @@ export default function Home() {
         {/* Row 1 — Vertex AI centered, transparent */}
         <div className="flex justify-center pt-3 pb-1">
           <button onClick={openChat} className="flex flex-col items-center gap-1">
-            <img src="/src/assets/Vertex-logo.webp" alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
+            <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
           </button>
         </div>
 
