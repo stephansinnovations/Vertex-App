@@ -76,7 +76,7 @@ export default function Home() {
         {/* Row 1 — Vertex AI centered, transparent */}
         <div className="flex justify-center pt-3 pb-1">
           <button onClick={openChat} className="flex flex-col items-center gap-1">
-            <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
+            <img src="/src/assets/Vertex-logo.webp" alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
           </button>
         </div>
 

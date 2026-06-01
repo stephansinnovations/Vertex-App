@@ -7,7 +7,7 @@ import {
   loadDisplay, loadApi, saveDisplay, saveApi, clearHistory,
   getContextKey, getContextLabel, getContextGreeting, getContextSuggestions,
 } from '@/lib/vertexChatStorage';
-import vertexLogo from '@/assets/vertex-logo.png';
+import vertexLogo from '@/assets/Vertex-logo.webp';
 
 // ── Dev (Build Mode) tools ────────────────────────────────────────────────────
 
@@ -87,7 +87,7 @@ Project structure:
 - src/components/  — reusable components (VertexChat.jsx, FloatingVertexButton.jsx, etc.)
 - src/lib/         — contexts (ThemeContext, VertexChatContext, AuthContext)
 - src/api/         — localDb.js, googleSheets.js, seed JSON files
-- src/assets/      — vertex-logo.png
+- src/assets/      — Vertex-logo.webp
 
 Rules:
 1. ALWAYS call read_file before editing any file — never guess the content

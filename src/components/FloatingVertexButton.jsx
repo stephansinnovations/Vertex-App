@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useVertexChat } from '@/lib/VertexChatContext';
-import vertexLogo from '@/assets/vertex-logo.png';
+import vertexLogo from '@/assets/Vertex-logo.webp';
 
 const LONG_PRESS_MS = 500;
 
