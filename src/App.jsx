@@ -25,6 +25,7 @@ import MasterSheet from './pages/MasterSheet';
 import Inventory from './pages/Inventory';
 import Stock from './pages/Stock';
 import StockLocation from './pages/StockLocation.jsx';
+import GeminiScanner from './pages/GeminiScanner';
 import BuildWorkOrder from './pages/BuildWorkOrder.jsx';
 import Profile from './pages/Profile.jsx';
 import MyProfile from './pages/MyProfile.jsx';
@@ -110,6 +111,7 @@ const AuthenticatedApp = () => {
       <Route path="/Inventory" element={<Inventory />} />
       <Route path="/Stock" element={<Stock />} />
       <Route path="/StockLocation" element={<StockLocation />} />
+      <Route path="/GeminiScanner" element={<GeminiScanner />} />
       <Route path="/Contacts" element={<Contacts />} />
       <Route path="/BuildWorkOrder" element={<BuildWorkOrder />} />
       <Route path="/Profile" element={<Profile />} />

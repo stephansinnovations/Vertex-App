@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PartsBrowserSheet from '@/components/PartsBrowserSheet';
 import {
   ArrowLeft, Plus, Clock, AlertTriangle, CheckCircle2, Circle,
   ChevronDown, X, BookOpen, Package, Search, Check, Trash2
@@ -28,9 +29,12 @@ function loadSOPs() {
   return [];
 }
 
-function StatusIcon({ status }) {
+function StatusIcon({ status, blockedReason }) {
   if (status === 'done') return <CheckCircle2 className="w-5 h-5 text-green-400 flex-shrink-0" />;
-  if (status === 'blocked') return <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />;
+  if (status === 'blocked') {
+    if (blockedReason === 'Waiting on Parts') return <Package className="w-5 h-5 text-yellow-400 flex-shrink-0" />;
+    return <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />;
+  }
   if (status === 'in_progress') return <Circle className="w-5 h-5 text-blue-400 flex-shrink-0" />;
   return <Circle className="w-5 h-5 text-gray-600 flex-shrink-0" />;
 }
@@ -85,9 +89,10 @@ function SOPPicker({ allSOPs, attached, onToggle, onClose }) {
                 <p className="text-sm font-medium truncate">{sop.title}</p>
                 {sop.group && <p className="text-xs text-gray-600 truncate">{sop.group}</p>}
               </div>
-              {sop.materials?.length > 0 && (
-                <span className="text-xs text-gray-600 flex-shrink-0">{sop.materials.length} parts</span>
-              )}
+              {(() => {
+                const count = (sop.steps || []).reduce((n, s) => n + (s.materials?.length || 0), 0);
+                return count > 0 ? <span className="text-xs text-gray-600 flex-shrink-0">{count} parts</span> : null;
+              })()}
             </button>
           );
         })}
@@ -108,24 +113,58 @@ function AddTaskPanel({ allSOPs, onAdd, onCancel }) {
   const toggleSOP = (sop) => {
     const isOn = attachedSOPs.some(a => a.id === sop.id);
     if (isOn) {
-      // detach SOP and remove its auto-added parts
       setAttachedSOPs(prev => prev.filter(a => a.id !== sop.id));
-      setParts(prev => prev.filter(p => p.from_sop !== sop.id));
+      setParts(prev => prev
+        .map(p => {
+          const contrib = (p.sop_qtys || {})[sop.id] || 0;
+          if (!contrib) return p;
+          const newQty = (p.qty || 1) - contrib;
+          const newSopQtys = { ...(p.sop_qtys || {}) };
+          delete newSopQtys[sop.id];
+          return { ...p, qty: newQty, sop_qtys: newSopQtys };
+        })
+        .filter(p => (p.qty || 1) > 0)
+      );
     } else {
-      // attach SOP and import its materials
       setAttachedSOPs(prev => [...prev, { id: sop.id, title: sop.title }]);
-      const materials = Array.isArray(sop.materials) ? sop.materials : [];
-      const newParts = materials
-        .filter(m => m?.name?.trim())
-        .map(m => ({
-          id: `${sop.id}_${m.name}_${Date.now()}_${Math.random()}`,
-          name: m.name.trim(),
-          note: m.location || '',
-          from_sop: sop.id,
-          from_sop_title: sop.title,
-          checked: false,
-        }));
-      setParts(prev => [...prev, ...newParts]);
+      const sopPartsMap = {};
+      (sop.steps || []).forEach(step => {
+        (step.materials || []).forEach(m => {
+          if (!m?.name?.trim()) return;
+          const key = m.name.trim().toLowerCase();
+          if (sopPartsMap[key]) {
+            sopPartsMap[key].qty += (m.qty || 1);
+          } else {
+            sopPartsMap[key] = { ...m, name: m.name.trim(), qty: m.qty || 1 };
+          }
+        });
+      });
+      setParts(prev => {
+        let updated = [...prev];
+        Object.values(sopPartsMap).forEach(sopPart => {
+          const existingIdx = updated.findIndex(p => p.name.toLowerCase() === sopPart.name.toLowerCase());
+          if (existingIdx >= 0) {
+            const existing = updated[existingIdx];
+            updated[existingIdx] = {
+              ...existing,
+              qty: (existing.qty || 1) + sopPart.qty,
+              sop_qtys: { ...(existing.sop_qtys || {}), [sop.id]: sopPart.qty },
+            };
+          } else {
+            updated.push({
+              id: `${sop.id}_${sopPart.name}_${Date.now()}_${Math.random()}`,
+              name: sopPart.name,
+              note: '',
+              qty: sopPart.qty,
+              sop_qtys: { [sop.id]: sopPart.qty },
+              from_sop: sop.id,
+              from_sop_title: sop.title,
+              checked: false,
+            });
+          }
+        });
+        return updated;
+      });
     }
   };
 
@@ -219,6 +258,9 @@ function AddTaskPanel({ allSOPs, onAdd, onCancel }) {
               <div key={part.id} className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
                 <Package className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                 <span className="flex-1 text-sm text-white truncate">{part.name}</span>
+                {(part.qty && part.qty > 1) && (
+                  <span className="text-xs text-gray-400 flex-shrink-0">×{part.qty}</span>
+                )}
                 {part.from_sop_title && (
                   <span className="text-xs text-gray-600 truncate max-w-[80px]">{part.from_sop_title}</span>
                 )}
@@ -272,19 +314,41 @@ function AddTaskPanel({ allSOPs, onAdd, onCancel }) {
 }
 
 // ── Task Row ─────────────────────────────────────────────────────────────────
-function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
-  const [expanded, setExpanded] = useState(false);
+function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate, initialExpanded = false }) {
+  const [expanded, setExpanded] = useState(initialExpanded);
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const [showSOPPicker, setShowSOPPicker] = useState(false);
-  const [addingPart, setAddingPart] = useState(false);
-  const [newPartName, setNewPartName] = useState('');
+  const [partsBrowserOpen, setPartsBrowserOpen] = useState(false);
+  const [activeStepperPartId, setActiveStepperPartId] = useState(null);
+  const [showUnblockConfirm, setShowUnblockConfirm] = useState(false);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [sopDetachConfirm, setSopDetachConfirm] = useState(null);
+
+  const UNBLOCK_MESSAGES = {
+    'Waiting on Parts': 'Do you have all the parts ready?',
+    'Waiting on Customer': "Do you have the customer's approval?",
+    'Waiting on Subcontractor': 'Is the subcontractor ready to proceed?',
+    'Other': 'Are you ready to unblock this task?',
+  };
 
   const cycleStatus = () => {
     if (task.status === 'blocked') {
-      onUpdate({ ...task, status: 'not_started', blocked_reason: null });
+      setShowUnblockConfirm(true);
+    } else if (task.status === 'in_progress') {
+      setShowCompleteConfirm(true);
     } else {
       onUpdate({ ...task, status: STATUS_CYCLE[task.status] || 'not_started' });
     }
+  };
+
+  const confirmUnblock = () => {
+    onUpdate({ ...task, status: 'not_started', blocked_reason: null });
+    setShowUnblockConfirm(false);
+  };
+
+  const confirmComplete = () => {
+    onUpdate({ ...task, status: 'done', parts: (task.parts || []).map(p => ({ ...p, checked: true })) });
+    setShowCompleteConfirm(false);
   };
 
   const setBlocked = (reason) => {
@@ -307,47 +371,120 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
     const currentSOPs = task.sops || [];
     const currentParts = task.parts || [];
     const isOn = currentSOPs.some(a => a.id === sop.id);
+
     if (isOn) {
+      // Detach: subtract this SOP's contribution from each part, remove if qty hits 0
+      const updatedParts = currentParts
+        .map(p => {
+          const contrib = (p.sop_qtys || {})[sop.id] || 0;
+          if (!contrib) return p;
+          const newQty = (p.qty || 1) - contrib;
+          const newSopQtys = { ...(p.sop_qtys || {}) };
+          delete newSopQtys[sop.id];
+          return { ...p, qty: newQty, sop_qtys: newSopQtys };
+        })
+        .filter(p => (p.qty || 1) > 0);
       onUpdate({
         ...task,
         sops: currentSOPs.filter(a => a.id !== sop.id),
-        parts: currentParts.filter(p => p.from_sop !== sop.id),
+        parts: updatedParts,
       });
     } else {
-      const materials = Array.isArray(sop.materials) ? sop.materials : [];
-      const newParts = materials
-        .filter(m => m?.name?.trim())
-        .map(m => ({
-          id: `${sop.id}_${m.name}_${Date.now()}_${Math.random()}`,
-          name: m.name.trim(),
-          note: m.location || '',
-          from_sop: sop.id,
-          from_sop_title: sop.title,
-          checked: false,
-        }));
+      // Attach: aggregate parts from all steps, merge by name
+      const sopPartsMap = {};
+      (sop.steps || []).forEach(step => {
+        (step.materials || []).forEach(m => {
+          if (!m?.name?.trim()) return;
+          const key = m.name.trim().toLowerCase();
+          if (sopPartsMap[key]) {
+            sopPartsMap[key].qty += (m.qty || 1);
+          } else {
+            sopPartsMap[key] = { name: m.name.trim(), qty: m.qty || 1 };
+          }
+        });
+      });
+
+      let updatedParts = [...currentParts];
+      Object.values(sopPartsMap).forEach(sopPart => {
+        const existingIdx = updatedParts.findIndex(p => p.name.toLowerCase() === sopPart.name.toLowerCase());
+        if (existingIdx >= 0) {
+          const existing = updatedParts[existingIdx];
+          updatedParts[existingIdx] = {
+            ...existing,
+            qty: (existing.qty || 1) + sopPart.qty,
+            sop_qtys: { ...(existing.sop_qtys || {}), [sop.id]: sopPart.qty },
+          };
+        } else {
+          updatedParts.push({
+            id: `${sop.id}_${sopPart.name}_${Date.now()}_${Math.random()}`,
+            name: sopPart.name,
+            note: '',
+            qty: sopPart.qty,
+            sop_qtys: { [sop.id]: sopPart.qty },
+            from_sop: sop.id,
+            from_sop_title: sop.title,
+            checked: false,
+          });
+        }
+      });
+
       onUpdate({
         ...task,
         sops: [...currentSOPs, { id: sop.id, title: sop.title }],
-        parts: [...currentParts, ...newParts],
+        parts: updatedParts,
       });
     }
   };
 
-  const addPart = () => {
-    if (!newPartName.trim()) return;
-    onUpdate({
-      ...task,
-      parts: [...(task.parts || []), {
-        id: `manual_${Date.now()}`,
-        name: newPartName.trim(),
-        note: '',
-        from_sop: null,
-        from_sop_title: null,
-        checked: false,
-      }]
-    });
-    setNewPartName('');
-    setAddingPart(false);
+  const addLibraryPart = (partData) => {
+    const currentParts = task.parts || [];
+    const existingIdx = currentParts.findIndex(p => p.name.toLowerCase() === partData.name.toLowerCase());
+    if (existingIdx >= 0) {
+      const updated = [...currentParts];
+      updated[existingIdx] = { ...updated[existingIdx], qty: (updated[existingIdx].qty || 1) + 1 };
+      onUpdate({ ...task, parts: updated });
+    } else {
+      onUpdate({
+        ...task,
+        parts: [...currentParts, {
+          id: `lib_${Date.now()}_${Math.random()}`,
+          name: partData.name,
+          note: partData.supplier || '',
+          qty: 1,
+          sop_qtys: {},
+          from_sop: null,
+          from_sop_title: null,
+          from_library: true,
+          checked: false,
+        }],
+      });
+    }
+  };
+
+  const incrementPart = (partId) => {
+    onUpdate({ ...task, parts: (task.parts || []).map(p => p.id === partId ? { ...p, qty: (p.qty || 1) + 1 } : p) });
+  };
+
+  const decrementPartById = (partId) => {
+    const part = (task.parts || []).find(p => p.id === partId);
+    if (!part) return;
+    const newQty = (part.qty || 1) - 1;
+    if (newQty < 0) return;
+    onUpdate({ ...task, parts: (task.parts || []).map(p => p.id === partId ? { ...p, qty: newQty } : p) });
+  };
+
+  const decrementLibraryPart = (partName) => {
+    const currentParts = task.parts || [];
+    const existingIdx = currentParts.findIndex(p => p.name.toLowerCase() === partName.toLowerCase());
+    if (existingIdx < 0) return;
+    const current = currentParts[existingIdx].qty || 1;
+    if (current <= 1) {
+      onUpdate({ ...task, parts: currentParts.filter((_, i) => i !== existingIdx) });
+    } else {
+      const updated = [...currentParts];
+      updated[existingIdx] = { ...updated[existingIdx], qty: current - 1 };
+      onUpdate({ ...task, parts: updated });
+    }
   };
 
   const parts = task.parts || [];
@@ -355,7 +492,7 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
   const checkedParts = parts.filter(p => p.checked).length;
 
   return (
-    <div className={`rounded-2xl border transition-colors ${task.status === 'done' ? 'border-zinc-900 bg-zinc-900/30' : task.status === 'blocked' ? 'border-red-900/50 bg-red-900/10' : 'border-zinc-800 bg-zinc-900/60'}`}>
+    <div className={`rounded-2xl border transition-colors ${task.status === 'done' ? 'border-zinc-900 bg-zinc-900/30' : task.status === 'blocked' ? (task.blocked_reason === 'Waiting on Parts' ? 'border-yellow-900/50 bg-yellow-900/10' : 'border-red-900/50 bg-red-900/10') : 'border-zinc-800 bg-zinc-900/60'}`}>
       {/* Main row — tap anywhere except the two icon buttons to expand */}
       <div
         className="flex items-center gap-3 px-4 py-4 cursor-pointer select-none"
@@ -365,7 +502,7 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
           onClick={e => { e.stopPropagation(); cycleStatus(); }}
           className="flex-shrink-0 p-1 -m-1"
         >
-          <StatusIcon status={task.status} />
+          <StatusIcon status={task.status} blockedReason={task.blocked_reason} />
         </button>
 
         <div className="flex-1 min-w-0">
@@ -373,7 +510,10 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
             {task.name}
           </p>
           {task.status === 'blocked' && task.blocked_reason && (
-            <p className="text-xs text-red-400 mt-0.5">{task.blocked_reason}</p>
+            <p className={`text-xs mt-0.5 ${task.blocked_reason === 'Waiting on Parts' ? 'text-yellow-400' : 'text-red-400'}`}>{task.blocked_reason}</p>
+          )}
+          {task.status === 'in_progress' && (
+            <p className="text-xs mt-0.5 text-blue-400">In Progress</p>
           )}
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             {(task.estimated_hours || task.actual_hours) && (
@@ -474,14 +614,14 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
                   {sops.map(sop => (
                     <span key={sop.id} className="flex items-center gap-1 bg-zinc-800 border border-zinc-700 text-white text-xs rounded-full overflow-hidden">
                       <button
-                        onClick={() => navigate(`/SOPView?id=${sop.id}`)}
+                        onClick={() => navigate(`/SOPView?id=${sop.id}&returnTo=${encodeURIComponent(window.location.pathname + window.location.search + '&expandTask=' + task.id)}`)}
                         className="flex items-center gap-1.5 pl-2.5 pr-1 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         <BookOpen className="w-3 h-3 text-gray-400 flex-shrink-0" />
                         <span className="font-medium">{sop.title}</span>
                       </button>
                       <button
-                        onClick={() => toggleSOP(allSOPs.find(s => s.id === sop.id) || sop)}
+                        onClick={() => setSopDetachConfirm(allSOPs.find(s => s.id === sop.id) || sop)}
                         className="text-gray-500 hover:text-white pr-2 py-1.5 hover:bg-zinc-700 transition-colors"
                       >
                         <X className="w-3 h-3" />
@@ -515,53 +655,166 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate }) {
             </label>
             {parts.length > 0 && (
               <div className="space-y-1 mb-2">
-                {parts.map(part => (
-                  <div key={part.id} className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
-                    <button
-                      onClick={() => togglePart(part.id)}
-                      className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${part.checked ? 'bg-green-500 border-green-500' : 'border-zinc-600 hover:border-zinc-400'}`}
-                    >
-                      {part.checked && <Check className="w-3 h-3 text-black" />}
-                    </button>
-                    <span className={`flex-1 text-sm truncate ${part.checked ? 'line-through text-gray-500' : 'text-white'}`}>
-                      {part.name}
-                    </span>
-                    {part.from_sop_title && (
-                      <span className="text-xs text-gray-600 truncate max-w-[80px] flex-shrink-0">{part.from_sop_title}</span>
-                    )}
-                    <button onClick={() => removePart(part.id)} className="text-gray-600 hover:text-red-400 transition-colors flex-shrink-0">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+                {parts.map(part => {
+                  const isLocked = part.sop_qtys && Object.keys(part.sop_qtys).length > 0;
+                  const qty = part.qty || 1;
+                  const stepperOpen = activeStepperPartId === part.id;
+                  const confirmStepper = () => {
+                    if (qty === 0) {
+                      removePart(part.id);
+                    }
+                    setActiveStepperPartId(null);
+                  };
+                  return (
+                    <div key={part.id} className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
+                      <button
+                        onClick={() => togglePart(part.id)}
+                        className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-colors ${part.checked ? 'bg-green-500 border-green-500' : 'border-zinc-600 hover:border-zinc-400'}`}
+                      >
+                        {part.checked && <Check className="w-3 h-3 text-black" />}
+                      </button>
+                      <span className={`flex-1 text-sm truncate ${part.checked ? 'line-through text-gray-500' : 'text-white'}`}>
+                        {part.name}
+                      </span>
+                      {stepperOpen ? (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            onClick={() => decrementPartById(part.id)}
+                            disabled={qty <= 0}
+                            className="w-6 h-6 rounded bg-zinc-700 hover:bg-zinc-600 disabled:opacity-30 text-white text-sm flex items-center justify-center leading-none transition-all"
+                          >−</button>
+                          <span className={`text-xs font-semibold w-5 text-center ${qty === 0 ? 'text-red-400' : 'text-white'}`}>{qty}</span>
+                          <button
+                            onClick={() => incrementPart(part.id)}
+                            className="w-6 h-6 rounded bg-zinc-700 hover:bg-zinc-600 text-white flex items-center justify-center transition-all"
+                          ><Plus className="w-3 h-3" /></button>
+                          <button onClick={confirmStepper} className="w-6 h-6 rounded bg-green-600 hover:bg-green-500 text-white flex items-center justify-center transition-all ml-1">
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setActiveStepperPartId(part.id)}
+                          className="text-xs text-zinc-500 hover:text-white flex-shrink-0 px-1 transition-colors"
+                        >
+                          ×{qty}
+                        </button>
+                      )}
+                      {!stepperOpen && !isLocked && (
+                        <button onClick={() => removePart(part.id)} className="text-gray-600 hover:text-red-400 transition-colors flex-shrink-0">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
-            {addingPart ? (
-              <div className="flex gap-2">
-                <input
-                  autoFocus
-                  value={newPartName}
-                  onChange={e => setNewPartName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') addPart(); if (e.key === 'Escape') setAddingPart(false); }}
-                  placeholder="Part name..."
-                  className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-sm focus:outline-none focus:border-zinc-500"
-                />
-                <button onClick={addPart} className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs px-3 py-1.5 rounded-lg">Add</button>
-                <button onClick={() => setAddingPart(false)} className="text-gray-500 px-1"><X className="w-4 h-4" /></button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setAddingPart(true)}
-                className="flex items-center gap-2 text-xs text-gray-500 hover:text-white transition-colors"
-              >
-                <Plus className="w-3 h-3" /> Add part
-              </button>
-            )}
+            <button
+              onClick={() => setPartsBrowserOpen(true)}
+              className="flex items-center gap-2 text-xs text-gray-500 hover:text-white transition-colors"
+            >
+              <Plus className="w-3 h-3" /> Add part
+            </button>
           </div>
 
           <button onClick={() => onDelete(task.id)} className="text-xs text-red-500 hover:text-red-400 transition-colors">
             Delete task
           </button>
+        </div>
+      )}
+
+      {partsBrowserOpen && (
+        <PartsBrowserSheet
+          materials={(task.parts || []).filter(p => p.from_library && !p.from_sop)}
+          onAdd={addLibraryPart}
+          onDecrement={decrementLibraryPart}
+          onClose={() => setPartsBrowserOpen(false)}
+        />
+      )}
+
+      {sopDetachConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setSopDetachConfirm(null)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm px-6 py-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-2">
+              <BookOpen className="w-5 h-5 text-gray-400 flex-shrink-0" />
+              <p className="text-white font-semibold text-base">Are you sure you want to delete this?</p>
+            </div>
+            <p className="text-gray-500 text-sm mb-6 pl-8">{sopDetachConfirm.title}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setSopDetachConfirm(null)}
+                className="flex-1 py-3 rounded-xl border border-zinc-700 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { toggleSOP(sopDetachConfirm); setSopDetachConfirm(null); }}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-500 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCompleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setShowCompleteConfirm(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm px-6 py-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-2">
+              <Circle className="w-5 h-5 text-blue-400 flex-shrink-0" />
+              <p className="text-white font-semibold text-base">Mark this task as complete?</p>
+            </div>
+            <p className="text-gray-500 text-sm mb-6 pl-8">{task.name}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { onUpdate({ ...task, status: 'not_started' }); setShowCompleteConfirm(false); }}
+                className="flex-1 py-3 rounded-xl border border-zinc-700 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+              >
+                No
+              </button>
+              <button
+                onClick={confirmComplete}
+                className="flex-1 py-3 rounded-xl bg-white text-black text-sm font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Complete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUnblockConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={() => setShowUnblockConfirm(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative bg-zinc-900 border border-zinc-700 rounded-2xl w-full max-w-sm px-6 py-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-2">
+              {task.blocked_reason === 'Waiting on Parts'
+                ? <Package className="w-5 h-5 text-yellow-400 flex-shrink-0" />
+                : <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />}
+              <p className="text-white font-semibold text-base">
+                {UNBLOCK_MESSAGES[task.blocked_reason] || 'Are you ready to unblock this task?'}
+              </p>
+            </div>
+            <p className="text-gray-500 text-sm mb-6 pl-8">{task.name}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowUnblockConfirm(false)}
+                className="flex-1 py-3 rounded-xl border border-zinc-700 text-gray-400 hover:text-white text-sm font-medium transition-colors"
+              >
+                Not yet
+              </button>
+              <button
+                onClick={confirmUnblock}
+                className="flex-1 py-3 rounded-xl bg-white text-black text-sm font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Yes, unblock
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -575,6 +828,7 @@ export default function PhaseDetail() {
   const buildId = params.get('buildId');
   const buildName = params.get('buildName') || 'Build';
   const phaseId = params.get('phaseId');
+  const expandTask = params.get('expandTask');
 
   const [phases, setPhases] = useState(() => loadPhases(buildId));
   const [allSOPs] = useState(() => loadSOPs());
@@ -618,6 +872,11 @@ export default function PhaseDetail() {
   const tasks = phase.tasks || [];
   const done = tasks.filter(t => t.status === 'done').length;
   const blocked = tasks.filter(t => t.status === 'blocked').length;
+  const inProgress = tasks.filter(t => t.status === 'in_progress').length;
+  const waitingOnParts = tasks.filter(t => t.status === 'blocked' && t.blocked_reason === 'Waiting on Parts').length;
+  const blockedNonParts = tasks.filter(t => t.status === 'blocked' && t.blocked_reason !== 'Waiting on Parts').length;
+  const hasAllPartsChecked = tasks.some(t => t.status !== 'done' && (t.parts || []).length > 0 && (t.parts || []).every(p => p.checked));
+  const headerCountColor = inProgress > 0 ? 'text-blue-400' : hasAllPartsChecked ? 'text-green-400' : blockedNonParts > 0 ? 'text-red-400' : waitingOnParts > 0 ? 'text-yellow-400' : 'text-gray-500';
   const totalEst = tasks.reduce((sum, t) => sum + (parseFloat(t.estimated_hours) || 0), 0);
   const totalActual = tasks.reduce((sum, t) => sum + (parseFloat(t.actual_hours) || 0), 0);
 
@@ -630,9 +889,15 @@ export default function PhaseDetail() {
         </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold text-white">{phase.name}</h1>
-          <p className="text-gray-500 text-xs mt-0.5">
-            {done}/{tasks.length} done
-            {blocked > 0 && <span className="text-red-400"> · {blocked} blocked</span>}
+          <p className="text-xs mt-0.5">
+            <span className={headerCountColor}>{done}/{tasks.length} done</span>
+            {(blocked > 0 || inProgress > 0) && (
+              <span className="inline-flex items-center gap-1 ml-1">
+                {inProgress > 0 && <Circle className="w-3 h-3 text-blue-400" />}
+                {blockedNonParts > 0 && <AlertTriangle className="w-3 h-3 text-red-400" />}
+                {waitingOnParts > 0 && <Package className="w-3 h-3 text-yellow-400" />}
+              </span>
+            )}
             {totalEst > 0 && <span> · {totalEst}h est{totalActual > 0 ? ` / ${totalActual}h actual` : ''}</span>}
           </p>
         </div>
@@ -655,7 +920,7 @@ export default function PhaseDetail() {
         )}
 
         {tasks.map(task => (
-          <TaskRow key={task.id} task={task} onUpdate={updateTask} onDelete={deleteTask} allSOPs={allSOPs} navigate={navigate} />
+          <TaskRow key={task.id} task={task} onUpdate={updateTask} onDelete={deleteTask} allSOPs={allSOPs} navigate={navigate} initialExpanded={task.id === expandTask} />
         ))}
 
         {addingTask ? (

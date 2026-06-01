@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, Sparkles, Ruler, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, Sparkles, Ruler, X } from 'lucide-react';
 import MeasurementsInput from '@/components/MeasurementsInput';
+import PartsBrowserSheet from '@/components/PartsBrowserSheet';
 import AddVariableMenu from '@/components/AddVariableMenu';
-import InsertMasterDialog from '@/components/InsertMasterDialog';
 import { toast } from 'sonner';
 import RichTextEditor from '@/components/RichTextEditor';
 import {
@@ -54,8 +54,7 @@ export default function SOPEditor() {
   const [uploadingStepIndex, setUploadingStepIndex] = useState(null);
   const [uploadingSubstepIndex, setUploadingSubstepIndex] = useState(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState(null);
-  const [uploadingMaterialIndex, setUploadingMaterialIndex] = useState(null);
-  const [enlargedMaterialImage, setEnlargedMaterialImage] = useState(null);
+  const [partsBrowserStep, setPartsBrowserStep] = useState(null);
   const [processingPdf, setProcessingPdf] = useState(false);
   const [simplifyingStepIndex, setSimplifyingStepIndex] = useState(null);
   const [simplifyingSubstepIndex, setSimplifyingSubstepIndex] = useState(null);
@@ -63,8 +62,6 @@ export default function SOPEditor() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [showExitDialog, setShowExitDialog] = useState(false);
   const [originalData, setOriginalData] = useState(null);
-  const [showMasterDialog, setShowMasterDialog] = useState(false);
-  const [insertMasterAtIndex, setInsertMasterAtIndex] = useState(null);
   const [showNewDeptDialog, setShowNewDeptDialog] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -247,18 +244,6 @@ export default function SOPEditor() {
     setFormData({ ...formData, steps: newSteps.map((step, i) => ({ ...step, step_number: i + 1 })) });
   };
 
-  const handleInsertFromMaster = (masterSop) => {
-    if (!masterSop.steps || masterSop.steps.length === 0) return;
-    const insertAt = insertMasterAtIndex ?? formData.steps.length;
-    const newSteps = [...formData.steps];
-    const masterSteps = masterSop.steps.map(step => ({
-      ...step,
-      image_urls: step.image_urls || [],
-      substeps: (step.substeps || []).map(sub => ({ ...sub, image_urls: sub.image_urls || [] }))
-    }));
-    newSteps.splice(insertAt, 0, ...masterSteps);
-    setFormData({ ...formData, steps: newSteps.map((s, i) => ({ ...s, step_number: i + 1 })) });
-  };
 
   const removeStep = (index) => {
     const newSteps = formData.steps.filter((_, i) => i !== index);
@@ -302,6 +287,60 @@ export default function SOPEditor() {
     const substeps = [...(newSteps[stepIndex].substeps || [])];
     substeps[substepIndex] = { ...substeps[substepIndex], [field]: value };
     newSteps[stepIndex] = { ...newSteps[stepIndex], substeps };
+    setFormData({ ...formData, steps: newSteps });
+  };
+
+  const addStepMaterial = (stepIndex) => {
+    const newSteps = [...formData.steps];
+    const materials = newSteps[stepIndex].materials || [];
+    newSteps[stepIndex] = { ...newSteps[stepIndex], materials: [...materials, { name: '', location: '' }] };
+    setFormData({ ...formData, steps: newSteps });
+  };
+
+  const removeStepMaterial = (stepIndex, materialIndex) => {
+    const newSteps = [...formData.steps];
+    const materials = (newSteps[stepIndex].materials || []).filter((_, i) => i !== materialIndex);
+    newSteps[stepIndex] = { ...newSteps[stepIndex], materials };
+    setFormData({ ...formData, steps: newSteps });
+  };
+
+  const addLibraryPart = (stepIndex, partData) => {
+    const newSteps = [...formData.steps];
+    const materials = newSteps[stepIndex].materials || [];
+    const existingIdx = materials.findIndex(m => m.from_library && m.name === partData.name);
+    let updated;
+    if (existingIdx >= 0) {
+      updated = [...materials];
+      updated[existingIdx] = { ...updated[existingIdx], qty: (updated[existingIdx].qty || 1) + 1 };
+    } else {
+      updated = [...materials, { ...partData, qty: 1 }];
+    }
+    newSteps[stepIndex] = { ...newSteps[stepIndex], materials: updated };
+    setFormData({ ...formData, steps: newSteps });
+  };
+
+  const decrementLibraryPart = (stepIndex, partName) => {
+    const newSteps = [...formData.steps];
+    const materials = newSteps[stepIndex].materials || [];
+    const existingIdx = materials.findIndex(m => m.from_library && m.name === partName);
+    if (existingIdx < 0) return;
+    const current = materials[existingIdx].qty || 1;
+    let updated;
+    if (current <= 1) {
+      updated = materials.filter((_, i) => i !== existingIdx);
+    } else {
+      updated = [...materials];
+      updated[existingIdx] = { ...updated[existingIdx], qty: current - 1 };
+    }
+    newSteps[stepIndex] = { ...newSteps[stepIndex], materials: updated };
+    setFormData({ ...formData, steps: newSteps });
+  };
+
+  const updateStepMaterial = (stepIndex, materialIndex, field, value) => {
+    const newSteps = [...formData.steps];
+    const materials = [...(newSteps[stepIndex].materials || [])];
+    materials[materialIndex] = { ...materials[materialIndex], [field]: value };
+    newSteps[stepIndex] = { ...newSteps[stepIndex], materials };
     setFormData({ ...formData, steps: newSteps });
   };
 
@@ -560,23 +599,6 @@ export default function SOPEditor() {
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label className="text-xs font-medium text-gray-300">Type</Label>
-              <div className="flex gap-3 mt-2">
-                <Button type="button" onClick={() => setFormData({ ...formData, type: 'SOP' })}
-                  className={formData.type === 'SOP' ? 'bg-white text-black hover:bg-gray-200' : 'bg-black border border-zinc-700 text-white hover:bg-zinc-800'}>
-                  SOP
-                </Button>
-                <Button type="button" onClick={() => setFormData({ ...formData, type: 'Test Plan' })}
-                  className={formData.type === 'Test Plan' ? 'bg-white text-black hover:bg-gray-200' : 'bg-black border border-zinc-700 text-white hover:bg-zinc-800'}>
-                  Test Plan
-                </Button>
-                <Button type="button" onClick={() => setFormData({ ...formData, type: 'Master' })}
-                  className={formData.type === 'Master' ? 'bg-white text-black hover:bg-gray-200' : 'bg-black border border-zinc-700 text-white hover:bg-zinc-800'}>
-                  Master
-                </Button>
-              </div>
-            </div>
-            <div>
               <Label htmlFor="title" className="text-xs font-medium text-gray-300">Title *</Label>
               <Input
                 id="title"
@@ -625,86 +647,6 @@ export default function SOPEditor() {
           </CardContent>
         </Card>
 
-        {/* Materials List */}
-        <Card className="mb-5 bg-zinc-900 border-zinc-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold text-white">Materials Required</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <p className="text-xs text-gray-400">List all materials or components needed for this SOP</p>
-            {formData.materials && formData.materials.length > 0 && (
-              <Card className="bg-black border-zinc-700">
-                <CardContent className="pt-3 pb-3">
-                  <div className="space-y-3">
-                    {formData.materials.map((material, index) => (
-                      <div key={index} className="flex items-center gap-3 pb-3 border-b border-zinc-800 last:border-b-0 last:pb-0">
-                        <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <Input value={material.name || ''} onChange={(e) => {
-                            const newMaterials = [...formData.materials];
-                            newMaterials[index] = { ...material, name: e.target.value };
-                            setFormData({ ...formData, materials: newMaterials });
-                          }} placeholder="Material name..." className="bg-zinc-900 border-zinc-600 text-white placeholder:text-gray-500 text-sm" />
-                          <Input value={material.location || ''} onChange={(e) => {
-                            const newMaterials = [...formData.materials];
-                            newMaterials[index] = { ...material, location: e.target.value };
-                            setFormData({ ...formData, materials: newMaterials });
-                          }} placeholder="Location..." className="bg-zinc-900 border-zinc-600 text-white placeholder:text-gray-500 text-sm" />
-                        </div>
-                        {material.image ? (
-                          <div className="relative flex-shrink-0 cursor-pointer group" onClick={() => setEnlargedMaterialImage(material.image)}>
-                            <img src={`${material.image}?w=80`} alt={material.name || 'Material'}
-                              className="rounded border border-zinc-600 w-12 h-12 object-cover group-hover:opacity-80 transition-opacity" />
-                          </div>
-                        ) : (
-                          <div className="flex-shrink-0">
-                            <input type="file" id={`material-image-${index}`} accept="image/*" className="hidden"
-                              onChange={async (e) => {
-                                const file = e.target.files[0];
-                                if (!file) return;
-                                setUploadingMaterialIndex(index);
-                                try {
-                                  const { file_url } = await base44.integrations.Core.UploadFile({ file });
-                                  const newMaterials = [...formData.materials];
-                                  newMaterials[index] = { ...material, image: file_url };
-                                  setFormData({ ...formData, materials: newMaterials });
-                                  toast.success('Image uploaded');
-                                } catch (error) {
-                                  toast.error('Failed to upload image');
-                                } finally {
-                                  setUploadingMaterialIndex(null);
-                                }
-                              }} />
-                            <Button variant="outline" size="icon"
-                              className="h-12 w-12 bg-zinc-900 border-zinc-600 text-white hover:bg-zinc-800"
-                              onClick={() => document.getElementById(`material-image-${index}`).click()}
-                              disabled={uploadingMaterialIndex === index}>
-                              <ImageIcon className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        )}
-                        <Button variant="ghost" size="icon" className="flex-shrink-0 text-white hover:text-red-500 hover:bg-zinc-800"
-                          onClick={() => { const newMaterials = formData.materials.filter((_, i) => i !== index); setFormData({ ...formData, materials: newMaterials }); }}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-            {enlargedMaterialImage && (
-              <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setEnlargedMaterialImage(null)}>
-                <img src={enlargedMaterialImage} alt="Enlarged view" className="max-w-full max-h-full object-contain" />
-              </div>
-            )}
-            <Button variant="outline"
-              onClick={() => setFormData({ ...formData, materials: [...(formData.materials || []), { name: '', location: '', image: '' }] })}
-              className="bg-black border-zinc-700 text-white hover:bg-zinc-800">
-              <Plus className="w-4 h-4 mr-2" />Add Material
-            </Button>
-          </CardContent>
-        </Card>
-
         {/* Steps */}
         <div className="mb-6">
           <h2 className="text-base font-semibold text-white mb-3">Steps</h2>
@@ -712,16 +654,10 @@ export default function SOPEditor() {
             {formData.steps.map((step, index) => (
               <React.Fragment key={index}>
                 {index === 0 && (
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => insertStepAt(0)}
-                      className="flex-1 bg-black border-zinc-700 text-white hover:bg-zinc-800 border-dashed">
-                      <Plus className="w-4 h-4 mr-2" />Insert Step Here
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => { setInsertMasterAtIndex(0); setShowMasterDialog(true); }}
-                      className="bg-black border-zinc-700 text-purple-400 hover:bg-zinc-800 border-dashed whitespace-nowrap">
-                      Insert From Master
-                    </Button>
-                  </div>
+                  <Button variant="outline" size="sm" onClick={() => insertStepAt(0)}
+                    className="w-full bg-black border-zinc-700 text-white hover:bg-zinc-800 border-dashed">
+                    <Plus className="w-4 h-4 mr-2" />Insert Step Here
+                  </Button>
                 )}
                 <Card className="bg-zinc-900 border-zinc-800">
                   <CardContent className="pt-4">
@@ -757,6 +693,40 @@ export default function SOPEditor() {
                         <Textarea value={step.caution || ''} onChange={(e) => updateStep(index, 'caution', e.target.value)} placeholder="Caution statement (optional)" className="bg-black border-zinc-700 text-sm text-white placeholder:text-gray-600" rows={2} />
                         <Textarea value={step.description} onChange={(e) => updateStep(index, 'description', e.target.value)} placeholder="Describe this step in detail..." className="bg-black border-zinc-700 text-sm text-white placeholder:text-gray-600" rows={3} />
                         
+                        {/* Per-step Materials */}
+                        <div className="space-y-2">
+                          {(step.materials || []).map((material, mIdx) => (
+                            material.from_library ? (
+                              <div key={mIdx} className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
+                                <div className="flex-1 min-w-0">
+                                  <span className="text-white text-xs font-medium">{material.name}</span>
+                                  {material.partNum && <span className="text-gray-500 font-mono text-xs ml-2">{material.partNum}</span>}
+                                  {material.supplier && <span className="text-gray-500 text-xs ml-2">{material.supplier}</span>}
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-red-500 hover:bg-zinc-700 flex-shrink-0"
+                                  onClick={() => removeStepMaterial(index, mIdx)}>
+                                  <X className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <div key={mIdx} className="flex items-center gap-2">
+                                <Input value={material.name || ''} onChange={(e) => updateStepMaterial(index, mIdx, 'name', e.target.value)}
+                                  placeholder="Material name..." className="flex-1 h-7 bg-black border-zinc-700 text-xs text-white placeholder:text-gray-600" />
+                                <Input value={material.location || ''} onChange={(e) => updateStepMaterial(index, mIdx, 'location', e.target.value)}
+                                  placeholder="Location..." className="flex-1 h-7 bg-black border-zinc-700 text-xs text-white placeholder:text-gray-600" />
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:text-red-500 hover:bg-zinc-800"
+                                  onClick={() => removeStepMaterial(index, mIdx)}>
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            )
+                          ))}
+                          <Button variant="outline" size="sm" onClick={() => setPartsBrowserStep(index)}
+                            className="bg-black border-zinc-700 text-white hover:bg-zinc-800 h-7 text-xs">
+                            <Plus className="w-3 h-3 mr-1" />Add Material
+                          </Button>
+                        </div>
+
                         {/* Images */}
                         <div>
                           {step.image_urls && step.image_urls.length > 0 ? (
@@ -881,6 +851,47 @@ export default function SOPEditor() {
                       <Input value={step.title} onChange={(e) => updateStep(index, 'title', e.target.value)} placeholder="Step title (optional)" className="h-8 bg-black border-zinc-700 text-sm text-white placeholder:text-gray-600" />
                       <Textarea value={step.caution || ''} onChange={(e) => updateStep(index, 'caution', e.target.value)} placeholder="Caution statement (optional)" className="bg-black border-zinc-700 text-sm text-white placeholder:text-gray-600" rows={2} />
                       <Textarea value={step.description} onChange={(e) => updateStep(index, 'description', e.target.value)} placeholder="Describe this step in detail..." className="bg-black border-zinc-700 text-sm text-white placeholder:text-gray-600" rows={3} />
+
+                      {/* Per-step Materials (mobile) */}
+                      <div className="space-y-2">
+                        {(step.materials || []).map((material, mIdx) => (
+                          material.from_library ? (
+                            <div key={mIdx} className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
+                              <div className="flex-1 min-w-0">
+                                <span className="text-white text-xs font-medium">{material.name}</span>
+                                {material.partNum && <span className="text-gray-500 font-mono text-xs ml-2">{material.partNum}</span>}
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <button onClick={() => decrementLibraryPart(index, material.name)}
+                                  className="w-5 h-5 rounded bg-zinc-700 hover:bg-zinc-600 text-white text-xs flex items-center justify-center leading-none">−</button>
+                                <span className="text-white text-xs font-medium w-5 text-center">{material.qty || 1}</span>
+                                <button onClick={() => addLibraryPart(index, material)}
+                                  className="w-5 h-5 rounded bg-zinc-700 hover:bg-zinc-600 text-white text-xs flex items-center justify-center leading-none">+</button>
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-red-500 hover:bg-zinc-700 flex-shrink-0"
+                                onClick={() => removeStepMaterial(index, mIdx)}>
+                                <X className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <div key={mIdx} className="flex items-center gap-2">
+                              <Input value={material.name || ''} onChange={(e) => updateStepMaterial(index, mIdx, 'name', e.target.value)}
+                                placeholder="Material name..." className="flex-1 h-7 bg-black border-zinc-700 text-xs text-white placeholder:text-gray-600" />
+                              <Input value={material.location || ''} onChange={(e) => updateStepMaterial(index, mIdx, 'location', e.target.value)}
+                                placeholder="Location..." className="w-24 h-7 bg-black border-zinc-700 text-xs text-white placeholder:text-gray-600" />
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-white hover:text-red-500 hover:bg-zinc-800"
+                                onClick={() => removeStepMaterial(index, mIdx)}>
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )
+                        ))}
+                        <Button variant="outline" size="sm" onClick={() => setPartsBrowserStep(index)}
+                          className="bg-black border-zinc-700 text-white hover:bg-zinc-800 h-7 text-xs">
+                          <Plus className="w-3 h-3 mr-1" />Add Material
+                        </Button>
+                      </div>
+
                       <div>
                         {step.image_urls && step.image_urls.length > 0 ? (
                           <div className="flex gap-2 flex-wrap">
@@ -997,16 +1008,10 @@ export default function SOPEditor() {
                     </div>
                   </CardContent>
                 </Card>
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" onClick={() => insertStepAt(index + 1)}
-                    className="flex-1 bg-black border-zinc-700 text-white hover:bg-zinc-800 border-dashed">
-                    <Plus className="w-4 h-4 mr-2" />Insert Step Here
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setInsertMasterAtIndex(index + 1); setShowMasterDialog(true); }}
-                    className="bg-black border-zinc-700 text-purple-400 hover:bg-zinc-800 border-dashed whitespace-nowrap">
-                    Insert From Master
-                  </Button>
-                </div>
+                <Button variant="outline" size="sm" onClick={() => insertStepAt(index + 1)}
+                  className="w-full bg-black border-zinc-700 text-white hover:bg-zinc-800 border-dashed">
+                  <Plus className="w-4 h-4 mr-2" />Insert Step Here
+                </Button>
               </React.Fragment>
             ))}
 
@@ -1040,13 +1045,6 @@ export default function SOPEditor() {
         </div>
       )}
 
-      {/* Insert From Master Dialog */}
-      <InsertMasterDialog
-        open={showMasterDialog}
-        onOpenChange={setShowMasterDialog}
-        companyId={user?.company_id}
-        onSelect={handleInsertFromMaster}
-      />
 
       {/* New Department Dialog */}
       <AlertDialog open={showNewDeptDialog} onOpenChange={setShowNewDeptDialog}>
@@ -1096,6 +1094,16 @@ export default function SOPEditor() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Parts Browser Sheet */}
+      {partsBrowserStep !== null && (
+        <PartsBrowserSheet
+          materials={formData.steps[partsBrowserStep]?.materials || []}
+          onAdd={(part) => addLibraryPart(partsBrowserStep, part)}
+          onDecrement={(partName) => decrementLibraryPart(partsBrowserStep, partName)}
+          onClose={() => setPartsBrowserStep(null)}
+        />
+      )}
 
       {/* Exit Dialog */}
       <AlertDialog open={showExitDialog} onOpenChange={setShowExitDialog}>

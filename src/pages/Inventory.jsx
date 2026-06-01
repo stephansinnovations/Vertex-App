@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Package, Layers } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Package, Layers, ScanLine } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LongPressRow from '@/components/LongPressRow';
 
@@ -49,6 +49,22 @@ export default function Inventory() {
             </LongPressRow>
           );
         })}
+
+        {/* Scan Parts */}
+        <button
+          onClick={() => navigate('/GeminiScanner')}
+          className="w-full flex items-center justify-between px-6 py-5 cursor-pointer rounded-2xl border border-blue-900/50 bg-blue-950/30 hover:bg-blue-950/50 transition-colors duration-150"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+        >
+          <div className="flex items-center gap-3">
+            <ScanLine className="w-5 h-5 text-blue-400" />
+            <div className="text-left">
+              <span className="text-lg font-medium tracking-wide text-white block">Scan Parts</span>
+              <span className="text-xs text-blue-400/70">Live AI recognition</span>
+            </div>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-500" />
+        </button>
       </div>
     </motion.div>
   );

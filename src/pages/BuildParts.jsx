@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Folder, FolderOpen, ChevronRight, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Folder, FolderOpen, ChevronRight, ChevronDown, Package } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 
@@ -125,6 +125,38 @@ export default function BuildParts() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['build', buildId] }),
   });
 
+  // Aggregate parts from tasks in localStorage
+  const taskParts = useMemo(() => {
+    try {
+      const phases = JSON.parse(localStorage.getItem(`buildPhases_${buildId}`) || '[]');
+      const map = {};
+      phases.forEach(phase => {
+        (phase.tasks || []).forEach(task => {
+          (task.parts || []).forEach(part => {
+            if (!part.name) return;
+            const key = part.name.toLowerCase().trim();
+            if (!map[key]) {
+              map[key] = {
+                name: part.name,
+                partNum: part.partNum || '',
+                supplier: part.supplier || '',
+                supplierLink: part.supplierLink || '',
+                price: part.price || '',
+                qty: 0,
+                tasks: [],
+              };
+            }
+            map[key].qty += (part.qty || 1);
+            if (!map[key].tasks.includes(task.name)) {
+              map[key].tasks.push(task.name);
+            }
+          });
+        });
+      });
+      return Object.values(map).sort((a, b) => a.name.localeCompare(b.name));
+    } catch { return []; }
+  }, [buildId]);
+
   // Group parts by sheetTab only (top-level folder, no sub-folders)
   const grouped = {};
   parts.forEach((part, index) => {
@@ -158,6 +190,35 @@ export default function BuildParts() {
             Add Part
           </button>
         </div>
+
+        {/* Parts from Tasks */}
+        {taskParts.length > 0 && (
+          <div className="rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800 mb-4" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+            <div className="flex items-center gap-2 px-6 py-4 border-b border-zinc-800">
+              <Package className="w-4 h-4 text-gray-400" />
+              <h2 className="text-white font-semibold text-sm">From Tasks</h2>
+              <span className="text-gray-500 text-xs">({taskParts.length})</span>
+            </div>
+            {taskParts.map((part, i) => (
+              <div key={i} className="flex items-start justify-between px-6 py-3 border-b border-zinc-900 last:border-b-0">
+                <div className="flex-1 min-w-0 mr-4">
+                  <p className="text-white text-sm font-medium">{part.name}</p>
+                  <div className="flex flex-wrap gap-2 mt-0.5">
+                    {part.partNum && <span className="text-gray-500 font-mono text-xs">{part.partNum}</span>}
+                    {part.supplier && (
+                      part.supplierLink
+                        ? <a href={part.supplierLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline underline-offset-2 text-xs">{part.supplier}</a>
+                        : <span className="text-gray-500 text-xs">{part.supplier}</span>
+                    )}
+                    {part.price && <span className="text-gray-500 text-xs">{part.price}</span>}
+                  </div>
+                  <p className="text-gray-600 text-xs mt-1">{part.tasks.join(', ')}</p>
+                </div>
+                <span className="text-gray-400 text-sm font-semibold flex-shrink-0">×{part.qty}</span>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Parts grouped by sheet tab */}
         <div className="rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>

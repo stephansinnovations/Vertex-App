@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, ChevronRight, CheckCircle2, Circle, ToggleLeft, ToggleRight, GripVertical } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronRight, CheckCircle2, Circle, ToggleLeft, ToggleRight, GripVertical, AlertTriangle, Package } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 
 const DEFAULT_PHASES = [
@@ -22,7 +22,9 @@ function loadPhases(buildId) {
     const stored = localStorage.getItem(`buildPhases_${buildId}`);
     if (stored) return JSON.parse(stored);
   } catch {}
-  return DEFAULT_PHASES.map(p => ({ ...p, enabled: true }));
+  const defaults = DEFAULT_PHASES.map(p => ({ ...p, enabled: true }));
+  localStorage.setItem(`buildPhases_${buildId}`, JSON.stringify(defaults));
+  return defaults;
 }
 
 function savePhases(buildId, phases) {
@@ -141,6 +143,12 @@ export default function BuildPhases() {
                   const prog = phaseProgress(phase);
                   const status = phaseStatus(phase);
                   const enabled = phase.enabled !== false;
+                  const hasWaitingOnParts = (phase.tasks || []).some(t => t.status === 'blocked' && t.blocked_reason === 'Waiting on Parts');
+                  const hasBlockedNonParts = (phase.tasks || []).some(t => t.status === 'blocked' && t.blocked_reason !== 'Waiting on Parts');
+                  const hasInProgress = (phase.tasks || []).some(t => t.status === 'in_progress');
+                  const hasNotStarted = (phase.tasks || []).some(t => t.status === 'not_started');
+                  const hasAllPartsChecked = (phase.tasks || []).some(t => t.status !== 'done' && (t.parts || []).length > 0 && (t.parts || []).every(p => p.checked));
+                  const countColor = hasInProgress ? 'text-blue-400' : hasAllPartsChecked ? 'text-green-400' : hasNotStarted ? 'text-gray-500' : hasBlockedNonParts ? 'text-red-400' : hasWaitingOnParts ? 'text-yellow-400' : 'text-gray-500';
 
                   return (
                     <Draggable key={phase.id} draggableId={phase.id} index={index} isDragDisabled={!editing}>
@@ -160,8 +168,14 @@ export default function BuildPhases() {
                             )}
                             <div className="min-w-0">
                               <span className="text-white font-medium truncate block">{phase.name}</span>
-                              <span className={`text-xs ${STATUS_COLORS[status]}`}>
-                                {prog ? `${prog.done}/${prog.total} tasks · ` : ''}{STATUS_LABELS[status]}
+                              <span className="text-xs inline-flex items-center gap-1">
+                                {prog
+                                  ? <span className={countColor}>{prog.done}/{prog.total} tasks</span>
+                                  : <span className="text-gray-700">{STATUS_LABELS['empty']}</span>}
+                                {status === 'done' && <span className="text-green-400"> · Complete</span>}
+                                {hasInProgress && <Circle className="w-3 h-3 text-blue-400" />}
+                                {hasBlockedNonParts && <AlertTriangle className="w-3 h-3 text-red-400" />}
+                                {hasWaitingOnParts && <Package className="w-3 h-3 text-yellow-400" />}
                               </span>
                             </div>
                           </div>

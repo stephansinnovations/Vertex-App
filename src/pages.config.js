@@ -49,7 +49,6 @@
  */
 import SOPEditor from './pages/SOPEditor';
 import SOPList from './pages/SOPList';
-import SOPPerform from './pages/SOPPerform';
 import SOPView from './pages/SOPView';
 import Home from './pages/Home';
 
@@ -58,7 +57,6 @@ export const PAGES = {
     "Home": Home,
     "SOPEditor": SOPEditor,
     "SOPList": SOPList,
-    "SOPPerform": SOPPerform,
     "SOPView": SOPView,
 }
 

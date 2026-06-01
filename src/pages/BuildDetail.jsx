@@ -61,7 +61,9 @@ export default function BuildDetail() {
   const [editValue, setEditValue] = useState('');
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [buildNameValue, setBuildNameValue] = useState(buildName);
   const inputRef = useRef(null);
+  const nameInputRef = useRef(null);
 
   const handleSettingsClick = () => {
     if (editing) {
@@ -70,7 +72,17 @@ export default function BuildDetail() {
       setShowDelete(false);
     } else {
       setEditing(true);
+      setBuildNameValue(buildName);
+      setTimeout(() => nameInputRef.current?.focus(), 50);
     }
+  };
+
+  const commitBuildRename = async () => {
+    const trimmed = buildNameValue.trim();
+    if (!trimmed || trimmed === buildName) return;
+    await base44.entities.Build.update(buildId, { name: trimmed });
+    // Update URL so back-navigation reflects new name
+    window.history.replaceState(null, '', `/BuildDetail?id=${buildId}&name=${encodeURIComponent(trimmed)}`);
   };
 
   const handleFolderClick = (folder) => {
@@ -122,10 +134,21 @@ export default function BuildDetail() {
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
-          <button onClick={() => navigate('/Builds')} className="text-gray-400 hover:text-white transition-colors">
+          <button onClick={() => navigate('/Builds')} className="text-gray-400 hover:text-white transition-colors flex-shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-4xl font-bold text-white tracking-tight">{buildName}</h1>
+          {editing ? (
+            <input
+              ref={nameInputRef}
+              value={buildNameValue}
+              onChange={e => setBuildNameValue(e.target.value)}
+              onBlur={commitBuildRename}
+              onKeyDown={e => { if (e.key === 'Enter') { commitBuildRename(); nameInputRef.current?.blur(); } if (e.key === 'Escape') { setBuildNameValue(buildName); nameInputRef.current?.blur(); } }}
+              className="flex-1 text-4xl font-bold text-white tracking-tight bg-transparent border-b-2 border-zinc-600 focus:border-white focus:outline-none pb-1"
+            />
+          ) : (
+            <h1 className="text-4xl font-bold text-white tracking-tight">{buildNameValue}</h1>
+          )}
         </div>
 
         {/* Folders */}

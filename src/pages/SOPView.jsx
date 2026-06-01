@@ -195,14 +195,6 @@ export default function SOPView() {
                 Edit
               </Button>
             </Link>
-            <Link to={createPageUrl('SOPPerform') + '?id=' + sopId} className="ml-auto">
-              <Button
-                variant="outline"
-                className="flex items-center justify-center gap-2 bg-black border-zinc-700 text-white hover:bg-zinc-800"
-              >
-                Perform
-              </Button>
-            </Link>
           </div>
 
           {/* Materials List */}
@@ -251,6 +243,40 @@ export default function SOPView() {
             </div>
           )}
 
+          {/* Aggregated Parts List */}
+          {(() => {
+            const partMap = {};
+            (sop.steps || []).forEach(step => {
+              (step.materials || []).forEach(m => {
+                if (!m.name) return;
+                if (partMap[m.name]) {
+                  partMap[m.name].qty = (partMap[m.name].qty || 1) + (m.qty || 1);
+                } else {
+                  partMap[m.name] = { ...m, qty: m.qty || 1 };
+                }
+              });
+            });
+            const parts = Object.values(partMap);
+            if (parts.length === 0) return null;
+            return (
+              <div className="mb-8 print:mb-6">
+                <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 print:text-gray-600">Parts Required</h2>
+                <div className="bg-zinc-900 border border-zinc-800 rounded-lg divide-y divide-zinc-800 print:bg-white print:border-gray-200">
+                  {parts.map((part, i) => (
+                    <div key={i} className="flex items-center justify-between px-4 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm text-white print:text-gray-900">{part.name}</span>
+                        {part.partNum && <span className="text-xs text-zinc-500 font-mono ml-2">{part.partNum}</span>}
+                        {part.supplier && <span className="text-xs text-zinc-500 ml-2">{part.supplier}</span>}
+                      </div>
+                      <span className="text-sm font-medium text-zinc-400 print:text-gray-500 flex-shrink-0 ml-4">×{part.qty}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Steps */}
           <div className="space-y-4 print:space-y-2">
             {sop.steps && sop.steps.length > 0 ? (
@@ -291,6 +317,16 @@ export default function SOPView() {
                         <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed print:text-xs print:leading-tight print:text-gray-700">
                           {step.description}
                         </p>
+                      )}
+                      {step.materials && step.materials.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {step.materials.map((m, mi) => (
+                            <span key={mi} className="inline-flex items-center gap-1 bg-zinc-800 border border-zinc-700 text-zinc-400 text-xs px-2 py-0.5 rounded-full print:bg-gray-100 print:border-gray-300 print:text-gray-600">
+                              {m.name}
+                              {(m.qty && m.qty > 1) && <span className="text-zinc-500 print:text-gray-400">×{m.qty}</span>}
+                            </span>
+                          ))}
+                        </div>
                       )}
                       {(step.input_type === 'measurements' || step.input_type === 'time') && step.measurements && step.measurements.length > 0 && (
                         <div className="mt-2">

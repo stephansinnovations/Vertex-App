@@ -77,12 +77,11 @@ export default function Home() {
         <div className="flex justify-center pt-3 pb-1">
           <button onClick={openChat} className="flex flex-col items-center gap-1">
             <img src="/src/assets/vertex-logo.png" alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
-            <span className="text-[9px] text-white/50 font-medium">Vertex AI</span>
           </button>
         </div>
 
         {/* Row 2 — nav icons with dark background */}
-        <div className="flex items-center justify-center gap-8 px-4 pb-6 pt-2 bg-black/95 backdrop-blur-md border-t border-zinc-800">
+        <div className="flex items-center justify-around px-8 pb-6 pt-2 bg-black/95 backdrop-blur-md border-t border-zinc-800">
           <button onClick={() => navigate(createPageUrl('SOPList'))} className="flex flex-col items-center gap-1">
             <FileText className="w-5 h-5 text-white/70" />
             <span className="text-[9px] text-white/50 font-medium">SOPs</span>

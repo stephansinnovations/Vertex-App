@@ -19,6 +19,33 @@ export function clearHistory(ctx) {
   localStorage.removeItem(A_PREFIX + ctx);
 }
 
+export function getCurrentPageName() {
+  const path = window.location.pathname;
+  const p = new URLSearchParams(window.location.search);
+  if (path.includes('BuildDetail'))        return `BuildDetail (id=${p.get('id') || '?'})`;
+  if (path.includes('BuildPhases'))        return `BuildPhases (id=${p.get('id') || '?'})`;
+  if (path.includes('BuildWorkOrder'))     return `BuildWorkOrder (id=${p.get('id') || '?'})`;
+  if (path.includes('BuildPartsLibrary'))  return `BuildPartsLibrary (id=${p.get('id') || '?'})`;
+  if (path.includes('PhaseDetail'))        return `PhaseDetail (buildId=${p.get('buildId') || '?'}, phaseId=${p.get('phaseId') || '?'})`;
+  if (path.includes('SOPEditor'))          return `SOPEditor (id=${p.get('id') || '?'})`;
+  if (path.includes('SOPView'))            return `SOPView (id=${p.get('id') || '?'})`;
+  if (path.includes('SOPPerform'))         return `SOPPerform (id=${p.get('id') || '?'})`;
+  if (path.includes('SOPList'))            return 'SOPList';
+  if (path.includes('WorkOrderPage'))      return `WorkOrderPage (id=${p.get('id') || '?'})`;
+  if (path.includes('Builds'))             return 'Builds';
+  if (path.includes('PartsLibrary'))       return 'PartsLibrary';
+  if (path.includes('Inventory'))          return 'Inventory';
+  if (path.includes('Stock'))              return 'Stock';
+  if (path.includes('Contacts'))           return 'Contacts';
+  if (path.includes('MeetingNotes'))       return 'MeetingNotes';
+  if (path.includes('MasterSheet'))        return 'MasterSheet';
+  if (path.includes('TeamProfiles'))       return 'TeamProfiles';
+  if (path.includes('MyProfile'))          return 'MyProfile';
+  if (path.includes('Vertex'))             return 'Vertex';
+  if (path === '/' || path.includes('Home')) return 'Home';
+  return path;
+}
+
 export function getContextKey() {
   const path = window.location.pathname;
   const p = new URLSearchParams(window.location.search);

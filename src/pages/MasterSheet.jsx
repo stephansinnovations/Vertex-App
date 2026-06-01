@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Edit2, Check, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Edit2, Check, X, Key } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 export default function MasterSheet() {
@@ -9,6 +9,9 @@ export default function MasterSheet() {
   const [inputUrl, setInputUrl] = useState('');
   const [editing, setEditing] = useState(!localStorage.getItem('masterSheetUrl'));
   const [loading, setLoading] = useState(true);
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
+  const [editingKey, setEditingKey] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
 
   useEffect(() => {
     const loadUrl = async () => {
@@ -65,6 +68,15 @@ export default function MasterSheet() {
   const handleCancel = () => {
     setInputUrl('');
     setEditing(false);
+  };
+
+  const saveGeminiKey = () => {
+    const trimmed = keyInput.trim();
+    if (!trimmed) return;
+    localStorage.setItem('geminiApiKey', trimmed);
+    setGeminiKey(trimmed);
+    setEditingKey(false);
+    setKeyInput('');
   };
 
   return (
@@ -133,6 +145,42 @@ export default function MasterSheet() {
           </div>
         </div>
       )}
+
+      {/* Gemini API Key */}
+      <div className="px-6 py-4 bg-zinc-900 border-b border-zinc-800 flex-shrink-0">
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <Key className="w-4 h-4 text-gray-400" />
+            <span className="text-sm font-medium text-white">Gemini API Key</span>
+          </div>
+          {geminiKey && !editingKey && (
+            <button onClick={() => { setKeyInput(geminiKey); setEditingKey(true); }} className="text-xs text-gray-500 hover:text-white transition-colors">Change</button>
+          )}
+        </div>
+        {editingKey || !geminiKey ? (
+          <div className="flex gap-2 mt-2">
+            <input
+              type="password"
+              value={keyInput}
+              onChange={e => setKeyInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveGeminiKey(); if (e.key === 'Escape') setEditingKey(false); }}
+              placeholder="AIza..."
+              className="flex-1 bg-black border border-zinc-700 rounded px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
+              autoFocus={editingKey}
+            />
+            <button onClick={saveGeminiKey} className="bg-white text-black font-semibold text-sm px-4 py-2 rounded hover:bg-gray-200 transition-colors flex items-center gap-1">
+              <Check className="w-4 h-4" /> Save
+            </button>
+            {geminiKey && (
+              <button onClick={() => setEditingKey(false)} className="bg-zinc-800 text-white text-sm px-3 py-2 rounded hover:bg-zinc-700 transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ) : (
+          <p className="text-gray-500 text-xs mt-1">••••••••••••••••••••• <span className="text-green-400 ml-1">✓ Set</span></p>
+        )}
+      </div>
 
       {/* Sheet embed */}
       <div className="flex-1">
