@@ -452,8 +452,9 @@ export default function SOPEditor() {
       }
       const uploadData = await uploadRes.json();
       const fileUri = uploadData.file?.uri;
-      const fileName = uploadData.file?.name;
+      const fileName = uploadData.file?.name; // e.g. "files/abc123"
       if (!fileUri) throw new Error('No file URI returned');
+      console.log('Uploaded file:', { fileUri, fileName });
 
       // Step 3: Wait for file to be processed
       let fileReady = false;
@@ -462,7 +463,9 @@ export default function SOPEditor() {
           `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`
         );
         const statusData = await statusRes.json();
+        console.log('File status:', statusData.state);
         if (statusData.state === 'ACTIVE') { fileReady = true; break; }
+        if (statusData.state === 'FAILED') throw new Error('Video processing failed');
         await new Promise(r => setTimeout(r, 3000));
       }
       if (!fileReady) throw new Error('Video processing timed out');
