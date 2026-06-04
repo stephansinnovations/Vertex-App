@@ -480,7 +480,7 @@ export default function SOPEditor() {
             contents: [{
               parts: [
                 { file_data: { mime_type: file.type, file_uri: fileUri } },
-                { text: `Watch this video and generate a detailed SOP (Standard Operating Procedure) for the task being performed. Return ONLY valid JSON with this exact structure:
+                { text: `Watch this video and generate a detailed SOP (Standard Operating Procedure) for the task being performed. For each step, also include a "timestamp_seconds" field with the approximate second in the video when that step occurs. Return ONLY valid JSON with this exact structure:
 {
   "title": "short descriptive title",
   "description": "1-2 sentence overview of what this SOP covers",
@@ -491,6 +491,7 @@ export default function SOPEditor() {
       "title": "step title",
       "description": "detailed description of this step",
       "caution": "any safety warning or empty string",
+      "timestamp_seconds": 5,
       "substeps": [
         { "substep_number": 1, "title": "substep title", "description": "detail", "caution": "" }
       ]
@@ -515,29 +516,56 @@ export default function SOPEditor() {
       const result = JSON.parse(text);
 
       if (result.steps?.length > 0) {
+        // Extract frames from video at each step's timestamp
+        const extractFrame = (videoFile, timeSeconds) => new Promise((resolve) => {
+          const video = document.createElement('video');
+          const canvas = document.createElement('canvas');
+          video.muted = true;
+          video.src = URL.createObjectURL(videoFile);
+          video.addEventListener('loadedmetadata', () => {
+            video.currentTime = Math.min(timeSeconds, video.duration - 0.1);
+          });
+          video.addEventListener('seeked', () => {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            resolve(canvas.toDataURL('image/jpeg', 0.8));
+            URL.revokeObjectURL(video.src);
+          });
+          video.addEventListener('error', () => resolve(null));
+        });
+
+        const stepsWithFrames = await Promise.all(
+          result.steps.map(async (step, index) => {
+            const ts = step.timestamp_seconds ?? index * 5;
+            const frameUrl = await extractFrame(file, ts);
+            return {
+              id: Date.now() + index,
+              step_number: step.step_number || index + 1,
+              title: step.title || '',
+              description: step.description || '',
+              caution: step.caution || '',
+              image_url: frameUrl,
+              substeps: (step.substeps || []).map((sub, si) => ({
+                id: Date.now() + index * 100 + si,
+                substep_number: sub.substep_number || si + 1,
+                title: sub.title || '',
+                description: sub.description || '',
+                caution: sub.caution || '',
+                image_url: null
+              }))
+            };
+          })
+        );
+
         setFormData(prev => ({
           ...prev,
           title: prev.title || result.title || '',
           description: prev.description || result.description || '',
           group: prev.group || result.department || '',
-          steps: result.steps.map((step, index) => ({
-            id: Date.now() + index,
-            step_number: step.step_number || index + 1,
-            title: step.title || '',
-            description: step.description || '',
-            caution: step.caution || '',
-            image_url: null,
-            substeps: (step.substeps || []).map((sub, si) => ({
-              id: Date.now() + index * 100 + si,
-              substep_number: sub.substep_number || si + 1,
-              title: sub.title || '',
-              description: sub.description || '',
-              caution: sub.caution || '',
-              image_url: null
-            }))
-          }))
+          steps: stepsWithFrames
         }));
-        toast.success(`Generated ${result.steps.length} steps from video`);
+        toast.success(`Generated ${result.steps.length} steps with screenshots from video`);
       } else {
         toast.error('No steps found in video');
       }
