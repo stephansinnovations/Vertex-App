@@ -752,11 +752,11 @@ export default function SOPEditor() {
             </div>
             <Button
               onClick={handleSave}
-              disabled={saveMutation.isPending || processingVideo}
+              disabled={saveMutation.isPending}
               className="bg-white text-black hover:bg-gray-200 font-semibold"
             >
               <Save className="w-4 h-4 mr-2" />
-              {processingVideo ? 'Processing Video...' : saveMutation.isPending ? 'Saving...' : 'Save SOP'}
+              {saveMutation.isPending ? 'Saving...' : 'Save SOP'}
             </Button>
           </div>
         </div>
