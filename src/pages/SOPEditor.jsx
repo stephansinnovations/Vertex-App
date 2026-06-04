@@ -721,17 +721,22 @@ export default function SOPEditor() {
                 <Video className="w-4 h-4 text-purple-400" />
                 Import from Video
               </div>
-              {localStorage.getItem('geminiApiKey') ? (
-                <span className="flex items-center gap-1 text-xs font-normal text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                  Gemini API Key Set
-                </span>
-              ) : (
-                <span className="flex items-center gap-1 text-xs font-normal text-red-400 bg-red-400/10 px-2 py-1 rounded-full">
-                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-                  No Gemini API Key
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {localStorage.getItem('geminiApiKey') ? (
+                  <span className="flex items-center gap-1 text-xs font-normal text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    Gemini API Key Set
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-xs font-normal text-red-400 bg-red-400/10 px-2 py-1 rounded-full">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    No Gemini API Key
+                  </span>
+                )}
+                <button onClick={() => navigate('/MasterSheet')} className="text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-full transition-colors">
+                  Add Key
+                </button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
