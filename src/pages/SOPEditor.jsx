@@ -716,9 +716,22 @@ export default function SOPEditor() {
         {/* Video Import */}
         <Card className="mb-5 bg-zinc-900 border-zinc-800">
           <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
-              <Video className="w-4 h-4 text-purple-400" />
-              Import from Video
+            <CardTitle className="text-base font-semibold text-white flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-purple-400" />
+                Import from Video
+              </div>
+              {localStorage.getItem('geminiApiKey') ? (
+                <span className="flex items-center gap-1 text-xs font-normal text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  Gemini API Key Set
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-xs font-normal text-red-400 bg-red-400/10 px-2 py-1 rounded-full">
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                  No Gemini API Key
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
