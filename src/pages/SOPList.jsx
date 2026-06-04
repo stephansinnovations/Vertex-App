@@ -131,7 +131,6 @@ export default function SOPList() {
             </Button>
             <div>
               <h1 className="text-4xl font-bold text-white tracking-tight">SOP's</h1>
-              <p className="text-gray-400 mt-2">Create and manage your team's SOPs by department</p>
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
