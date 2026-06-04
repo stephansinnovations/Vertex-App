@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, Sparkles, Ruler, X } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Image as ImageIcon, Sparkles, Ruler, X, Video } from 'lucide-react';
 import MeasurementsInput from '@/components/MeasurementsInput';
 import PartsBrowserSheet from '@/components/PartsBrowserSheet';
 import AddVariableMenu from '@/components/AddVariableMenu';
@@ -56,6 +56,8 @@ export default function SOPEditor() {
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState(null);
   const [partsBrowserStep, setPartsBrowserStep] = useState(null);
   const [processingPdf, setProcessingPdf] = useState(false);
+  const [processingVideo, setProcessingVideo] = useState(false);
+  const [videoFileName, setVideoFileName] = useState(null);
   const [simplifyingStepIndex, setSimplifyingStepIndex] = useState(null);
   const [simplifyingSubstepIndex, setSimplifyingSubstepIndex] = useState(null);
   const [simplifyingAll, setSimplifyingAll] = useState(false);
@@ -399,6 +401,125 @@ export default function SOPEditor() {
     }
   };
 
+  const handleVideoImport = async (file) => {
+    if (!file) return;
+    const apiKey = localStorage.getItem('geminiApiKey');
+    if (!apiKey) {
+      toast.error('Gemini API key not set — add it in Master Sheet settings');
+      return;
+    }
+    setVideoFileName(file.name);
+    setProcessingVideo(true);
+    try {
+      // Upload video to Gemini File API
+      const uploadRes = await fetch(
+        `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'X-Goog-Upload-Protocol': 'multipart', 'Content-Type': `multipart/form-data; boundary=boundary` },
+          body: (() => {
+            const boundary = '----boundary';
+            const metadata = JSON.stringify({ file: { display_name: file.name, mime_type: file.type } });
+            const enc = new TextEncoder();
+            const metaPart = enc.encode(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${metadata}\r\n`);
+            const filePart = enc.encode(`--${boundary}\r\nContent-Type: ${file.type}\r\n\r\n`);
+            const end = enc.encode(`\r\n--${boundary}--`);
+            return new Blob([metaPart, filePart, file, end]);
+          })(),
+        }
+      );
+
+      if (!uploadRes.ok) throw new Error('Video upload failed');
+      const uploadData = await uploadRes.json();
+      const fileUri = uploadData.file?.uri;
+      if (!fileUri) throw new Error('No file URI returned');
+
+      // Wait for file to be processed
+      let fileReady = false;
+      for (let i = 0; i < 20; i++) {
+        const statusRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/${uploadData.file.name}?key=${apiKey}`
+        );
+        const statusData = await statusRes.json();
+        if (statusData.state === 'ACTIVE') { fileReady = true; break; }
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      if (!fileReady) throw new Error('Video processing timed out');
+
+      // Generate SOP from video
+      const genRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { file_data: { mime_type: file.type, file_uri: fileUri } },
+                { text: `Watch this video and generate a detailed SOP (Standard Operating Procedure) for the task being performed. Return ONLY valid JSON with this exact structure:
+{
+  "title": "short descriptive title",
+  "description": "1-2 sentence overview of what this SOP covers",
+  "department": "department name (e.g. Electrical, Interior, Fabrication)",
+  "steps": [
+    {
+      "step_number": 1,
+      "title": "step title",
+      "description": "detailed description of this step",
+      "caution": "any safety warning or empty string",
+      "substeps": [
+        { "substep_number": 1, "title": "substep title", "description": "detail", "caution": "" }
+      ]
+    }
+  ]
+}` }
+              ]
+            }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        }
+      );
+
+      if (!genRes.ok) throw new Error('Gemini generation failed');
+      const genData = await genRes.json();
+      const text = genData.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!text) throw new Error('No response from Gemini');
+      const result = JSON.parse(text);
+
+      if (result.steps?.length > 0) {
+        setFormData(prev => ({
+          ...prev,
+          title: prev.title || result.title || '',
+          description: prev.description || result.description || '',
+          group: prev.group || result.department || '',
+          steps: result.steps.map((step, index) => ({
+            id: Date.now() + index,
+            step_number: step.step_number || index + 1,
+            title: step.title || '',
+            description: step.description || '',
+            caution: step.caution || '',
+            image_url: null,
+            substeps: (step.substeps || []).map((sub, si) => ({
+              id: Date.now() + index * 100 + si,
+              substep_number: sub.substep_number || si + 1,
+              title: sub.title || '',
+              description: sub.description || '',
+              caution: sub.caution || '',
+              image_url: null
+            }))
+          }))
+        }));
+        toast.success(`Generated ${result.steps.length} steps from video`);
+      } else {
+        toast.error('No steps found in video');
+      }
+    } catch (err) {
+      toast.error(err.message || 'Failed to process video');
+    } finally {
+      setProcessingVideo(false);
+    }
+  };
+
   const handleConvertPdfToSop = async () => {
     if (!uploadedPdfUrl) return;
     setProcessingPdf(true);
@@ -589,6 +710,35 @@ export default function SOPEditor() {
               )}
             </div>
             {uploadedPdfUrl && !processingPdf && <p className="text-sm text-gray-400">✓ PDF ready to convert</p>}
+          </CardContent>
+        </Card>
+
+        {/* Video Import */}
+        <Card className="mb-5 bg-zinc-900 border-zinc-800">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold text-white flex items-center gap-2">
+              <Video className="w-4 h-4 text-purple-400" />
+              Import from Video
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-gray-400">Upload a video and Vertex AI will watch it and generate all SOP steps automatically</p>
+            <div className="flex gap-3 items-center">
+              <input type="file" id="video-upload" accept="video/*" className="hidden"
+                onChange={(e) => { const file = e.target.files[0]; if (file) handleVideoImport(file); e.target.value = ''; }} />
+              <Button variant="outline" onClick={() => document.getElementById('video-upload').click()}
+                disabled={processingVideo} className="bg-black border-zinc-700 text-white hover:bg-zinc-800">
+                <Video className="w-4 h-4 mr-2" />
+                {processingVideo ? 'Processing...' : videoFileName ? 'Change Video' : 'Upload Video'}
+              </Button>
+              {processingVideo && (
+                <div className="flex items-center gap-2 text-sm text-purple-400">
+                  <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+                  Analyzing video with Gemini AI...
+                </div>
+              )}
+            </div>
+            {videoFileName && !processingVideo && <p className="text-sm text-gray-400">✓ {videoFileName}</p>}
           </CardContent>
         </Card>
 
