@@ -429,7 +429,10 @@ export default function SOPEditor() {
           body: JSON.stringify({ file: { display_name: file.name } }),
         }
       );
-      if (!startRes.ok) throw new Error('Failed to start video upload');
+      if (!startRes.ok) {
+        const errText = await startRes.text();
+        throw new Error(`Failed to start video upload: ${startRes.status} ${errText}`);
+      }
       const uploadUrl = startRes.headers.get('X-Goog-Upload-URL');
       if (!uploadUrl) throw new Error('No upload URL returned');
 
@@ -443,7 +446,10 @@ export default function SOPEditor() {
         },
         body: file,
       });
-      if (!uploadRes.ok) throw new Error('Video upload failed');
+      if (!uploadRes.ok) {
+        const errText = await uploadRes.text();
+        throw new Error(`Video upload failed: ${uploadRes.status} ${errText}`);
+      }
       const uploadData = await uploadRes.json();
       const fileUri = uploadData.file?.uri;
       const fileName = uploadData.file?.name;
@@ -495,10 +501,14 @@ export default function SOPEditor() {
         }
       );
 
-      if (!genRes.ok) throw new Error('Gemini generation failed');
+      if (!genRes.ok) {
+        const errText = await genRes.text();
+        throw new Error(`Gemini generation failed: ${genRes.status} ${errText}`);
+      }
       const genData = await genRes.json();
+      console.log('Gemini response:', JSON.stringify(genData, null, 2));
       const text = genData.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error('No response from Gemini');
+      if (!text) throw new Error(`No response from Gemini. Full response: ${JSON.stringify(genData)}`);
       const result = JSON.parse(text);
 
       if (result.steps?.length > 0) {
