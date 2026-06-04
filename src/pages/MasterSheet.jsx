@@ -1,21 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ExternalLink, Edit2, Check, X, Key } from 'lucide-react';
+import { getSetting, setSetting } from '@/api/appSettings';
 
 
 export default function MasterSheet() {
   const navigate = useNavigate();
-  const [sheetUrl, setSheetUrl] = useState(() => localStorage.getItem('masterSheetUrl') || '');
+  const [sheetUrl, setSheetUrl] = useState('');
   const [inputUrl, setInputUrl] = useState('');
-  const [editing, setEditing] = useState(!localStorage.getItem('masterSheetUrl'));
+  const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
+  const [geminiKey, setGeminiKey] = useState('');
   const [editingKey, setEditingKey] = useState(false);
   const [keyInput, setKeyInput] = useState('');
 
   useEffect(() => {
-    if (!localStorage.getItem('masterSheetUrl')) setEditing(true);
-    setLoading(false);
+    Promise.all([getSetting('masterSheetUrl'), getSetting('geminiApiKey')]).then(([url, key]) => {
+      if (url) setSheetUrl(url);
+      else setEditing(true);
+      if (key) setGeminiKey(key);
+      setLoading(false);
+    });
   }, []);
 
   const getEmbedUrl = (url) => {
@@ -38,7 +43,7 @@ export default function MasterSheet() {
     const trimmed = inputUrl.trim();
     if (!trimmed) return;
     setSheetUrl(trimmed);
-    localStorage.setItem('masterSheetUrl', trimmed);
+    await setSetting('masterSheetUrl', trimmed);
     setEditing(false);
     setInputUrl('');
     setLoading(false);
@@ -54,10 +59,10 @@ export default function MasterSheet() {
     setEditing(false);
   };
 
-  const saveGeminiKey = () => {
+  const saveGeminiKey = async () => {
     const trimmed = keyInput.trim();
     if (!trimmed) return;
-    localStorage.setItem('geminiApiKey', trimmed);
+    await setSetting('geminiApiKey', trimmed);
     setGeminiKey(trimmed);
     setEditingKey(false);
     setKeyInput('');

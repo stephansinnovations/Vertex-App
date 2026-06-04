@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories } from '@/api/googleSheets';
+import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
   try {
@@ -251,7 +252,7 @@ export default function PartsLibrary() {
   useEffect(() => {
     const loadSheet = async () => {
       try {
-        const url = localStorage.getItem('masterSheetUrl');
+        const url = await getSetting('masterSheetUrl');
         if (!url) { setLoading(false); return; }
         const id = extractSpreadsheetId(url);
         if (!id) { setLoading(false); return; }
