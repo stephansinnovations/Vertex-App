@@ -5,13 +5,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, Edit, Download, Calendar, User, X, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Edit, Download, Calendar, User, X, ExternalLink, Play } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
+
+function formatTimestamp(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
 
 export default function SOPView() {
   const navigate = useNavigate();
   const printRef = useRef();
+  const videoRef = useRef();
   const urlParams = new URLSearchParams(window.location.search);
   const sopId = urlParams.get('id');
   const returnTo = urlParams.get('returnTo');
@@ -154,6 +161,22 @@ export default function SOPView() {
               )}
             </div>
           </div>
+
+          {/* Video Player */}
+          {sop.video_url && (
+            <div className="mb-6 no-print">
+              <div className="flex items-center gap-2 mb-2">
+                <Play className="w-4 h-4 text-purple-400" />
+                <span className="text-sm font-medium text-white">Source Video</span>
+              </div>
+              <video
+                ref={videoRef}
+                src={sop.video_url}
+                controls
+                className="w-full rounded-xl border border-zinc-800 max-h-64 bg-black"
+              />
+            </div>
+          )}
 
           {/* Progress Bar - Only for work order copies */}
           {sop.original_sop_id && sop.steps && sop.steps.length > 0 && (
@@ -301,11 +324,28 @@ export default function SOPView() {
                        </div>
                      </div>
                     <div className="flex-1">
-                      {step.title && (
-                        <h3 className="text-base font-semibold text-white mb-2 print:text-sm print:mb-1 print:text-gray-900">
-                          {step.title}
-                        </h3>
-                      )}
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        {step.title && (
+                          <h3 className="text-base font-semibold text-white print:text-sm print:text-gray-900">
+                            {step.title}
+                          </h3>
+                        )}
+                        {step.timestamp_seconds != null && sop.video_url && (
+                          <button
+                            onClick={() => {
+                              if (videoRef.current) {
+                                videoRef.current.currentTime = step.timestamp_seconds;
+                                videoRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                videoRef.current.play();
+                              }
+                            }}
+                            className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300 bg-purple-400/10 hover:bg-purple-400/20 px-2 py-0.5 rounded-full transition-colors whitespace-nowrap no-print"
+                          >
+                            <Play className="w-3 h-3" />
+                            {formatTimestamp(step.timestamp_seconds)}
+                          </button>
+                        )}
+                      </div>
                       {step.caution && (
                         <div className="mb-2 p-3 bg-zinc-800 border border-zinc-700 rounded-lg print:p-1.5 print:mb-1 print:bg-red-50 print:border-red-200">
                           <p className="text-sm text-gray-300 font-medium whitespace-pre-wrap print:text-xs print:text-red-700">

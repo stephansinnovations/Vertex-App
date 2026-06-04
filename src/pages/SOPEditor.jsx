@@ -46,7 +46,8 @@ export default function SOPEditor() {
     description: '',
     group: prefillGroup,
     materials: [],
-    steps: []
+    steps: [],
+    video_url: null
   });
 
   const [workOrders, setWorkOrders] = useState([]);
@@ -516,12 +517,21 @@ export default function SOPEditor() {
       const result = JSON.parse(text);
 
       if (result.steps?.length > 0) {
+        // Upload video to get a permanent URL
+        let videoUrl = null;
+        try {
+          const { file_url } = await base44.integrations.Core.UploadFile({ file });
+          videoUrl = file_url;
+        } catch { /* video upload optional */ }
+
         // Extract frames from video at each step's timestamp
         const extractFrame = (videoFile, timeSeconds) => new Promise((resolve) => {
           const video = document.createElement('video');
           const canvas = document.createElement('canvas');
           video.muted = true;
-          video.src = URL.createObjectURL(videoFile);
+          video.crossOrigin = 'anonymous';
+          const objectUrl = URL.createObjectURL(videoFile);
+          video.src = objectUrl;
           video.addEventListener('loadedmetadata', () => {
             video.currentTime = Math.min(timeSeconds, video.duration - 0.1);
           });
@@ -529,10 +539,11 @@ export default function SOPEditor() {
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             canvas.getContext('2d').drawImage(video, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg', 0.8));
-            URL.revokeObjectURL(video.src);
+            resolve(canvas.toDataURL('image/jpeg', 0.75));
+            URL.revokeObjectURL(objectUrl);
           });
-          video.addEventListener('error', () => resolve(null));
+          video.addEventListener('error', () => { URL.revokeObjectURL(objectUrl); resolve(null); });
+          video.load();
         });
 
         const stepsWithFrames = await Promise.all(
@@ -545,14 +556,15 @@ export default function SOPEditor() {
               title: step.title || '',
               description: step.description || '',
               caution: step.caution || '',
-              image_url: frameUrl,
+              timestamp_seconds: ts,
+              image_urls: frameUrl ? [frameUrl] : [],
               substeps: (step.substeps || []).map((sub, si) => ({
                 id: Date.now() + index * 100 + si,
                 substep_number: sub.substep_number || si + 1,
                 title: sub.title || '',
                 description: sub.description || '',
                 caution: sub.caution || '',
-                image_url: null
+                image_urls: []
               }))
             };
           })
@@ -563,6 +575,7 @@ export default function SOPEditor() {
           title: prev.title || result.title || '',
           description: prev.description || result.description || '',
           group: prev.group || result.department || '',
+          video_url: videoUrl,
           steps: stepsWithFrames
         }));
         toast.success(`Generated ${result.steps.length} steps with screenshots from video`);
