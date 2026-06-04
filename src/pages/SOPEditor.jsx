@@ -414,34 +414,46 @@ export default function SOPEditor() {
     setVideoFileName(file.name);
     setProcessingVideo(true);
     try {
-      // Upload video to Gemini File API
-      const uploadRes = await fetch(
+      // Step 1: Start resumable upload
+      const startRes = await fetch(
         `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
         {
           method: 'POST',
-          headers: { 'X-Goog-Upload-Protocol': 'multipart', 'Content-Type': `multipart/form-data; boundary=boundary` },
-          body: (() => {
-            const boundary = '----boundary';
-            const metadata = JSON.stringify({ file: { display_name: file.name, mime_type: file.type } });
-            const enc = new TextEncoder();
-            const metaPart = enc.encode(`--${boundary}\r\nContent-Type: application/json\r\n\r\n${metadata}\r\n`);
-            const filePart = enc.encode(`--${boundary}\r\nContent-Type: ${file.type}\r\n\r\n`);
-            const end = enc.encode(`\r\n--${boundary}--`);
-            return new Blob([metaPart, filePart, file, end]);
-          })(),
+          headers: {
+            'X-Goog-Upload-Protocol': 'resumable',
+            'X-Goog-Upload-Command': 'start',
+            'X-Goog-Upload-Header-Content-Length': file.size,
+            'X-Goog-Upload-Header-Content-Type': file.type,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ file: { display_name: file.name } }),
         }
       );
+      if (!startRes.ok) throw new Error('Failed to start video upload');
+      const uploadUrl = startRes.headers.get('X-Goog-Upload-URL');
+      if (!uploadUrl) throw new Error('No upload URL returned');
 
+      // Step 2: Upload the actual file bytes
+      const uploadRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Length': file.size,
+          'X-Goog-Upload-Offset': '0',
+          'X-Goog-Upload-Command': 'upload, finalize',
+        },
+        body: file,
+      });
       if (!uploadRes.ok) throw new Error('Video upload failed');
       const uploadData = await uploadRes.json();
       const fileUri = uploadData.file?.uri;
+      const fileName = uploadData.file?.name;
       if (!fileUri) throw new Error('No file URI returned');
 
-      // Wait for file to be processed
+      // Step 3: Wait for file to be processed
       let fileReady = false;
       for (let i = 0; i < 20; i++) {
         const statusRes = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/${uploadData.file.name}?key=${apiKey}`
+          `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`
         );
         const statusData = await statusRes.json();
         if (statusData.state === 'ACTIVE') { fileReady = true; break; }
