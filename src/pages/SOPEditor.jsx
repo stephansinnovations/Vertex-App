@@ -524,23 +524,29 @@ export default function SOPEditor() {
           videoUrl = file_url;
         } catch { /* video upload optional */ }
 
-        // Extract frames from video at each step's timestamp
-        const extractFrame = (videoFile, timeSeconds) => new Promise((resolve) => {
+        // Extract frame from video at a given timestamp and upload it
+        const extractAndUploadFrame = (videoFile, timeSeconds) => new Promise((resolve) => {
           const video = document.createElement('video');
           const canvas = document.createElement('canvas');
           video.muted = true;
-          video.crossOrigin = 'anonymous';
           const objectUrl = URL.createObjectURL(videoFile);
           video.src = objectUrl;
           video.addEventListener('loadedmetadata', () => {
             video.currentTime = Math.min(timeSeconds, video.duration - 0.1);
           });
           video.addEventListener('seeked', () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            resolve(canvas.toDataURL('image/jpeg', 0.75));
+            canvas.width = Math.min(video.videoWidth, 1280);
+            canvas.height = Math.round(video.videoHeight * (canvas.width / video.videoWidth));
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(objectUrl);
+            canvas.toBlob(async (blob) => {
+              if (!blob) return resolve(null);
+              try {
+                const frameFile = new File([blob], `step-frame-${timeSeconds}s.jpg`, { type: 'image/jpeg' });
+                const { file_url } = await base44.integrations.Core.UploadFile({ file: frameFile });
+                resolve(file_url);
+              } catch { resolve(null); }
+            }, 'image/jpeg', 0.75);
           });
           video.addEventListener('error', () => { URL.revokeObjectURL(objectUrl); resolve(null); });
           video.load();
@@ -549,7 +555,7 @@ export default function SOPEditor() {
         const stepsWithFrames = await Promise.all(
           result.steps.map(async (step, index) => {
             const ts = step.timestamp_seconds ?? index * 5;
-            const frameUrl = await extractFrame(file, ts);
+            const frameUrl = await extractAndUploadFrame(file, ts);
             return {
               id: Date.now() + index,
               step_number: step.step_number || index + 1,
