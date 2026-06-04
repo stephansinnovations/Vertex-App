@@ -58,6 +58,9 @@ export default function SOPEditor() {
   const [processingPdf, setProcessingPdf] = useState(false);
   const [processingVideo, setProcessingVideo] = useState(false);
   const [videoFileName, setVideoFileName] = useState(null);
+  const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [geminiKeySet, setGeminiKeySet] = useState(!!localStorage.getItem('geminiApiKey'));
   const [simplifyingStepIndex, setSimplifyingStepIndex] = useState(null);
   const [simplifyingSubstepIndex, setSimplifyingSubstepIndex] = useState(null);
   const [simplifyingAll, setSimplifyingAll] = useState(false);
@@ -722,7 +725,7 @@ export default function SOPEditor() {
                 Import from Video
               </div>
               <div className="flex items-center gap-2">
-                {localStorage.getItem('geminiApiKey') ? (
+                {geminiKeySet ? (
                   <span className="flex items-center gap-1 text-xs font-normal text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
                     <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                     Gemini API Key Set
@@ -733,8 +736,8 @@ export default function SOPEditor() {
                     No Gemini API Key
                   </span>
                 )}
-                <button onClick={() => navigate('/MasterSheet')} className="text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-full transition-colors">
-                  Add Key
+                <button onClick={() => { setApiKeyInput(''); setShowApiKeyDialog(true); }} className="text-xs text-gray-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 px-2 py-1 rounded-full transition-colors">
+                  {geminiKeySet ? 'Change Key' : 'Add Key'}
                 </button>
               </div>
             </CardTitle>
@@ -1283,6 +1286,50 @@ export default function SOPEditor() {
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleExitWithoutSaving}>Leave without saving</AlertDialogCancel>
             <AlertDialogAction onClick={handleSave} className="bg-white text-black hover:bg-gray-200">Save and exit</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Gemini API Key Dialog */}
+      <AlertDialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Gemini API Key</AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-400">
+              Paste your Gemini API key below. Get one free at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 underline">aistudio.google.com</a>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <input
+            type="password"
+            value={apiKeyInput}
+            onChange={e => setApiKeyInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && apiKeyInput.trim()) {
+                localStorage.setItem('geminiApiKey', apiKeyInput.trim());
+                setGeminiKeySet(true);
+                setShowApiKeyDialog(false);
+                toast.success('Gemini API key saved');
+              }
+            }}
+            placeholder="AIza..."
+            className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500 mt-2"
+            autoFocus
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-zinc-800 text-white border-zinc-700 hover:bg-zinc-700">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                const trimmed = apiKeyInput.trim();
+                if (!trimmed) return;
+                localStorage.setItem('geminiApiKey', trimmed);
+                setGeminiKeySet(true);
+                setShowApiKeyDialog(false);
+                toast.success('Gemini API key saved');
+              }}
+              className="bg-white text-black hover:bg-gray-200 font-semibold"
+            >
+              Save Key
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
