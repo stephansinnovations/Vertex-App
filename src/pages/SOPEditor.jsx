@@ -526,6 +526,7 @@ export default function SOPEditor() {
 
         // Extract frame from video at a given timestamp and upload it
         const extractAndUploadFrame = (videoFile, timeSeconds) => new Promise((resolve) => {
+          const timeout = setTimeout(() => resolve(null), 10000); // 10s timeout per frame
           const video = document.createElement('video');
           const canvas = document.createElement('canvas');
           video.muted = true;
@@ -535,20 +536,21 @@ export default function SOPEditor() {
             video.currentTime = Math.min(timeSeconds, video.duration - 0.1);
           });
           video.addEventListener('seeked', () => {
-            canvas.width = Math.min(video.videoWidth, 1280);
+            canvas.width = Math.min(video.videoWidth, 960);
             canvas.height = Math.round(video.videoHeight * (canvas.width / video.videoWidth));
             canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(objectUrl);
             canvas.toBlob(async (blob) => {
+              clearTimeout(timeout);
               if (!blob) return resolve(null);
               try {
                 const frameFile = new File([blob], `step-frame-${timeSeconds}s.jpg`, { type: 'image/jpeg' });
                 const { file_url } = await base44.integrations.Core.UploadFile({ file: frameFile });
                 resolve(file_url);
               } catch { resolve(null); }
-            }, 'image/jpeg', 0.75);
+            }, 'image/jpeg', 0.6);
           });
-          video.addEventListener('error', () => { URL.revokeObjectURL(objectUrl); resolve(null); });
+          video.addEventListener('error', () => { clearTimeout(timeout); URL.revokeObjectURL(objectUrl); resolve(null); });
           video.load();
         });
 
@@ -750,11 +752,11 @@ export default function SOPEditor() {
             </div>
             <Button
               onClick={handleSave}
-              disabled={saveMutation.isPending}
+              disabled={saveMutation.isPending || processingVideo}
               className="bg-white text-black hover:bg-gray-200 font-semibold"
             >
               <Save className="w-4 h-4 mr-2" />
-              {saveMutation.isPending ? 'Saving...' : 'Save SOP'}
+              {processingVideo ? 'Processing Video...' : saveMutation.isPending ? 'Saving...' : 'Save SOP'}
             </Button>
           </div>
         </div>
