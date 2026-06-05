@@ -1,6 +1,6 @@
-const https = require('https');
+import https from 'https';
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -11,7 +11,6 @@ module.exports = async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
-  // Collect raw body from stream
   const rawBody = await new Promise((resolve, reject) => {
     let data = '';
     req.on('data', chunk => { data += chunk.toString(); });
@@ -54,4 +53,4 @@ module.exports = async function handler(req, res) {
     proxyReq.write(bodyStr);
     proxyReq.end();
   });
-};
+}
