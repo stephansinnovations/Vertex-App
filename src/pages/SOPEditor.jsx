@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
 import { getSetting, setSetting } from '@/api/appSettings';
+import { supabase } from '@/api/supabaseClient';
 import { createPageUrl } from '../utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -426,18 +427,22 @@ export default function SOPEditor() {
     if (!file) return;
     setVideoFile(file);
     setVideoFileName(file.name);
-    // Use a local blob URL for preview — upload to get a real URL for saving
+    // Show local preview immediately
     const blobUrl = URL.createObjectURL(file);
     setFormData(prev => ({ ...prev, video_url: blobUrl }));
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      // Only use the uploaded URL if it's a real URL (not a base64 data URL)
-      if (file_url && !file_url.startsWith('data:')) {
-        setFormData(prev => ({ ...prev, video_url: file_url }));
-      }
-      toast.success('Video attached to SOP');
-    } catch {
-      toast.success('Video attached (local preview only)');
+      // Upload to Supabase Storage
+      const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+      const { data, error } = await supabase.storage
+        .from('sop-videos')
+        .upload(fileName, file, { upsert: true });
+      if (error) throw error;
+      const { data: urlData } = supabase.storage.from('sop-videos').getPublicUrl(data.path);
+      setFormData(prev => ({ ...prev, video_url: urlData.publicUrl }));
+      toast.success('Video uploaded and attached to SOP');
+    } catch (err) {
+      console.error('Video upload error:', err);
+      toast.error('Could not upload video — create a "sop-videos" bucket in Supabase Storage');
     }
   };
 
