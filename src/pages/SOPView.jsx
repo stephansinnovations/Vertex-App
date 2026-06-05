@@ -9,6 +9,45 @@ import { ArrowLeft, Edit, Download, Calendar, User, X, ExternalLink, Play } from
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 
+function VideoPlayer({ videoUrl, videoRef }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="mb-6 no-print">
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-3 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl px-5 py-3 transition-colors"
+        >
+          <div className="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center flex-shrink-0">
+            <Play className="w-5 h-5 text-white ml-0.5" />
+          </div>
+          <div className="text-left">
+            <p className="text-white font-medium text-sm">Play Source Video</p>
+            <p className="text-gray-500 text-xs">Tap to watch</p>
+          </div>
+        </button>
+      ) : (
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Play className="w-4 h-4 text-purple-400" />
+              <span className="text-sm font-medium text-white">Source Video</span>
+            </div>
+            <button onClick={() => setOpen(false)} className="text-gray-500 hover:text-white text-xs">Hide</button>
+          </div>
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            controls
+            autoPlay
+            className="w-full rounded-xl border border-zinc-800 max-h-72 bg-black"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatTimestamp(seconds) {
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
@@ -164,18 +203,7 @@ export default function SOPView() {
 
           {/* Video Player */}
           {sop.video_url && (
-            <div className="mb-6 no-print">
-              <div className="flex items-center gap-2 mb-2">
-                <Play className="w-4 h-4 text-purple-400" />
-                <span className="text-sm font-medium text-white">Source Video</span>
-              </div>
-              <video
-                ref={videoRef}
-                src={sop.video_url}
-                controls
-                className="w-full rounded-xl border border-zinc-800 max-h-64 bg-black"
-              />
-            </div>
+            <VideoPlayer videoUrl={sop.video_url} videoRef={videoRef} />
           )}
 
           {/* Progress Bar - Only for work order copies */}
