@@ -60,6 +60,7 @@ export default function SOPEditor() {
   const [processingPdf, setProcessingPdf] = useState(false);
   const [processingVideo, setProcessingVideo] = useState(false);
   const [videoFileName, setVideoFileName] = useState(null);
+  const [videoFile, setVideoFile] = useState(null);
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [geminiKeySet, setGeminiKeySet] = useState(!!localStorage.getItem('geminiApiKey'));
@@ -421,14 +422,28 @@ export default function SOPEditor() {
     }
   };
 
-  const handleVideoImport = async (file) => {
+  const handleVideoUpload = async (file) => {
+    if (!file) return;
+    setVideoFile(file);
+    setVideoFileName(file.name);
+    // Upload and save video URL to the SOP
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      setFormData(prev => ({ ...prev, video_url: file_url }));
+      toast.success('Video attached to SOP');
+    } catch {
+      toast.error('Failed to upload video');
+    }
+  };
+
+  const handleAnalyzeVideo = async () => {
+    const file = videoFile;
     if (!file) return;
     const apiKey = (await getSetting('geminiApiKey')) || localStorage.getItem('geminiApiKey');
     if (!apiKey) {
       toast.error('Gemini API key not set — click "Add Key" to set it');
       return;
     }
-    setVideoFileName(file.name);
     setProcessingVideo(true);
     try {
       // Step 1: Start resumable upload
@@ -533,12 +548,7 @@ export default function SOPEditor() {
       const result = JSON.parse(text);
 
       if (result.steps?.length > 0) {
-        // Upload video to get a permanent URL
-        let videoUrl = null;
-        try {
-          const { file_url } = await base44.integrations.Core.UploadFile({ file });
-          videoUrl = file_url;
-        } catch { /* video upload optional */ }
+        const videoUrl = formData.video_url || null;
 
         // Extract frame from video at a given timestamp and upload it
         const extractAndUploadFrame = (videoFile, timeSeconds) => new Promise((resolve) => {
@@ -833,15 +843,22 @@ export default function SOPEditor() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-xs text-gray-400">Upload a video and Vertex AI will watch it and generate all SOP steps automatically</p>
-            <div className="flex gap-3 items-center">
+            <p className="text-xs text-gray-400">Upload a video to attach it to this SOP. Optionally, let Gemini AI analyze it to auto-generate steps.</p>
+            <div className="flex gap-3 items-center flex-wrap">
               <input type="file" id="video-upload" accept="video/*" className="hidden"
-                onChange={(e) => { const file = e.target.files[0]; if (file) handleVideoImport(file); e.target.value = ''; }} />
+                onChange={(e) => { const file = e.target.files[0]; if (file) handleVideoUpload(file); e.target.value = ''; }} />
               <Button variant="outline" onClick={() => document.getElementById('video-upload').click()}
                 disabled={processingVideo} className="bg-black border-zinc-700 text-white hover:bg-zinc-800">
                 <Video className="w-4 h-4 mr-2" />
-                {processingVideo ? 'Processing...' : videoFileName ? 'Change Video' : 'Upload Video'}
+                {videoFileName ? 'Change Video' : 'Upload Video'}
               </Button>
+              {videoFileName && !processingVideo && (
+                <Button onClick={handleAnalyzeVideo}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold">
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Analyze with Gemini
+                </Button>
+              )}
               {processingVideo && (
                 <div className="flex items-center gap-2 text-sm text-purple-400">
                   <div className="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
@@ -849,7 +866,7 @@ export default function SOPEditor() {
                 </div>
               )}
             </div>
-            {videoFileName && !processingVideo && <p className="text-sm text-gray-400">✓ {videoFileName}</p>}
+            {videoFileName && <p className="text-sm text-gray-400">✓ {videoFileName}</p>}
           </CardContent>
         </Card>
 
