@@ -1,3 +1,5 @@
+const https = require('https');
+
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -9,32 +11,40 @@ module.exports = async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
-  try {
-    // Read raw body if req.body is not parsed
-    let body = req.body;
-    if (!body) {
-      body = await new Promise((resolve, reject) => {
-        let data = '';
-        req.on('data', chunk => data += chunk);
-        req.on('end', () => resolve(data));
-        req.on('error', reject);
-      });
-    }
-    if (typeof body === 'object') body = JSON.stringify(body);
+  const body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+  return new Promise((resolve) => {
+    const options = {
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'content-length': Buffer.byteLength(body),
       },
-      body,
+    };
+
+    const proxyReq = https.request(options, (proxyRes) => {
+      let data = '';
+      proxyRes.on('data', chunk => data += chunk);
+      proxyRes.on('end', () => {
+        try {
+          res.status(proxyRes.statusCode).json(JSON.parse(data));
+        } catch {
+          res.status(500).json({ error: 'Invalid response from Anthropic' });
+        }
+        resolve();
+      });
     });
 
-    const data = await response.json();
-    return res.status(response.status).json(data);
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
-  }
+    proxyReq.on('error', (err) => {
+      res.status(500).json({ error: err.message });
+      resolve();
+    });
+
+    proxyReq.write(body);
+    proxyReq.end();
+  });
 };
