@@ -11,7 +11,6 @@ const API_KEYS = [
     placeholder: 'sk-ant-...',
     secret: true,
     hint: 'Get one at console.anthropic.com — powers the Vertex AI chat',
-    local: true,
   },
   {
     key: 'geminiApiKey',

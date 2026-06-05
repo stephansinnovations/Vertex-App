@@ -237,7 +237,6 @@ async function execTool(name, input, { formResolve, navigate }) {
 // ── API call ─────────────────────────────────────────────────────────────────
 
 async function callClaude(messages, systemPrompt, tools) {
-  // Try proxy first (localhost), fall back to direct API call (production)
   const isLocalhost = window.location.hostname === 'localhost';
   const url = isLocalhost
     ? '/api/claude/v1/messages'
@@ -245,8 +244,9 @@ async function callClaude(messages, systemPrompt, tools) {
 
   const headers = { 'content-type': 'application/json' };
   if (!isLocalhost) {
-    const key = localStorage.getItem('anthropicApiKey');
-    if (!key) throw new Error('No Anthropic API key set');
+    const { getSetting } = await import('@/api/appSettings');
+    const key = (await getSetting('anthropicApiKey')) || localStorage.getItem('anthropicApiKey');
+    if (!key) throw new Error('No Anthropic API key — add it in Settings');
     headers['x-api-key'] = key;
     headers['anthropic-version'] = '2023-06-01';
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
