@@ -22,7 +22,7 @@ export default function FloatingVertexButton() {
     timerRef.current = setTimeout(() => {
       firedRef.current = true;
       setPressing(false);
-      open();
+      open(); // long press → open default chat
     }, LONG_PRESS_MS);
   };
 
@@ -30,7 +30,7 @@ export default function FloatingVertexButton() {
     clearTimeout(timerRef.current);
     setPressing(false);
     if (!firedRef.current) {
-      navigate('/');
+      navigate('/AIRoom'); // short tap → open AI Room
     }
     firedRef.current = false;
   };

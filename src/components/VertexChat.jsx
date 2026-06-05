@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Palette, Code2 } from 'lucide-react';
 import { localClient } from '@/api/localDb';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
+import { useVertexChat } from '@/lib/VertexChatContext';
 import {
   loadDisplay, loadApi, saveDisplay, saveApi, clearHistory,
   getContextKey, getContextLabel, getContextGreeting, getContextSuggestions,
@@ -554,10 +555,11 @@ function SettingsPanel({ onClose, contextKey, buildMode, onToggleBuildMode }) {
 export default function VertexChat({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { personality } = useTheme();
+  const { agentPrompt, agentName, agentEmoji } = useVertexChat();
 
-  const contextKey = getContextKey();
-  const contextLabel = getContextLabel(contextKey);
-  const greeting = getContextGreeting(contextKey);
+  const contextKey = agentPrompt ? `agent_${agentName}` : getContextKey();
+  const contextLabel = agentName || getContextLabel(contextKey);
+  const greeting = agentName ? `Hey! I'm ${agentName} ${agentEmoji || ''}` : getContextGreeting(contextKey);
 
   const [displayMsgs, setDisplayMsgs] = useState(() => loadDisplay(contextKey));
   const [apiMsgs, setApiMsgs] = useState(() => loadApi(contextKey));
@@ -676,7 +678,9 @@ export default function VertexChat({ isOpen, onClose }) {
     setLoading(true);
 
     const activeTools = buildMode ? [...TOOLS, ...DEV_TOOLS] : TOOLS;
-    const systemPrompt = buildMode ? buildDevSystemPrompt(personality) : buildSystemPrompt(contextKey, personality);
+    const systemPrompt = agentPrompt
+      ? agentPrompt
+      : buildMode ? buildDevSystemPrompt(personality) : buildSystemPrompt(contextKey, personality);
 
     try {
       let currentApi = [...newApi];
