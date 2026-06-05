@@ -866,7 +866,17 @@ export default function SOPEditor() {
                 </div>
               )}
             </div>
-            {videoFileName && <p className="text-sm text-gray-400">✓ {videoFileName}</p>}
+            {videoFileName && (
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-gray-400">✓ {videoFileName}</p>
+                <button
+                  onClick={() => { setVideoFile(null); setVideoFileName(null); setFormData(prev => ({ ...prev, video_url: null })); }}
+                  className="text-xs text-red-400 hover:text-red-300 transition-colors"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
