@@ -241,8 +241,8 @@ export default function GeminiScanner() {
         <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 text-center max-w-sm w-full">
           <p className="text-white font-semibold text-lg mb-2">Gemini API Key Required</p>
           <p className="text-gray-400 text-sm mb-1">Get a free key at <span className="text-blue-400">aistudio.google.com</span></p>
-          <p className="text-gray-400 text-sm mb-5">Then add it in Master Sheet settings</p>
-          <button onClick={() => navigate('/MasterSheet')} className="w-full bg-white text-black font-semibold py-3 rounded-xl text-sm hover:bg-gray-200 transition-colors">
+          <p className="text-gray-400 text-sm mb-5">Then add it in Settings</p>
+          <button onClick={() => navigate('/Settings')} className="w-full bg-white text-black font-semibold py-3 rounded-xl text-sm hover:bg-gray-200 transition-colors">
             Go to Settings
           </button>
           <button onClick={() => navigate('/Inventory')} className="w-full mt-2 text-gray-500 text-sm py-2">

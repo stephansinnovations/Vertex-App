@@ -1,11 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, UserCircle, Users, ChevronRight } from 'lucide-react';
+import { ArrowLeft, UserCircle, Users, Settings as SettingsIcon, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const TABS = [
   { id: 'my', label: 'My Profile', icon: UserCircle, path: '/MyProfile' },
   { id: 'team', label: 'Team Profiles', icon: Users, path: '/TeamProfiles' },
+  { id: 'settings', label: 'Settings', icon: SettingsIcon, path: '/Settings' },
 ];
 
 export default function Profile() {

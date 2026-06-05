@@ -34,6 +34,7 @@ import Vertex from './pages/Vertex.jsx';
 import BuildPhases from './pages/BuildPhases.jsx';
 import PhaseDetail from './pages/PhaseDetail.jsx';
 import AIRoom from './pages/AIRoom.jsx';
+import Settings from './pages/Settings.jsx';
 
 import { useEffect } from 'react';
 
@@ -122,6 +123,7 @@ const AuthenticatedApp = () => {
       <Route path="/BuildPhases" element={<BuildPhases />} />
       <Route path="/PhaseDetail" element={<PhaseDetail />} />
       <Route path="/AIRoom" element={<AIRoom />} />
+      <Route path="/Settings" element={<Settings />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
