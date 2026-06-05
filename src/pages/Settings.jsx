@@ -6,6 +6,14 @@ import { getSetting, setSetting } from '@/api/appSettings';
 
 const API_KEYS = [
   {
+    key: 'anthropicApiKey',
+    label: 'Anthropic (Claude) API Key',
+    placeholder: 'sk-ant-...',
+    secret: true,
+    hint: 'Get one at console.anthropic.com — powers the Vertex AI chat',
+    local: true,
+  },
+  {
     key: 'geminiApiKey',
     label: 'Gemini API Key',
     placeholder: 'AIza...',
@@ -39,7 +47,9 @@ export default function Settings() {
   useEffect(() => {
     Promise.all(
       ALL_FIELDS.map(async (f) => {
-        const v = (await getSetting(f.key)) || localStorage.getItem(f.key) || '';
+        const v = f.local
+          ? localStorage.getItem(f.key) || ''
+          : (await getSetting(f.key)) || localStorage.getItem(f.key) || '';
         return [f.key, v];
       })
     ).then((entries) => {
@@ -60,7 +70,11 @@ export default function Settings() {
 
   const save = async (field) => {
     const trimmed = draft.trim();
-    await setSetting(field.key, trimmed);
+    if (field.local) {
+      localStorage.setItem(field.key, trimmed);
+    } else {
+      await setSetting(field.key, trimmed);
+    }
     setValues((prev) => ({ ...prev, [field.key]: trimmed }));
     setEditing(null);
     setDraft('');
