@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Palette, Code2 } from 'lucide-react';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Palette, Code2, ImagePlus } from 'lucide-react';
 import { localClient } from '@/api/localDb';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
@@ -266,12 +266,23 @@ function TypingDots() {
   );
 }
 
-function UserBubble({ text }) {
+function UserBubble({ text, images }) {
   return (
     <div className="flex justify-end">
-      <div className="max-w-[78%] px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm whitespace-pre-wrap"
-        style={{ background: 'var(--vx-accent)', color: 'var(--vx-accent-fg)' }}>
-        {text}
+      <div className="max-w-[78%] flex flex-col gap-2 items-end">
+        {images && images.length > 0 && (
+          <div className="flex gap-2 flex-wrap justify-end">
+            {images.map((src, i) => (
+              <img key={i} src={src} alt="" className="w-32 h-32 rounded-2xl object-cover border border-zinc-700" />
+            ))}
+          </div>
+        )}
+        {text && (
+          <div className="px-4 py-2.5 rounded-2xl rounded-tr-sm text-sm whitespace-pre-wrap"
+            style={{ background: 'var(--vx-accent)', color: 'var(--vx-accent-fg)' }}>
+            {text}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -568,6 +579,7 @@ export default function VertexChat({ isOpen, onClose }) {
   const [isListening, setIsListening] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingForm, setPendingForm] = useState(null);
+  const [pendingImages, setPendingImages] = useState([]); // [{dataUrl, mediaType}]
   const [departments, setDepartments] = useState([]);
   const [buildMode, setBuildMode] = useState(() => localStorage.getItem('vx_build_mode') === 'true');
 
@@ -667,12 +679,23 @@ export default function VertexChat({ isOpen, onClose }) {
   // Send message
   const sendMessage = async (text) => {
     const msg = (text || input).trim();
-    if (!msg || loading) return;
+    if ((!msg && pendingImages.length === 0) || loading) return;
     setInput('');
+    const images = [...pendingImages];
+    setPendingImages([]);
 
-    const userDisplay = { id: Date.now().toString(), type: 'user', text: msg };
+    const userDisplay = { id: Date.now().toString(), type: 'user', text: msg, images: images.map(i => i.dataUrl) };
     const newDisplay = [...displayMsgs, userDisplay];
-    const userApiMsg = { role: 'user', content: msg };
+
+    // Build Claude content array — images first, then text
+    const contentParts = [
+      ...images.map(img => ({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mediaType, data: img.data },
+      })),
+      ...(msg ? [{ type: 'text', text: msg }] : [{ type: 'text', text: 'Please analyze this image.' }]),
+    ];
+    const userApiMsg = { role: 'user', content: images.length > 0 ? contentParts : msg };
     const newApi = [...apiMsgs, userApiMsg];
     persistMessages(newDisplay, newApi);
     setLoading(true);
@@ -826,7 +849,7 @@ export default function VertexChat({ isOpen, onClose }) {
           )}
 
           {displayMsgs.map((msg) => {
-            if (msg.type === 'user') return <UserBubble key={msg.id} text={msg.text} />;
+            if (msg.type === 'user') return <UserBubble key={msg.id} text={msg.text} images={msg.images} />;
             if (msg.type === 'ai') return <AIBubble key={msg.id} text={msg.text} isError={msg.isError} />;
             if (msg.type === 'tool') return <ToolCallChip key={msg.id} toolName={msg.toolName} />;
             if (msg.type === 'action') return <ActionCard key={msg.id} data={msg.data} navigate={navigate} onClose={onClose} />;
@@ -841,7 +864,41 @@ export default function VertexChat({ isOpen, onClose }) {
 
         {/* Input */}
         <div className="px-4 py-3 border-t flex-shrink-0" style={{ borderColor: 'var(--vx-border)' }}>
+          {/* Image previews */}
+          {pendingImages.length > 0 && (
+            <div className="flex gap-2 mb-2 flex-wrap">
+              {pendingImages.map((img, i) => (
+                <div key={i} className="relative">
+                  <img src={img.dataUrl} alt="" className="w-16 h-16 rounded-xl object-cover border border-zinc-700" />
+                  <button onClick={() => setPendingImages(p => p.filter((_, j) => j !== i))}
+                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-zinc-800 border border-zinc-600 flex items-center justify-center text-gray-300 hover:text-white">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-2">
+            {/* Image upload */}
+            <input type="file" id="chat-img-upload" accept="image/*" multiple className="hidden"
+              onChange={e => {
+                Array.from(e.target.files).forEach(file => {
+                  const reader = new FileReader();
+                  reader.onload = ev => {
+                    const dataUrl = ev.target.result;
+                    const data = dataUrl.split(',')[1];
+                    const mediaType = file.type;
+                    setPendingImages(p => [...p, { dataUrl, data, mediaType }]);
+                  };
+                  reader.readAsDataURL(file);
+                });
+                e.target.value = '';
+              }} />
+            <button onClick={() => document.getElementById('chat-img-upload').click()}
+              className="p-2.5 rounded-2xl flex-shrink-0 transition-all"
+              style={{ background: 'var(--vx-surface)', color: 'var(--vx-text2)', border: '1px solid var(--vx-border)' }}>
+              <ImagePlus className="w-4 h-4" />
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
@@ -869,7 +926,7 @@ export default function VertexChat({ isOpen, onClose }) {
               {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
             </button>
             <button onClick={() => sendMessage()}
-              disabled={loading || !input.trim()}
+              disabled={loading || (!input.trim() && pendingImages.length === 0)}
               className="p-2.5 rounded-2xl flex-shrink-0 transition-opacity disabled:opacity-30"
               style={{ background: 'var(--vx-accent)', color: 'var(--vx-accent-fg)' }}>
               <Send className="w-4 h-4" />
