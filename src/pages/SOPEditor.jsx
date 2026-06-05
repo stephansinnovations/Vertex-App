@@ -423,9 +423,9 @@ export default function SOPEditor() {
 
   const handleVideoImport = async (file) => {
     if (!file) return;
-    const apiKey = localStorage.getItem('geminiApiKey');
+    const apiKey = (await getSetting('geminiApiKey')) || localStorage.getItem('geminiApiKey');
     if (!apiKey) {
-      toast.error('Gemini API key not set — add it in Master Sheet settings');
+      toast.error('Gemini API key not set — click "Add Key" to set it');
       return;
     }
     setVideoFileName(file.name);
