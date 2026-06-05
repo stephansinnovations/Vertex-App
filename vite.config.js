@@ -79,6 +79,7 @@ export default defineConfig(({ mode }) => {
       devFileApiPlugin(),
     ],
     server: {
+      port: 3075,
       proxy: {
         '/api/claude': {
           target: 'https://api.anthropic.com',

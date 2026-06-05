@@ -196,17 +196,26 @@ export default function SOPEditor() {
     const normalizedData = {
       ...formData,
       group: formData.group || undefined,
+      video_url: formData.video_url || undefined,
       test_number: (formData.test_number !== '' && formData.test_number != null) ? Number(formData.test_number) : undefined,
       steps: formData.steps.map(step => ({
-        ...step,
-        image_urls: step.image_urls || [],
+        step_number: step.step_number,
+        title: step.title || '',
+        description: step.description || '',
+        caution: step.caution || '',
+        timestamp_seconds: step.timestamp_seconds,
+        image_urls: (step.image_urls || []).filter(Boolean),
         substeps: (step.substeps || []).map(substep => ({
-          ...substep,
-          image_urls: substep.image_urls || []
+          substep_number: substep.substep_number,
+          title: substep.title || '',
+          description: substep.description || '',
+          caution: substep.caution || '',
+          image_urls: (substep.image_urls || []).filter(Boolean)
         }))
       }))
     };
 
+    console.log('Saving SOP data:', JSON.stringify(normalizedData).length, 'bytes');
     saveMutation.mutate(normalizedData);
   };
 
