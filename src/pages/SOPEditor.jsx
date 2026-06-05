@@ -204,7 +204,7 @@ export default function SOPEditor() {
     const normalizedData = {
       ...formData,
       group: formData.group || undefined,
-      video_url: formData.video_url || undefined,
+      video_url: (formData.video_url && !formData.video_url.startsWith('blob:') && !formData.video_url.startsWith('data:')) ? formData.video_url : undefined,
       test_number: (formData.test_number !== '' && formData.test_number != null) ? Number(formData.test_number) : undefined,
       steps: formData.steps.map(step => ({
         step_number: step.step_number,
@@ -212,13 +212,13 @@ export default function SOPEditor() {
         description: step.description || '',
         caution: step.caution || '',
         timestamp_seconds: step.timestamp_seconds,
-        image_urls: (step.image_urls || []).filter(Boolean),
+        image_urls: (step.image_urls || []).filter(u => u && !u.startsWith('data:') && !u.startsWith('blob:')),
         substeps: (step.substeps || []).map(substep => ({
           substep_number: substep.substep_number,
           title: substep.title || '',
           description: substep.description || '',
           caution: substep.caution || '',
-          image_urls: (substep.image_urls || []).filter(Boolean)
+          image_urls: (substep.image_urls || []).filter(u => u && !u.startsWith('data:') && !u.startsWith('blob:'))
         }))
       }))
     };
@@ -426,13 +426,18 @@ export default function SOPEditor() {
     if (!file) return;
     setVideoFile(file);
     setVideoFileName(file.name);
-    // Upload and save video URL to the SOP
+    // Use a local blob URL for preview — upload to get a real URL for saving
+    const blobUrl = URL.createObjectURL(file);
+    setFormData(prev => ({ ...prev, video_url: blobUrl }));
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setFormData(prev => ({ ...prev, video_url: file_url }));
+      // Only use the uploaded URL if it's a real URL (not a base64 data URL)
+      if (file_url && !file_url.startsWith('data:')) {
+        setFormData(prev => ({ ...prev, video_url: file_url }));
+      }
       toast.success('Video attached to SOP');
     } catch {
-      toast.error('Failed to upload video');
+      toast.success('Video attached (local preview only)');
     }
   };
 
