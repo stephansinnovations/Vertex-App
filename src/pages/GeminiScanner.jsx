@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mic, MicOff, Check, X, Volume2, VolumeX } from 'lucide-react';
+import { getSetting } from '@/api/appSettings';
 
 const STOCK_KEY = 'partsLibraryStock';
 const WS_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent';
@@ -21,7 +22,13 @@ function saveStock(s) { localStorage.setItem(STOCK_KEY, JSON.stringify(s)); }
 
 export default function GeminiScanner() {
   const navigate = useNavigate();
-  const apiKey = localStorage.getItem('geminiApiKey') || '';
+  const [apiKey, setApiKey] = useState(localStorage.getItem('geminiApiKey') || '');
+
+  useEffect(() => {
+    getSetting('geminiApiKey').then(key => {
+      if (key) { localStorage.setItem('geminiApiKey', key); setApiKey(key); }
+    });
+  }, []);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);

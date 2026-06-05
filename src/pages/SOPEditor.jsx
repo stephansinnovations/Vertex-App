@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 import { useNavigate } from 'react-router-dom';
+import { getSetting, setSetting } from '@/api/appSettings';
 import { createPageUrl } from '../utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -62,6 +63,12 @@ export default function SOPEditor() {
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [geminiKeySet, setGeminiKeySet] = useState(!!localStorage.getItem('geminiApiKey'));
+
+  useEffect(() => {
+    getSetting('geminiApiKey').then(key => {
+      if (key) { localStorage.setItem('geminiApiKey', key); setGeminiKeySet(true); }
+    });
+  }, []);
   const [simplifyingStepIndex, setSimplifyingStepIndex] = useState(null);
   const [simplifyingSubstepIndex, setSimplifyingSubstepIndex] = useState(null);
   const [simplifyingAll, setSimplifyingAll] = useState(false);
@@ -1388,7 +1395,7 @@ export default function SOPEditor() {
             onChange={e => setApiKeyInput(e.target.value)}
             onKeyDown={e => {
               if (e.key === 'Enter' && apiKeyInput.trim()) {
-                localStorage.setItem('geminiApiKey', apiKeyInput.trim());
+                setSetting('geminiApiKey', apiKeyInput.trim());
                 setGeminiKeySet(true);
                 setShowApiKeyDialog(false);
                 toast.success('Gemini API key saved');
@@ -1404,7 +1411,7 @@ export default function SOPEditor() {
               onClick={() => {
                 const trimmed = apiKeyInput.trim();
                 if (!trimmed) return;
-                localStorage.setItem('geminiApiKey', trimmed);
+                setSetting('geminiApiKey', trimmed);
                 setGeminiKeySet(true);
                 setShowApiKeyDialog(false);
                 toast.success('Gemini API key saved');
