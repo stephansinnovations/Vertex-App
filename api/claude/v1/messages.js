@@ -11,7 +11,15 @@ module.exports = async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
 
-  const body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+  // Collect raw body from stream
+  const rawBody = await new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => { data += chunk.toString(); });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+
+  const bodyStr = rawBody || JSON.stringify(req.body || {});
 
   return new Promise((resolve) => {
     const options = {
@@ -22,18 +30,17 @@ module.exports = async function handler(req, res) {
         'content-type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
-        'content-length': Buffer.byteLength(body),
       },
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
       let data = '';
-      proxyRes.on('data', chunk => data += chunk);
+      proxyRes.on('data', chunk => { data += chunk; });
       proxyRes.on('end', () => {
         try {
           res.status(proxyRes.statusCode).json(JSON.parse(data));
         } catch {
-          res.status(500).json({ error: 'Invalid response from Anthropic' });
+          res.status(500).json({ error: 'Invalid response', raw: data.slice(0, 200) });
         }
         resolve();
       });
@@ -44,7 +51,7 @@ module.exports = async function handler(req, res) {
       resolve();
     });
 
-    proxyReq.write(body);
+    proxyReq.write(bodyStr);
     proxyReq.end();
   });
 };
