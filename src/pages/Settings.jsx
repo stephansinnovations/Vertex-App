@@ -11,6 +11,7 @@ const API_KEYS = [
     placeholder: 'sk-ant-...',
     secret: true,
     hint: 'Get one at console.anthropic.com — powers the Vertex AI chat',
+    balanceUrl: 'https://console.anthropic.com/settings/billing',
   },
   {
     key: 'geminiApiKey',
@@ -92,6 +93,16 @@ export default function Settings() {
           <span className="text-sm font-medium text-white">{field.label}</span>
           {!isEditing && (
             <div className="flex items-center gap-3">
+              {field.balanceUrl && value && (
+                <a
+                  href={field.balanceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-xs text-green-400 hover:text-green-300 bg-green-400/10 px-2 py-0.5 rounded-full transition-colors"
+                >
+                  Check Balance ↗
+                </a>
+              )}
               {value && !field.secret && (
                 <a
                   href={value}
