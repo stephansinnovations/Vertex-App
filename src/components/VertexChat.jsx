@@ -589,6 +589,17 @@ export default function VertexChat({ isOpen, onClose }) {
 
   const [displayMsgs, setDisplayMsgs] = useState(() => loadDisplay(contextKey));
   const [apiMsgs, setApiMsgs] = useState(() => loadApi(contextKey));
+
+  // Reload messages when switching agents
+  const prevContextKey = React.useRef(contextKey);
+  React.useEffect(() => {
+    if (prevContextKey.current !== contextKey) {
+      prevContextKey.current = contextKey;
+      setDisplayMsgs(loadDisplay(contextKey));
+      setApiMsgs(loadApi(contextKey));
+      setInput('');
+    }
+  }, [contextKey]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
