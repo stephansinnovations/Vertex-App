@@ -74,15 +74,18 @@ export default function AIRoom() {
 
   const allAgents = [DEFAULT_AGENT, ...agents];
 
-  // Arrange bubbles in a loose grid
+  // Arrange bubbles in a centered grid
+  const COLS = 3;
+  const COL_W = 110;
+  const ROW_H = 130;
+  const totalW = COLS * COL_W;
   const bubblePositions = allAgents.map((_, i) => {
-    const cols = 3;
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    return { x: col * 110 + (row % 2 === 1 ? 55 : 0), y: row * 120 };
+    const col = i % COLS;
+    const row = Math.floor(i / COLS);
+    const offset = row % 2 === 1 ? COL_W / 2 : 0;
+    return { x: col * COL_W + offset, y: row * ROW_H };
   });
-
-  const totalH = Math.ceil(allAgents.length / 3) * 120 + 100;
+  const totalH = Math.ceil(allAgents.length / COLS) * ROW_H + 120;
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -102,7 +105,7 @@ export default function AIRoom() {
 
       {/* Bubble Room */}
       <div className="flex-1 relative overflow-auto" style={{ minHeight: totalH + 80 }}>
-        <div className="relative mx-auto" style={{ width: 340, height: totalH }}>
+        <div className="relative mx-auto" style={{ width: totalW, height: totalH }}>
           {allAgents.map((agent, i) => {
             const pos = bubblePositions[i];
             return (
