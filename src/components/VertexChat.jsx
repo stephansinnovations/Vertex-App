@@ -236,7 +236,10 @@ async function execTool(name, input, { formResolve, navigate }) {
 
 // ── API call ─────────────────────────────────────────────────────────────────
 
-async function callClaude(messages, systemPrompt, tools) {
+// Cache API key in memory so we don't hit Supabase on every message
+let _cachedAnthropicKey = null;
+
+async function callClaude(messages, systemPrompt, tools, model = 'claude-haiku-4-5') {
   const isLocalhost = window.location.hostname === 'localhost';
   const url = isLocalhost
     ? '/api/claude/v1/messages'
@@ -244,10 +247,12 @@ async function callClaude(messages, systemPrompt, tools) {
 
   const headers = { 'content-type': 'application/json' };
   if (!isLocalhost) {
-    const { getSetting } = await import('@/api/appSettings');
-    const key = (await getSetting('anthropicApiKey')) || localStorage.getItem('anthropicApiKey');
-    if (!key) throw new Error('No Anthropic API key — add it in Settings');
-    headers['x-api-key'] = key;
+    if (!_cachedAnthropicKey) {
+      const { getSetting } = await import('@/api/appSettings');
+      _cachedAnthropicKey = (await getSetting('anthropicApiKey')) || localStorage.getItem('anthropicApiKey');
+    }
+    if (!_cachedAnthropicKey) throw new Error('No Anthropic API key — add it in Settings');
+    headers['x-api-key'] = _cachedAnthropicKey;
     headers['anthropic-version'] = '2023-06-01';
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
   }
@@ -256,7 +261,7 @@ async function callClaude(messages, systemPrompt, tools) {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model,
       max_tokens: 8096,
       system: systemPrompt,
       tools: tools || TOOLS,
@@ -736,7 +741,8 @@ export default function VertexChat({ isOpen, onClose }) {
       let currentDisplay = [...newDisplay];
 
       while (true) {
-        const resp = await callClaude(currentApi, systemPrompt, activeTools);
+        const model = buildMode ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
+        const resp = await callClaude(currentApi, systemPrompt, activeTools, model);
 
         if (resp.stop_reason === 'tool_use') {
           const toolBlocks = resp.content.filter(b => b.type === 'tool_use');
