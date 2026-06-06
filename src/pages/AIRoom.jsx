@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Edit2, Check, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Plus, X, Edit2, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,15 +17,24 @@ const DEFAULT_AGENT = {
   is_default: true,
 };
 
+// Subtle breathing animation for bubbles
+const breathe = {
+  animate: {
+    scale: [1, 1.04, 1],
+    transition: { duration: 3, repeat: Infinity, ease: 'easeInOut' },
+  },
+};
+
 export default function AIRoom() {
   const navigate = useNavigate();
   const { open: openChat } = useVertexChat();
   const [agents, setAgents] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
-  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [longPressAgent, setLongPressAgent] = useState(null);
   const [form, setForm] = useState({ name: '', emoji: '🤖', description: '', prompt: '' });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [tappedId, setTappedId] = useState(null);
 
   useEffect(() => { loadAgents(); }, []);
 
@@ -59,42 +68,38 @@ export default function AIRoom() {
 
   const handleDelete = async (id) => {
     await supabase.from('ai_agents').delete().eq('id', id);
-    setSelectedAgent(null);
+    setLongPressAgent(null);
     await loadAgents();
   };
 
-  const handleChat = (agent) => {
-    if (agent.is_default) {
-      openChat(null, null, null);
-    } else {
-      openChat(agent.prompt, agent.name, agent.emoji);
-    }
-    setSelectedAgent(null);
+  // Single tap → open chat directly
+  const handleTap = (agent) => {
+    setTappedId(agent.id);
+    setTimeout(() => {
+      setTappedId(null);
+      openChat(agent.is_default ? null : agent.prompt, agent.is_default ? null : agent.name, agent.is_default ? null : agent.emoji);
+    }, 180);
+  };
+
+  // Long press → show edit/delete
+  let pressTimer = null;
+  const handlePressStart = (agent) => {
+    pressTimer = setTimeout(() => setLongPressAgent(agent), 500);
+  };
+  const handlePressEnd = () => {
+    if (pressTimer) clearTimeout(pressTimer);
   };
 
   const allAgents = [DEFAULT_AGENT, ...agents];
 
-  // Arrange bubbles in a centered grid
-  const COLS = 3;
-  const COL_W = 110;
-  const ROW_H = 130;
-  const totalW = COLS * COL_W;
-  const bubblePositions = allAgents.map((_, i) => {
-    const col = i % COLS;
-    const row = Math.floor(i / COLS);
-    const offset = row % 2 === 1 ? COL_W / 2 : 0;
-    return { x: col * COL_W + offset, y: row * ROW_H };
-  });
-  const totalH = Math.ceil(allAgents.length / COLS) * ROW_H + 120;
-
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}>
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-12 pb-4">
         <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold text-white">AI Room</h1>
+        <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">AI Room</h1>
         <button
           onClick={() => { setEditingAgent(null); setForm({ name: '', emoji: '🤖', description: '', prompt: '' }); setShowForm(true); }}
           className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
@@ -103,113 +108,125 @@ export default function AIRoom() {
         </button>
       </div>
 
-      {/* Bubble Room */}
-      <div className="flex-1 relative overflow-auto" style={{ minHeight: totalH + 80 }}>
-        <div className="relative mx-auto" style={{ width: totalW, height: totalH }}>
-          {allAgents.map((agent, i) => {
-            const pos = bubblePositions[i];
-            return (
-              <motion.div
-                key={agent.id}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: i * 0.05, type: 'spring', stiffness: 300, damping: 20 }}
-                style={{ position: 'absolute', left: pos.x, top: pos.y }}
-                className="flex flex-col items-center gap-2"
-              >
-                <motion.button
-                  whileTap={{ scale: 0.92 }}
-                  onClick={() => setSelectedAgent(selectedAgent?.id === agent.id ? null : agent)}
-                  className="relative"
-                >
-                  {/* Glow ring when selected */}
-                  {selectedAgent?.id === agent.id && (
-                    <motion.div
-                      layoutId="glow"
-                      className="absolute inset-0 rounded-full"
-                      style={{ boxShadow: '0 0 0 3px rgba(255,255,255,0.5)', borderRadius: '50%', margin: -3 }}
-                    />
-                  )}
-                  {/* Bubble */}
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center
-                    ${agent.is_default
-                      ? 'bg-zinc-900 border-2 border-zinc-700'
-                      : 'bg-zinc-800 border-2 border-zinc-700'}
-                    shadow-lg transition-all duration-200
-                    ${selectedAgent?.id === agent.id ? 'border-white/50' : ''}
-                  `}>
-                    {agent.is_default ? (
-                      <img src={vertexLogo} alt="Vertex" className="w-12 h-12 object-contain rounded-xl" />
-                    ) : (
-                      <span className="text-3xl">{agent.emoji}</span>
-                    )}
-                  </div>
-                </motion.button>
-                <span className="text-white text-xs font-medium text-center max-w-[90px] leading-tight">
-                  {agent.name}
-                </span>
-              </motion.div>
-            );
-          })}
-        </div>
+      {/* Ambient fog */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/3 left-1/4 w-64 h-64 rounded-full opacity-10"
+          style={{ background: 'radial-gradient(circle, #6366f1, transparent)', filter: 'blur(60px)' }} />
+        <div className="absolute top-1/2 right-1/4 w-48 h-48 rounded-full opacity-10"
+          style={{ background: 'radial-gradient(circle, #a78bfa, transparent)', filter: 'blur(50px)' }} />
       </div>
 
-      {/* Agent Action Panel */}
-      <AnimatePresence>
-        {selectedAgent && (
+      {/* Bubble Grid */}
+      <div className="flex-1 flex flex-wrap justify-center gap-10 px-8 pt-10 pb-32 relative z-10">
+        {allAgents.map((agent, i) => (
           <motion.div
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 100, opacity: 0 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-            className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl p-6 z-50"
+            key={agent.id}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: i * 0.08, type: 'spring', stiffness: 260, damping: 18 }}
+            className="flex flex-col items-center gap-3"
           >
-            <div className="flex items-center gap-4 mb-5">
-              <div className="w-14 h-14 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0">
-                {selectedAgent.is_default
-                  ? <img src={vertexLogo} className="w-9 h-9 object-contain rounded-xl" />
-                  : <span className="text-3xl">{selectedAgent.emoji}</span>
-                }
-              </div>
-              <div className="flex-1">
-                <p className="text-white font-bold text-lg">{selectedAgent.name}</p>
-                {selectedAgent.description && <p className="text-gray-500 text-sm">{selectedAgent.description}</p>}
-              </div>
-              <button onClick={() => setSelectedAgent(null)} className="text-gray-500 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <button
-              onClick={() => handleChat(selectedAgent)}
-              className="w-full bg-white text-black font-bold py-3.5 rounded-xl text-base flex items-center justify-center gap-2 hover:bg-gray-200 transition-colors mb-3"
+            <motion.div
+              animate={tappedId === agent.id ? { scale: 0.88 } : breathe.animate}
+              onPointerDown={() => handlePressStart(agent)}
+              onPointerUp={() => { handlePressEnd(); }}
+              onPointerLeave={handlePressEnd}
+              onClick={() => handleTap(agent)}
+              className="relative cursor-pointer select-none"
+              style={{ touchAction: 'none' }}
             >
-              <MessageCircle className="w-5 h-5" />
-              Chat with {selectedAgent.name}
-            </button>
+              {/* Outer glow ring */}
+              <motion.div
+                className="absolute inset-0 rounded-full"
+                animate={{ opacity: [0.3, 0.7, 0.3] }}
+                transition={{ duration: 2.5 + i * 0.3, repeat: Infinity, ease: 'easeInOut' }}
+                style={{
+                  background: agent.is_default
+                    ? 'radial-gradient(circle, rgba(139,92,246,0.4), transparent)'
+                    : 'radial-gradient(circle, rgba(255,255,255,0.15), transparent)',
+                  margin: -12,
+                  borderRadius: '50%',
+                  filter: 'blur(8px)',
+                }}
+              />
 
-            {!selectedAgent.is_default && (
+              {/* Main bubble */}
+              <div
+                className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden"
+                style={{
+                  background: agent.is_default
+                    ? 'radial-gradient(circle at 35% 35%, #3b1f8c, #1a0a4a)'
+                    : 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)',
+                  boxShadow: agent.is_default
+                    ? '0 0 30px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)'
+                    : '0 0 20px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                }}
+              >
+                {/* Shine */}
+                <div className="absolute top-2 left-3 w-6 h-3 rounded-full opacity-20"
+                  style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
+
+                {agent.is_default ? (
+                  <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain" />
+                ) : (
+                  <span className="text-4xl">{agent.emoji}</span>
+                )}
+              </div>
+            </motion.div>
+
+            {/* Name */}
+            <span className="text-white/70 text-xs font-medium text-center tracking-wide max-w-[90px] leading-tight">
+              {agent.name}
+            </span>
+
+            {/* Presence dot */}
+            <motion.div
+              className="w-1.5 h-1.5 rounded-full bg-green-400"
+              animate={{ opacity: [0.4, 1, 0.4] }}
+              transition={{ duration: 2, repeat: Infinity, delay: i * 0.4 }}
+            />
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Long press context menu */}
+      <AnimatePresence>
+        {longPressAgent && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-40" onClick={() => setLongPressAgent(null)} />
+            <motion.div
+              initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl p-6 z-50"
+            >
+              <div className="flex items-center gap-4 mb-5">
+                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-2xl">
+                  {longPressAgent.emoji}
+                </div>
+                <div>
+                  <p className="text-white font-bold">{longPressAgent.name}</p>
+                  <p className="text-gray-500 text-sm">{longPressAgent.description}</p>
+                </div>
+                <button onClick={() => setLongPressAgent(null)} className="ml-auto text-gray-500"><X className="w-5 h-5" /></button>
+              </div>
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setEditingAgent(selectedAgent);
-                    setForm({ name: selectedAgent.name, emoji: selectedAgent.emoji, description: selectedAgent.description || '', prompt: selectedAgent.prompt });
-                    setSelectedAgent(null);
-                    setShowForm(true);
-                  }}
-                  className="flex-1 bg-zinc-800 text-white py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-zinc-700 transition-colors"
+                  onClick={() => { setEditingAgent(longPressAgent); setForm({ name: longPressAgent.name, emoji: longPressAgent.emoji, description: longPressAgent.description || '', prompt: longPressAgent.prompt }); setLongPressAgent(null); setShowForm(true); }}
+                  className="flex-1 bg-zinc-800 text-white py-3 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-zinc-700"
                 >
                   <Edit2 className="w-4 h-4" /> Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(selectedAgent.id)}
-                  className="flex-1 bg-red-900/40 text-red-400 py-2.5 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-red-900/60 transition-colors"
+                  onClick={() => handleDelete(longPressAgent.id)}
+                  className="flex-1 bg-red-900/40 text-red-400 py-3 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-red-900/60"
                 >
                   <X className="w-4 h-4" /> Delete
                 </button>
               </div>
-            )}
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -229,7 +246,6 @@ export default function AIRoom() {
                 <button onClick={() => setShowForm(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
               </div>
 
-              {/* Emoji */}
               <div className="mb-4">
                 <label className="text-xs text-gray-400 mb-2 block">Avatar</label>
                 <button onClick={() => setShowEmojiPicker(v => !v)}

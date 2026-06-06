@@ -308,10 +308,15 @@ function UserBubble({ text, images }) {
   );
 }
 
-function AIBubble({ text, isError }) {
+function AIBubble({ text, isError, agentEmoji }) {
   return (
-    <div className="flex justify-start">
-      <div className="max-w-[85%] px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm whitespace-pre-wrap"
+    <div className="flex justify-start items-end gap-2">
+      {/* Agent mini avatar */}
+      <div className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mb-0.5 text-base"
+        style={{ background: 'var(--vx-surface2)', border: '1px solid var(--vx-border)' }}>
+        {agentEmoji || '✦'}
+      </div>
+      <div className="max-w-[80%] px-4 py-2.5 rounded-2xl rounded-tl-sm text-sm whitespace-pre-wrap"
         style={{ background: isError ? '#7f1d1d' : 'var(--vx-bubble-ai)', color: isError ? '#fca5a5' : 'var(--vx-bubble-ai-txt)' }}>
         {text}
       </div>
@@ -846,10 +851,27 @@ export default function VertexChat({ isOpen, onClose }) {
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-3 border-b flex-shrink-0"
           style={{ borderColor: 'var(--vx-border)' }}>
-          <img src={vertexLogo} alt="Vertex" className="w-6 h-6 object-contain" />
+          {/* Agent avatar — pulsing presence */}
+          <div className="relative flex-shrink-0">
+            <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden"
+              style={{
+                background: agentEmoji ? 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)' : 'transparent',
+                boxShadow: agentEmoji ? '0 0 12px rgba(139,92,246,0.3)' : 'none',
+              }}>
+              {agentEmoji
+                ? <span className="text-xl">{agentEmoji}</span>
+                : <img src={vertexLogo} alt="Vertex" className="w-7 h-7 object-contain" />
+              }
+            </div>
+            {/* Live dot */}
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2"
+              style={{ borderColor: 'var(--vx-bg)' }} />
+          </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <p className="text-sm font-bold truncate" style={{ color: 'var(--vx-text)' }}>Vertex AI</p>
+              <p className="text-sm font-bold truncate" style={{ color: 'var(--vx-text)' }}>
+                {agentName || 'Vertex AI'}
+              </p>
               {buildMode && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0"
                   style={{ background: '#a78bfa22', color: '#a78bfa', border: '1px solid #a78bfa44' }}>
@@ -857,7 +879,9 @@ export default function VertexChat({ isOpen, onClose }) {
                 </span>
               )}
             </div>
-            <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>{contextLabel}</p>
+            <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>
+              {loading ? 'typing...' : 'online'}
+            </p>
           </div>
           {/* Model toggle */}
           {!buildMode && (
@@ -897,7 +921,7 @@ export default function VertexChat({ isOpen, onClose }) {
 
           {displayMsgs.map((msg) => {
             if (msg.type === 'user') return <UserBubble key={msg.id} text={msg.text} images={msg.images} />;
-            if (msg.type === 'ai') return <AIBubble key={msg.id} text={msg.text} isError={msg.isError} />;
+            if (msg.type === 'ai') return <AIBubble key={msg.id} text={msg.text} isError={msg.isError} agentEmoji={agentEmoji} />;
             if (msg.type === 'tool') return <ToolCallChip key={msg.id} toolName={msg.toolName} />;
             if (msg.type === 'action') return <ActionCard key={msg.id} data={msg.data} navigate={navigate} onClose={onClose} />;
             return null;
