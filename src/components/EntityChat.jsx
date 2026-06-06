@@ -1,8 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Send, ImagePlus, Mic, MicOff } from 'lucide-react';
+import { X, Send, ImagePlus, Mic, MicOff, Clock, Trash2 } from 'lucide-react';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import vertexLogo from '@/assets/Vertex-logo.webp';
+
+function getHistoryKey(agentName) {
+  return `entity_chat_history_${agentName || 'vertex'}`;
+}
+
+function loadHistory(agentName) {
+  try { return JSON.parse(localStorage.getItem(getHistoryKey(agentName))) || []; }
+  catch { return []; }
+}
+
+function saveHistory(agentName, msgs) {
+  localStorage.setItem(getHistoryKey(agentName), JSON.stringify(msgs.slice(-200)));
+}
 
 async function callClaude(messages, systemPrompt, model = 'claude-haiku-4-5') {
   const isLocalhost = window.location.hostname === 'localhost';
@@ -34,22 +47,35 @@ export default function EntityChat({ isOpen, onClose }) {
 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [latestMsg, setLatestMsg] = useState(null); // { role, text }
+  const [latestMsg, setLatestMsg] = useState(null);
   const [apiMsgs, setApiMsgs] = useState([]);
+  const [displayHistory, setDisplayHistory] = useState([]); // all display messages
   const [pendingImages, setPendingImages] = useState([]);
   const [isListening, setIsListening] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const recognitionRef = useRef(null);
   const inputRef = useRef(null);
   const fileRef = useRef(null);
+  const historyEndRef = useRef(null);
 
-  // Reset when agent changes
+  // Load history when agent opens
   useEffect(() => {
     if (isOpen) {
-      setLatestMsg(null);
+      const saved = loadHistory(agentName);
+      setDisplayHistory(saved);
+      setLatestMsg(saved.length > 0 ? saved[saved.length - 1] : null);
       setApiMsgs([]);
       setInput('');
+      setShowHistory(false);
     }
   }, [isOpen, agentName]);
+
+  // Scroll to bottom of history when opened
+  useEffect(() => {
+    if (showHistory) {
+      setTimeout(() => historyEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
+  }, [showHistory, displayHistory]);
 
   const systemPrompt = agentPrompt ||
     `You are Vertex AI, a helpful assistant for a van conversion shop. Be concise — one clear paragraph max per response.`;
@@ -73,18 +99,31 @@ export default function EntityChat({ isOpen, onClose }) {
     }
 
     setPendingImages([]);
-    setLatestMsg({ role: 'user', text: msg || '📷 Image' });
+    const userDisplay = { role: 'user', text: msg || '📷 Image', ts: Date.now() };
+    setLatestMsg(userDisplay);
+    const newDisplay = [...displayHistory, userDisplay];
+    setDisplayHistory(newDisplay);
+    saveHistory(agentName, newDisplay);
+
     const newApi = [...apiMsgs, { role: 'user', content: userContent }];
     setApiMsgs(newApi);
     setLoading(true);
 
     try {
       const resp = await callClaude(newApi, systemPrompt, model);
-      const text = resp.content?.find(b => b.type === 'text')?.text || '';
-      setLatestMsg({ role: 'ai', text });
+      const aiText = resp.content?.find(b => b.type === 'text')?.text || '';
+      const aiDisplay = { role: 'ai', text: aiText, ts: Date.now() };
+      setLatestMsg(aiDisplay);
+      const updatedDisplay = [...newDisplay, aiDisplay];
+      setDisplayHistory(updatedDisplay);
+      saveHistory(agentName, updatedDisplay);
       setApiMsgs([...newApi, { role: 'assistant', content: resp.content }]);
     } catch (err) {
-      setLatestMsg({ role: 'ai', text: `Error: ${err.message}`, isError: true });
+      const errDisplay = { role: 'ai', text: `Error: ${err.message}`, isError: true, ts: Date.now() };
+      setLatestMsg(errDisplay);
+      const updatedDisplay = [...newDisplay, errDisplay];
+      setDisplayHistory(updatedDisplay);
+      saveHistory(agentName, updatedDisplay);
     } finally {
       setLoading(false);
     }
@@ -164,6 +203,18 @@ export default function EntityChat({ isOpen, onClose }) {
               <X className="w-4 h-4" />
             </button>
 
+            {/* History button */}
+            <button
+              onClick={() => setShowHistory(v => !v)}
+              className="absolute top-4 left-4 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all"
+              style={{
+                background: showHistory ? 'rgba(139,92,246,0.3)' : 'rgba(255,255,255,0.07)',
+                color: showHistory ? '#a78bfa' : 'rgba(255,255,255,0.4)'
+              }}
+            >
+              <Clock className="w-4 h-4" />
+            </button>
+
             {/* Agent identity at top */}
             <div className="flex flex-col items-center pt-10 pb-4 flex-shrink-0">
               <motion.div
@@ -205,6 +256,56 @@ export default function EntityChat({ isOpen, onClose }) {
                 </span>
               </div>
             </div>
+
+            {/* History drawer */}
+            <AnimatePresence>
+              {showHistory && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  className="absolute inset-x-0 z-20 overflow-y-auto px-5 py-4"
+                  style={{
+                    top: 130,
+                    bottom: 90,
+                    background: 'rgba(0,0,0,0.7)',
+                    backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-white/40 text-xs tracking-widest uppercase">Conversation</p>
+                    <button
+                      onClick={() => { saveHistory(agentName, []); setDisplayHistory([]); setLatestMsg(null); setShowHistory(false); }}
+                      className="flex items-center gap-1 text-red-400/60 hover:text-red-400 text-xs transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" /> Clear
+                    </button>
+                  </div>
+                  {displayHistory.length === 0 ? (
+                    <p className="text-white/20 text-sm text-center mt-8">No messages yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {displayHistory.map((msg, i) => (
+                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                          <div
+                            className="max-w-[80%] px-3 py-2 rounded-2xl text-sm"
+                            style={{
+                              background: msg.role === 'user'
+                                ? 'rgba(139,92,246,0.25)'
+                                : 'rgba(255,255,255,0.07)',
+                              color: msg.isError ? '#f87171' : 'rgba(255,255,255,0.8)',
+                            }}
+                          >
+                            {msg.text}
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={historyEndRef} />
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {/* Message void — center */}
             <div className="flex-1 flex items-center justify-center px-6 relative">
