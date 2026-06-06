@@ -586,7 +586,7 @@ function SettingsPanel({ onClose, contextKey, buildMode, onToggleBuildMode }) {
 export default function VertexChat({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { personality } = useTheme();
-  const { agentPrompt, agentName, agentEmoji } = useVertexChat();
+  const { agentPrompt, agentName, agentEmoji, model, setModel } = useVertexChat();
 
   const contextKey = agentPrompt ? `agent_${agentName}` : getContextKey();
   const contextLabel = agentName || getContextLabel(contextKey);
@@ -741,8 +741,8 @@ export default function VertexChat({ isOpen, onClose }) {
       let currentDisplay = [...newDisplay];
 
       while (true) {
-        const model = buildMode ? 'claude-sonnet-4-6' : 'claude-haiku-4-5';
-        const resp = await callClaude(currentApi, systemPrompt, activeTools, model);
+        const activeModel = buildMode ? 'claude-sonnet-4-6' : model;
+        const resp = await callClaude(currentApi, systemPrompt, activeTools, activeModel);
 
         if (resp.stop_reason === 'tool_use') {
           const toolBlocks = resp.content.filter(b => b.type === 'tool_use');
@@ -859,6 +859,21 @@ export default function VertexChat({ isOpen, onClose }) {
             </div>
             <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>{contextLabel}</p>
           </div>
+          {/* Model toggle */}
+          {!buildMode && (
+            <button
+              onClick={() => setModel(model === 'claude-haiku-4-5' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5')}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: model === 'claude-sonnet-4-6' ? '#a78bfa22' : 'var(--vx-surface2)',
+                color: model === 'claude-sonnet-4-6' ? '#a78bfa' : 'var(--vx-text2)',
+                border: `1px solid ${model === 'claude-sonnet-4-6' ? '#a78bfa44' : 'var(--vx-border)'}`,
+              }}
+              title={model === 'claude-haiku-4-5' ? 'Switch to Sonnet (smarter, slower)' : 'Switch to Haiku (faster)'}
+            >
+              {model === 'claude-haiku-4-5' ? 'Haiku' : 'Sonnet'}
+            </button>
+          )}
           <button onClick={() => setShowSettings(v => !v)} className="p-2 rounded-xl hover:opacity-70 transition-opacity"
             style={{ color: 'var(--vx-text2)' }}>
             <Settings className="w-4.5 h-4.5 w-[18px] h-[18px]" />
