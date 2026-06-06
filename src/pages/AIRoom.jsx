@@ -77,7 +77,7 @@ export default function AIRoom() {
     setTappedId(agent.id);
     setTimeout(() => {
       setTappedId(null);
-      openChat(agent.is_default ? null : agent.prompt, agent.is_default ? null : agent.name, agent.is_default ? null : agent.emoji);
+      openChat(agent.is_default ? null : agent.prompt, agent.is_default ? null : agent.name, agent.is_default ? null : agent.emoji, true);
     }, 180);
   };
 

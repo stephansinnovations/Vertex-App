@@ -23,10 +23,13 @@ export function VertexChatProvider({ children }) {
     localStorage.setItem('vx_model', m);
   };
 
-  const open = (prompt = null, name = null, emoji = null) => {
+  const [entityMode, setEntityMode] = useState(false);
+
+  const open = (prompt = null, name = null, emoji = null, entity = false) => {
     setAgentPrompt(prompt);
     setAgentName(name);
     setAgentEmoji(emoji);
+    setEntityMode(entity);
     setIsOpen(true);
   };
 
@@ -38,7 +41,7 @@ export function VertexChatProvider({ children }) {
   };
 
   return (
-    <Ctx.Provider value={{ isOpen, agentPrompt, agentName, agentEmoji, model, setModel: handleSetModel, open, close }}>
+    <Ctx.Provider value={{ isOpen, agentPrompt, agentName, agentEmoji, entityMode, model, setModel: handleSetModel, open, close }}>
       {children}
     </Ctx.Provider>
   );

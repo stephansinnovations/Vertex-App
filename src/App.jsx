@@ -11,6 +11,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import { VertexChatProvider, useVertexChat } from '@/lib/VertexChatContext';
 import VertexChat from '@/components/VertexChat';
+import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
 import WorkOrderPage from './pages/WorkOrderPage';
 import Builds from './pages/Builds';
@@ -131,7 +132,8 @@ const AuthenticatedApp = () => {
 
 
 function GlobalVertexChat() {
-  const { isOpen, close } = useVertexChat();
+  const { isOpen, close, entityMode } = useVertexChat();
+  if (entityMode) return <EntityChat isOpen={isOpen} onClose={close} />;
   return <VertexChat isOpen={isOpen} onClose={close} />;
 }
 
