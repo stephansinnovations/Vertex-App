@@ -312,8 +312,6 @@ Return ONLY the prompt text, nothing else.`
               </div>
             </motion.div>
             <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">Vertex App</span>
-            <motion.div className="w-1.5 h-1.5 rounded-full bg-green-400"
-              animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 2, repeat: Infinity }} />
           </motion.div>
 
 

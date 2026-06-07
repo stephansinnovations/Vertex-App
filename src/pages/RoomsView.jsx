@@ -121,13 +121,6 @@ function MembraneBlob({ room, agents, onPress, index }) {
         <span className="text-white/70 text-sm font-semibold tracking-wide">{room.name}</span>
       </div>
 
-      {/* Presence dot */}
-      <motion.div
-        className="w-1.5 h-1.5 rounded-full"
-        style={{ background: room.color }}
-        animate={{ opacity: [0.4, 1, 0.4] }}
-        transition={{ duration: 2, repeat: Infinity }}
-      />
     </motion.div>
   );
 }
