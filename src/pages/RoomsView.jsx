@@ -52,7 +52,7 @@ function AgentBubble({ agent, index, total }) {
       {/* Glass bubble */}
       <div className="w-full h-full rounded-full flex items-center justify-center relative"
         style={{
-          background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.06))',
+          background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.1), rgba(255,255,255,0.02))',
           boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.1)`,
           border: '0.3px solid rgba(255,255,255,0.2)',
         }}>
@@ -105,7 +105,7 @@ function MembraneBlob({ room, agents, onPress, index }) {
             width: 76, height: 76,
             left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)',
-            background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.3), rgba(255,255,255,0.08))`,
+            background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(255,255,255,0.03))`,
             boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -2px 0 rgba(0,0,0,0.15)`,
             border: '0.3px solid rgba(255,255,255,0.3)',
             zIndex: 3,

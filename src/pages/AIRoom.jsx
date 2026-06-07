@@ -270,7 +270,7 @@ Return ONLY the prompt text, nothing else.`
                   {/* Glass bubble — identical to AI Rooms AgentBubble */}
                   <div className="w-24 h-24 rounded-full flex items-center justify-center relative"
                     style={{
-                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.06))',
+                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.1), rgba(255,255,255,0.02))',
                       boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.1)`,
                       border: '0.3px solid rgba(255,255,255,0.2)',
                     }}>
@@ -314,7 +314,7 @@ Return ONLY the prompt text, nothing else.`
               />
               <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
                 style={{
-                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.3), rgba(139,92,246,0.2))',
+                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(139,92,246,0.08))',
                   boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -1px 0 rgba(0,0,0,0.15)',
                   border: '0.3px solid rgba(255,255,255,0.35)',
                 }}>
