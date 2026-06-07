@@ -308,7 +308,7 @@ export default function EntityChat({ isOpen, onClose }) {
             </AnimatePresence>
 
             {/* Message void — center */}
-            <div className="flex-1 flex items-center justify-center px-6 relative">
+            <div className="flex-1 flex items-start justify-center px-6 relative overflow-y-auto py-4">
               <AnimatePresence mode="wait">
                 {loading ? (
                   <motion.div
@@ -338,7 +338,7 @@ export default function EntityChat({ isOpen, onClose }) {
                     {latestMsg.role === 'user' ? (
                       <p className="text-white/40 text-sm italic">"{latestMsg.text}"</p>
                     ) : (
-                      <p className={`text-white/90 text-base leading-relaxed ${latestMsg.isError ? 'text-red-400' : ''}`}>
+                      <p className={`text-white/90 text-base leading-relaxed text-left ${latestMsg.isError ? 'text-red-400' : ''}`}>
                         {latestMsg.text}
                       </p>
                     )}
