@@ -140,7 +140,7 @@ export default function RoomsView() {
         <button onClick={() => navigate('/')} className="text-gray-500 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">Vertex Rooms</h1>
+        <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">AI Rooms</h1>
         <button
           onClick={() => setShowNewRoom(true)}
           className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"

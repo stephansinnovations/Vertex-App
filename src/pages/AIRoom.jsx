@@ -208,7 +208,7 @@ Return ONLY the prompt text, nothing else.`
           <ArrowLeft className="w-5 h-5" />
         </button>
         <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">
-          {roomInfo?.name || 'AI Room'}
+          {roomInfo?.name || 'Vertex Room'}
         </h1>
         <button
           onClick={() => { setEditingAgent(null); setForm({ name: '', emoji: '🤖', description: '', prompt: '' }); setShowForm(true); }}
