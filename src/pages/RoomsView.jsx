@@ -18,9 +18,12 @@ function getClusterPos(index, total) {
   return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
 }
 
+const BUBBLE_COLORS = ['#6366f1','#a78bfa','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#8b5cf6'];
+
 function AgentBubble({ agent, index, total }) {
   const pos = getClusterPos(index, total);
   const size = 40;
+  const glow = BUBBLE_COLORS[index % BUBBLE_COLORS.length];
 
   return (
     <motion.div
@@ -30,19 +33,31 @@ function AgentBubble({ agent, index, total }) {
         left: `calc(50% + ${pos.x}px)`,
         top: `calc(50% + ${pos.y}px)`,
         transform: 'translate(-50%, -50%)',
-        // Apple glass sphere
-        background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(255,255,255,0.07))',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)',
-        border: '0.5px solid rgba(255,255,255,0.38)',
         zIndex: 2,
       }}
       animate={{ y: [0, -2, 0] }}
       transition={{ duration: 2.5 + index * 0.3, repeat: Infinity, ease: 'easeInOut', delay: index * 0.15 }}
     >
-      {/* Specular highlight */}
-      <div className="absolute top-1 left-1.5 w-4 h-2 rounded-full opacity-60 pointer-events-none"
-        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
-      <span style={{ fontSize: 18, position: 'relative', zIndex: 1 }}>{agent.emoji}</span>
+      {/* Outer glow pulse */}
+      <motion.div
+        className="absolute inset-0 rounded-full pointer-events-none"
+        animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.25, 1] }}
+        transition={{ duration: 2.5 + index * 0.3, repeat: Infinity, ease: 'easeInOut', delay: index * 0.2 }}
+        style={{
+          background: `radial-gradient(circle, ${glow}88, transparent)`,
+          filter: 'blur(6px)',
+          margin: -6,
+        }}
+      />
+      {/* Glass bubble */}
+      <div className="w-full h-full rounded-full flex items-center justify-center relative"
+        style={{
+          background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.06))',
+          boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)`,
+          border: '0.5px solid rgba(255,255,255,0.35)',
+        }}>
+        <span style={{ fontSize: 18, position: 'relative', zIndex: 1 }}>{agent.emoji}</span>
+      </div>
     </motion.div>
   );
 }
