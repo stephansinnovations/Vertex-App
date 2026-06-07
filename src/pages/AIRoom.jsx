@@ -268,13 +268,13 @@ Return ONLY the prompt text, nothing else.`
                     style={{ background: `radial-gradient(circle, ${glow}88, transparent)`, margin: -8, filter: 'blur(6px)' }}
                   />
                   {/* Glass bubble — identical to AI Rooms AgentBubble */}
-                  <div className="w-14 h-14 rounded-full flex items-center justify-center relative"
+                  <div className="w-24 h-24 rounded-full flex items-center justify-center relative"
                     style={{
                       background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.06))',
                       boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)`,
                       border: '0.5px solid rgba(255,255,255,0.35)',
                     }}>
-                    <span className="text-2xl">{agent.emoji}</span>
+                    <span className="text-4xl">{agent.emoji}</span>
                   </div>
                 </motion.div>
                 <span className="text-[11px] font-medium text-center leading-tight max-w-[80px]"
