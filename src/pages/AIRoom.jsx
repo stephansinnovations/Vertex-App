@@ -266,16 +266,20 @@ Return ONLY the prompt text, nothing else.`
                   />
                   <div className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden"
                     style={{
-                      background: 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)',
-                      boxShadow: '0 0 20px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
-                      border: '1px solid rgba(255,255,255,0.12)',
+                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.22), rgba(255,255,255,0.05))',
+                      backdropFilter: 'saturate(180%) blur(16px)',
+                      WebkitBackdropFilter: 'saturate(180%) blur(16px)',
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.25), inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)',
+                      border: '0.5px solid rgba(255,255,255,0.35)',
                     }}>
-                    <div className="absolute top-2 left-3 w-5 h-2.5 rounded-full opacity-20"
-                      style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
-                    <span className="text-4xl">{agent.emoji}</span>
+                    {/* Specular highlight */}
+                    <div className="absolute top-2 left-3 w-8 h-4 rounded-full opacity-50 pointer-events-none"
+                      style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
+                    <span className="text-4xl relative z-10">{agent.emoji}</span>
                   </div>
                 </motion.div>
-                <span className="text-white/60 text-[10px] font-medium text-center tracking-wide max-w-[70px] leading-tight">
+                <span className="text-[11px] font-medium text-center leading-tight max-w-[80px]"
+                  style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.9)', letterSpacing: 0.1 }}>
                   {agent.name}
                 </span>
               </motion.div>
@@ -309,13 +313,15 @@ Return ONLY the prompt text, nothing else.`
               />
               <div className="w-16 h-16 rounded-full flex items-center justify-center relative overflow-hidden"
                 style={{
-                  background: 'radial-gradient(circle at 35% 35%, #3b1f8c, #1a0a4a)',
-                  boxShadow: '0 0 30px rgba(139,92,246,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
-                  border: '1px solid rgba(139,92,246,0.4)',
+                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(139,92,246,0.15))',
+                  backdropFilter: 'saturate(180%) blur(20px)',
+                  WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+                  boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.15)',
+                  border: '0.5px solid rgba(255,255,255,0.45)',
                 }}>
-                <div className="absolute top-2 left-2 w-5 h-2.5 rounded-full opacity-20"
-                  style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
-                <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain" />
+                <div className="absolute top-1.5 left-2 w-7 h-3.5 rounded-full opacity-50 pointer-events-none"
+                  style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.95), transparent)' }} />
+                <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
               </div>
             </motion.div>
             <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">Vertex App</span>
