@@ -36,6 +36,7 @@ export default function AIRoom() {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [prevPrompt, setPrevPrompt] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const handleGeneratePrompt = async () => {
     if (!form.name.trim()) return;
@@ -263,7 +264,7 @@ Return ONLY the prompt text, nothing else.`
                   <Edit2 className="w-4 h-4" /> Edit
                 </button>
                 <button
-                  onClick={() => handleDelete(longPressAgent.id)}
+                  onClick={() => setConfirmDeleteId(longPressAgent.id)}
                   className="flex-1 bg-red-900/40 text-red-400 py-3 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-red-900/60"
                 >
                   <X className="w-4 h-4" /> Delete
@@ -355,6 +356,42 @@ Return ONLY the prompt text, nothing else.`
                 className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40">
                 {editingAgent ? 'Save Changes' : 'Create Agent'}
               </button>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Delete confirmation dialog */}
+      <AnimatePresence>
+        {confirmDeleteId && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 z-50"
+              onClick={() => setConfirmDeleteId(null)}
+            />
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed inset-x-8 z-50 bg-zinc-900 border border-zinc-800 rounded-2xl p-6"
+              style={{ top: '50%', transform: 'translateY(-50%)' }}
+            >
+              <h3 className="text-white font-bold text-lg mb-2">Delete Agent?</h3>
+              <p className="text-gray-400 text-sm mb-6">This will permanently delete this AI agent and all its chat history. This can't be undone.</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setConfirmDeleteId(null)}
+                  className="flex-1 bg-zinc-800 text-white py-3 rounded-xl font-medium hover:bg-zinc-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { handleDelete(confirmDeleteId); setConfirmDeleteId(null); }}
+                  className="flex-1 bg-red-600 text-white py-3 rounded-xl font-medium hover:bg-red-500 transition-colors"
+                >
+                  Delete
+                </button>
+              </div>
             </motion.div>
           </>
         )}
