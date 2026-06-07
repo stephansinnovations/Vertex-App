@@ -53,9 +53,15 @@ function AgentBubble({ agent, index, total }) {
       <div className="w-full h-full rounded-full flex items-center justify-center relative"
         style={{
           background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.06))',
-          boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)`,
-          border: '0.5px solid rgba(255,255,255,0.35)',
+          boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.4), inset 0 -1px 0 rgba(0,0,0,0.1)`,
+          border: '0.3px solid rgba(255,255,255,0.2)',
         }}>
+        {/* Curved reflection */}
+        <div className="absolute pointer-events-none" style={{
+          top: '12%', left: '18%', width: '38%', height: '15%',
+          borderRadius: '50%', background: 'rgba(255,255,255,0.5)',
+          filter: 'blur(1.5px)', transform: 'rotate(-35deg)',
+        }} />
         <span style={{ fontSize: 18, position: 'relative', zIndex: 1 }}>{agent.emoji}</span>
       </div>
     </motion.div>
@@ -101,13 +107,19 @@ function MembraneBlob({ room, agents, onPress, index }) {
             transform: 'translate(-50%, -50%)',
             background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.3), rgba(255,255,255,0.08))`,
             boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -2px 0 rgba(0,0,0,0.15)`,
-            border: '0.5px solid rgba(255,255,255,0.45)',
+            border: '0.3px solid rgba(255,255,255,0.3)',
             zIndex: 3,
           }}
           animate={{ scale: [1, 1.04, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
         >
-          <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain" />
+          {/* Curved reflection */}
+          <div className="absolute pointer-events-none" style={{
+            top: '11%', left: '18%', width: '40%', height: '16%',
+            borderRadius: '50%', background: 'rgba(255,255,255,0.55)',
+            filter: 'blur(2px)', transform: 'rotate(-35deg)',
+          }} />
+          <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
         </motion.div>
 
         {/* Small agent bubbles clustered around center */}
