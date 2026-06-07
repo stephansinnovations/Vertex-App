@@ -266,11 +266,9 @@ Return ONLY the prompt text, nothing else.`
                   />
                   <div className="w-24 h-24 rounded-full flex items-center justify-center relative"
                     style={{
-                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.22), rgba(255,255,255,0.05))',
-                      backdropFilter: 'saturate(180%) blur(20px)',
-                      WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-                      boxShadow: '0 6px 24px rgba(0,0,0,0.25), inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)',
-                      border: '0.5px solid rgba(255,255,255,0.35)',
+                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.08))',
+                      boxShadow: '0 6px 24px rgba(0,0,0,0.3), inset 0 1.5px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.15)',
+                      border: '0.5px solid rgba(255,255,255,0.4)',
                     }}>
                     <span className="text-4xl">{agent.emoji}</span>
                   </div>
@@ -310,11 +308,9 @@ Return ONLY the prompt text, nothing else.`
               />
               <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
                 style={{
-                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(139,92,246,0.15))',
-                  backdropFilter: 'saturate(180%) blur(20px)',
-                  WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-                  boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.15)',
-                  border: '0.5px solid rgba(255,255,255,0.45)',
+                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.3), rgba(139,92,246,0.2))',
+                  boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -1px 0 rgba(0,0,0,0.15)',
+                  border: '0.5px solid rgba(255,255,255,0.5)',
                 }}>
                 <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain" />
               </div>

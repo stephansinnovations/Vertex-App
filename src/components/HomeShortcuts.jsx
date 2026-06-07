@@ -255,11 +255,9 @@ export default function HomeShortcuts() {
                     className="w-full h-full relative flex items-center justify-center"
                     style={{
                       borderRadius: 18,
-                      background: 'rgba(255,255,255,0.13)',
-                      backdropFilter: 'saturate(180%) blur(24px)',
-                      WebkitBackdropFilter: 'saturate(180%) blur(24px)',
-                      boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.15)',
-                      border: '0.5px solid rgba(255,255,255,0.25)',
+                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.22), rgba(255,255,255,0.07))',
+                      boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.15)',
+                      border: '0.5px solid rgba(255,255,255,0.3)',
                     }}
                   >
                     {/* Specular highlight */}

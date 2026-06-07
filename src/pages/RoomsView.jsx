@@ -31,11 +31,9 @@ function AgentBubble({ agent, index, total }) {
         top: `calc(50% + ${pos.y}px)`,
         transform: 'translate(-50%, -50%)',
         // Apple glass sphere
-        background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(255,255,255,0.06))',
-        backdropFilter: 'saturate(180%) blur(12px)',
-        WebkitBackdropFilter: 'saturate(180%) blur(12px)',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.1)',
-        border: '0.5px solid rgba(255,255,255,0.35)',
+        background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(255,255,255,0.07))',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)',
+        border: '0.5px solid rgba(255,255,255,0.38)',
         zIndex: 2,
       }}
       animate={{ y: [0, -2, 0] }}
@@ -86,10 +84,8 @@ function MembraneBlob({ room, agents, onPress }) {
             width: 76, height: 76,
             left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)',
-            background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.32), rgba(255,255,255,0.08))`,
-            backdropFilter: 'saturate(180%) blur(20px)',
-            WebkitBackdropFilter: 'saturate(180%) blur(20px)',
-            boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -2px 0 rgba(0,0,0,0.15)`,
+            background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.3), rgba(255,255,255,0.08))`,
+            boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -2px 0 rgba(0,0,0,0.15)`,
             border: '0.5px solid rgba(255,255,255,0.45)',
             zIndex: 3,
           }}
