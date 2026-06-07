@@ -117,12 +117,16 @@ Return ONLY the prompt text, nothing else.`
     await loadAgents();
   };
 
-  // Single tap → open chat directly
+  // Single tap → open chat or go home
   const handleTap = (agent) => {
+    if (agent.is_default) {
+      navigate('/');
+      return;
+    }
     setTappedId(agent.id);
     setTimeout(() => {
       setTappedId(null);
-      openChat(agent.is_default ? null : agent.prompt, agent.is_default ? null : agent.name, agent.is_default ? null : agent.emoji, true);
+      openChat(agent.prompt, agent.name, agent.emoji, true);
     }, 180);
   };
 
@@ -142,14 +146,14 @@ Return ONLY the prompt text, nothing else.`
 
   const orbitAgents = agents; // custom agents only — Vertex is center
 
-  // Calculate circular positions for orbit agents
-  const getOrbitPos = (index, total, radius) => {
+  // Calculate circular positions — radius grows with agent count to prevent overlap
+  const getOrbitRadius = (total) => Math.max(130, total * 28);
+  const getOrbitPos = (index, total) => {
+    const radius = getOrbitRadius(total);
     const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
-    return {
-      x: Math.cos(angle) * radius,
-      y: Math.sin(angle) * radius,
-    };
+    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
   };
+  const containerSize = Math.max(340, getOrbitRadius(orbitAgents.length) * 2 + 120);
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}>
@@ -176,19 +180,19 @@ Return ONLY the prompt text, nothing else.`
       </div>
 
       {/* Orbital Layout */}
-      <div className="flex-1 flex items-center justify-center relative z-10">
+      <div className="flex-1 flex items-center justify-center relative z-10 overflow-auto py-8">
         <div className="relative flex items-center justify-center"
-          style={{ width: 340, height: 340 }}>
+          style={{ width: containerSize, height: containerSize }}>
 
           {/* Orbit ring */}
           {orbitAgents.length > 0 && (
             <div className="absolute rounded-full border border-white/5"
-              style={{ width: 280, height: 280 }} />
+              style={{ width: getOrbitRadius(orbitAgents.length) * 2, height: getOrbitRadius(orbitAgents.length) * 2 }} />
           )}
 
           {/* Orbit agents */}
           {orbitAgents.map((agent, i) => {
-            const pos = getOrbitPos(i, orbitAgents.length, 130);
+            const pos = getOrbitPos(i, orbitAgents.length);
             return (
               <motion.div
                 key={agent.id}
