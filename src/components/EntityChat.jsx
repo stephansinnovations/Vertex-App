@@ -2,19 +2,56 @@ import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, ImagePlus, Mic, MicOff, Clock, Trash2 } from 'lucide-react';
 import { useVertexChat } from '@/lib/VertexChatContext';
+import { supabase } from '@/api/supabaseClient';
 import vertexLogo from '@/assets/Vertex-logo.webp';
 
-function getHistoryKey(agentName) {
-  return `entity_chat_history_${agentName || 'vertex'}`;
+async function loadHistoryFromDB(agentName) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // fallback to localStorage
+    try { return JSON.parse(localStorage.getItem(`entity_chat_history_${agentName || 'vertex'}`)) || []; }
+    catch { return []; }
+  }
+  const { data } = await supabase
+    .from('chat_history')
+    .select('role, text, created_at')
+    .eq('user_id', user.id)
+    .eq('agent_name', agentName || 'vertex')
+    .order('created_at', { ascending: true })
+    .limit(200);
+  return (data || []).map(r => ({ role: r.role, text: r.text, ts: new Date(r.created_at).getTime() }));
 }
 
-function loadHistory(agentName) {
-  try { return JSON.parse(localStorage.getItem(getHistoryKey(agentName))) || []; }
-  catch { return []; }
+async function saveMessageToDB(agentName, role, text) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    // fallback to localStorage
+    const key = `entity_chat_history_${agentName || 'vertex'}`;
+    try {
+      const existing = JSON.parse(localStorage.getItem(key)) || [];
+      existing.push({ role, text, ts: Date.now() });
+      localStorage.setItem(key, JSON.stringify(existing.slice(-200)));
+    } catch {}
+    return;
+  }
+  await supabase.from('chat_history').insert({
+    user_id: user.id,
+    agent_name: agentName || 'vertex',
+    role,
+    text,
+  });
 }
 
-function saveHistory(agentName, msgs) {
-  localStorage.setItem(getHistoryKey(agentName), JSON.stringify(msgs.slice(-200)));
+async function clearHistoryFromDB(agentName) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    localStorage.removeItem(`entity_chat_history_${agentName || 'vertex'}`);
+    return;
+  }
+  await supabase.from('chat_history')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('agent_name', agentName || 'vertex');
 }
 
 async function callClaude(messages, systemPrompt, model = 'claude-haiku-4-5') {
@@ -61,12 +98,15 @@ export default function EntityChat({ isOpen, onClose }) {
   // Load history when agent opens
   useEffect(() => {
     if (isOpen) {
-      const saved = loadHistory(agentName);
-      setDisplayHistory(saved);
-      setLatestMsg(saved.length > 0 ? saved[saved.length - 1] : null);
+      setDisplayHistory([]);
+      setLatestMsg(null);
       setApiMsgs([]);
       setInput('');
       setShowHistory(false);
+      loadHistoryFromDB(agentName).then(saved => {
+        setDisplayHistory(saved);
+        if (saved.length > 0) setLatestMsg(saved[saved.length - 1]);
+      });
     }
   }, [isOpen, agentName]);
 
@@ -103,7 +143,7 @@ export default function EntityChat({ isOpen, onClose }) {
     setLatestMsg(userDisplay);
     const newDisplay = [...displayHistory, userDisplay];
     setDisplayHistory(newDisplay);
-    saveHistory(agentName, newDisplay);
+    saveMessageToDB(agentName, 'user', msg || '📷 Image');
 
     const newApi = [...apiMsgs, { role: 'user', content: userContent }];
     setApiMsgs(newApi);
@@ -114,16 +154,13 @@ export default function EntityChat({ isOpen, onClose }) {
       const aiText = resp.content?.find(b => b.type === 'text')?.text || '';
       const aiDisplay = { role: 'ai', text: aiText, ts: Date.now() };
       setLatestMsg(aiDisplay);
-      const updatedDisplay = [...newDisplay, aiDisplay];
-      setDisplayHistory(updatedDisplay);
-      saveHistory(agentName, updatedDisplay);
+      setDisplayHistory([...newDisplay, aiDisplay]);
+      saveMessageToDB(agentName, 'ai', aiText);
       setApiMsgs([...newApi, { role: 'assistant', content: resp.content }]);
     } catch (err) {
       const errDisplay = { role: 'ai', text: `Error: ${err.message}`, isError: true, ts: Date.now() };
       setLatestMsg(errDisplay);
-      const updatedDisplay = [...newDisplay, errDisplay];
-      setDisplayHistory(updatedDisplay);
-      saveHistory(agentName, updatedDisplay);
+      setDisplayHistory([...newDisplay, errDisplay]);
     } finally {
       setLoading(false);
     }
@@ -275,7 +312,7 @@ export default function EntityChat({ isOpen, onClose }) {
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-white/40 text-xs tracking-widest uppercase">Conversation</p>
                     <button
-                      onClick={() => { saveHistory(agentName, []); setDisplayHistory([]); setLatestMsg(null); setShowHistory(false); }}
+                      onClick={() => { clearHistoryFromDB(agentName); setDisplayHistory([]); setLatestMsg(null); setShowHistory(false); }}
                       className="flex items-center gap-1 text-red-400/60 hover:text-red-400 text-xs transition-colors"
                     >
                       <Trash2 className="w-3 h-3" /> Clear
