@@ -252,14 +252,20 @@ export default function HomeShortcuts() {
               <div className="flex flex-col items-center">
                 <div className="relative" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
                   <div
-                    className="w-full h-full rounded-[18px] flex items-center justify-center shadow-xl"
+                    className="w-full h-full relative flex items-center justify-center overflow-hidden"
                     style={{
-                      background: 'linear-gradient(145deg, #3a3a3a, #1a1a1a)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      boxShadow: '0 4px 20px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.08)',
+                      borderRadius: 18,
+                      background: 'rgba(255,255,255,0.13)',
+                      backdropFilter: 'saturate(180%) blur(24px)',
+                      WebkitBackdropFilter: 'saturate(180%) blur(24px)',
+                      boxShadow: '0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.15)',
+                      border: '0.5px solid rgba(255,255,255,0.25)',
                     }}
                   >
-                    <Icon className="w-8 h-8 text-white/80" />
+                    {/* Specular highlight */}
+                    <div className="absolute top-1.5 left-2 w-8 h-4 rounded-full opacity-30 pointer-events-none"
+                      style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
+                    <Icon className="w-8 h-8 relative z-10" style={{ color: 'rgba(255,255,255,0.9)', strokeWidth: 1.6 }} />
                   </div>
                   {editMode && (
                     <button
@@ -273,14 +279,17 @@ export default function HomeShortcuts() {
                   )}
                 </div>
                 <span
-                  className="mt-1.5 text-[11px] font-medium text-center"
+                  className="mt-1.5 text-center"
                   style={{
-                    color: 'rgba(255,255,255,0.75)',
+                    fontSize: 11,
+                    fontWeight: 500,
+                    letterSpacing: 0.1,
+                    color: 'rgba(255,255,255,0.88)',
                     width: TILE_W,
                     overflow: 'hidden',
                     textOverflow: 'ellipsis',
                     whiteSpace: 'nowrap',
-                    textShadow: '0 1px 3px rgba(0,0,0,0.8)',
+                    textShadow: '0 1px 4px rgba(0,0,0,0.9)',
                   }}
                 >
                   {s.label}

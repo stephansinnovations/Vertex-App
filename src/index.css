@@ -95,6 +95,9 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
   }
 
   body {
@@ -104,5 +107,43 @@
     background-attachment: fixed;
     background-position: center;
     background-color: #0a0a0a;
+    padding-bottom: env(safe-area-inset-bottom);
   }
+
+  /* Hide scrollbars */
+  ::-webkit-scrollbar { display: none; }
+  * { scrollbar-width: none; }
+}
+
+/* Apple glass utilities */
+.apple-glass {
+  background: rgba(255, 255, 255, 0.13);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border: 0.5px solid rgba(255, 255, 255, 0.22);
+}
+
+.apple-glass-dark {
+  background: rgba(22, 22, 24, 0.75);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+}
+
+.ios-tab-bar {
+  background: rgba(22, 22, 24, 0.82);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border-top: 0.5px solid rgba(255, 255, 255, 0.14);
+}
+
+.ios-nav-bar {
+  background: rgba(22, 22, 24, 0.75);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
+}
+
+:root {
+  --ios-blue: #007AFF;
 }

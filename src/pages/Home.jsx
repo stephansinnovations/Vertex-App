@@ -10,6 +10,27 @@ import { useVertexChat } from '@/lib/VertexChatContext';
 
 const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8b7f61/0e0de3cfb_VertexBannerLogoPrint.png';
 
+// Apple-style glass nav icon
+function NavIcon({ icon: Icon, label, onClick, accent }) {
+  return (
+    <button onClick={onClick} className="flex flex-col items-center gap-1.5 select-none active:scale-90 transition-transform duration-100">
+      <Icon
+        className="w-6 h-6"
+        style={{ color: accent ? 'var(--ios-blue)' : 'rgba(255,255,255,0.55)' }}
+        strokeWidth={1.8}
+      />
+      <span style={{
+        fontSize: 10,
+        fontWeight: 500,
+        letterSpacing: 0.2,
+        color: accent ? 'var(--ios-blue)' : 'rgba(255,255,255,0.45)',
+      }}>
+        {label}
+      </span>
+    </button>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const { open: openChat } = useVertexChat();
@@ -27,16 +48,13 @@ export default function Home() {
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
   };
-
   const onPointerMove = (e) => {
     dragging.current = true;
-    const newPos = {
+    setPos({
       x: Math.max(0, Math.min(window.innerWidth - 48, e.clientX - offset.current.x)),
       y: Math.max(0, Math.min(window.innerHeight - 48, e.clientY - offset.current.y)),
-    };
-    setPos(newPos);
+    });
   };
-
   const onPointerUp = () => {
     window.removeEventListener('pointermove', onPointerMove);
     window.removeEventListener('pointerup', onPointerUp);
@@ -48,61 +66,67 @@ export default function Home() {
     <motion.div
       className="min-h-screen flex flex-col items-center justify-center"
       style={{ backgroundColor: 'transparent' }}
-      initial={{ opacity: 0, scale: 0.96 }}
+      initial={{ opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.35, ease: [0.25, 0.46, 0.45, 0.94] }}
+      transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      {/* Draggable Settings Button */}
+      {/* Draggable Settings button — Apple glass style */}
       <div
         onPointerDown={onPointerDown}
         style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 60, touchAction: 'none', cursor: 'grab' }}
-        className="w-11 h-11 rounded-full bg-zinc-800/90 border border-zinc-700 backdrop-blur-sm flex items-center justify-center text-gray-400 hover:text-white shadow-lg select-none"
+        className="w-11 h-11 rounded-full apple-glass flex items-center justify-center shadow-lg select-none active:scale-90 transition-transform"
       >
-        <Settings className="w-5 h-5" />
+        <Settings className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.7)', strokeWidth: 1.8 }} />
       </div>
 
       {/* Shortcuts grid */}
       <HomeShortcuts />
 
-      {/* Logo */}
+      {/* Vertex banner logo */}
       <img
         src={DEFAULT_LOGO}
         alt="Vertex Vans Logo"
-        className="w-80 object-contain"
-        style={{ filter: 'invert(1) brightness(0.95)' }}
+        className="w-72 object-contain mb-4"
+        style={{ filter: 'invert(1) brightness(0.92)', opacity: 0.9 }}
       />
 
-      {/* Bottom Bar — two rows */}
+      {/* Bottom area */}
       <div className="fixed bottom-0 left-0 right-0 z-40">
-        {/* Row 1 — Vertex AI centered, transparent */}
-        <div className="flex justify-center pt-3 pb-1">
-          <button onClick={() => navigate('/Rooms')} className="flex flex-col items-center gap-1">
-            <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
-          </button>
+
+        {/* Vertex AI bubble — floating above dock */}
+        <div className="flex justify-center pb-3">
+          <motion.button
+            onClick={() => navigate('/Rooms')}
+            whileTap={{ scale: 0.88 }}
+            className="relative select-none"
+            style={{ filter: 'drop-shadow(0 8px 24px rgba(139,92,246,0.5))' }}
+          >
+            {/* Glass sphere */}
+            <div className="w-16 h-16 rounded-full relative overflow-hidden flex items-center justify-center"
+              style={{
+                background: 'radial-gradient(circle at 35% 28%, rgba(139,92,246,0.7), rgba(80,40,160,0.85))',
+                boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.2)',
+                border: '0.5px solid rgba(255,255,255,0.3)',
+              }}>
+              {/* Specular highlight */}
+              <div className="absolute top-1.5 left-3 w-7 h-3.5 rounded-full opacity-40"
+                style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
+              {/* Bottom shadow */}
+              <div className="absolute bottom-0 inset-x-0 h-6 rounded-b-full opacity-20"
+                style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)' }} />
+              <img src={vertexLogo} alt="Vertex" className="w-9 h-9 object-contain relative z-10" />
+            </div>
+          </motion.button>
         </div>
 
-        {/* Row 2 — nav icons with dark background */}
-        <div className="flex items-center justify-around px-8 pb-6 pt-2 bg-black/95 backdrop-blur-md border-t border-zinc-800">
-          <button onClick={() => navigate(createPageUrl('SOPList'))} className="flex flex-col items-center gap-1">
-            <FileText className="w-5 h-5 text-white/70" />
-            <span className="text-[9px] text-white/50 font-medium">SOPs</span>
-          </button>
-          <button onClick={() => navigate('/Inventory')} className="flex flex-col items-center gap-1">
-            <Package className="w-5 h-5 text-white/70" />
-            <span className="text-[9px] text-white/50 font-medium">Inventory</span>
-          </button>
-          <button onClick={() => navigate('/Builds')} className="flex flex-col items-center gap-1">
-            <Bus className="w-5 h-5 text-white/70" />
-            <span className="text-[9px] text-white/50 font-medium">Builds</span>
-          </button>
-          <button onClick={() => navigate('/Contacts')} className="flex flex-col items-center gap-1">
-            <Users className="w-5 h-5 text-white/70" />
-            <span className="text-[9px] text-white/50 font-medium">Contacts</span>
-          </button>
-          <button onClick={() => navigate('/Profile')} className="flex flex-col items-center gap-1">
-            <UserCircle className="w-5 h-5 text-white/70" />
-            <span className="text-[9px] text-white/50 font-medium">Profile</span>
-          </button>
+        {/* iOS-style tab bar */}
+        <div className="ios-tab-bar flex items-center justify-around px-6 pt-3"
+          style={{ paddingBottom: `calc(1.5rem + env(safe-area-inset-bottom))` }}>
+          <NavIcon icon={FileText} label="SOPs" onClick={() => navigate(createPageUrl('SOPList'))} />
+          <NavIcon icon={Package} label="Inventory" onClick={() => navigate('/Inventory')} />
+          <NavIcon icon={Bus} label="Builds" onClick={() => navigate('/Builds')} />
+          <NavIcon icon={Users} label="Contacts" onClick={() => navigate('/Contacts')} />
+          <NavIcon icon={UserCircle} label="Profile" onClick={() => navigate('/Profile')} />
         </div>
       </div>
     </motion.div>

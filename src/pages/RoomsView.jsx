@@ -20,9 +20,7 @@ function getClusterPos(index, total) {
 
 function AgentBubble({ agent, index, total }) {
   const pos = getClusterPos(index, total);
-  const size = 36;
-  const colors = ['#6366f1','#a78bfa','#ec4899','#f59e0b','#10b981','#3b82f6'];
-  const color = colors[index % colors.length];
+  const size = 40;
 
   return (
     <motion.div
@@ -32,15 +30,21 @@ function AgentBubble({ agent, index, total }) {
         left: `calc(50% + ${pos.x}px)`,
         top: `calc(50% + ${pos.y}px)`,
         transform: 'translate(-50%, -50%)',
-        background: `radial-gradient(circle at 35% 30%, ${color}cc, ${color}66)`,
-        boxShadow: `0 0 10px ${color}66, inset 0 1px 0 rgba(255,255,255,0.2)`,
-        border: '1px solid rgba(255,255,255,0.15)',
+        // Apple glass sphere
+        background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(255,255,255,0.06))',
+        backdropFilter: 'saturate(180%) blur(12px)',
+        WebkitBackdropFilter: 'saturate(180%) blur(12px)',
+        boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -1px 0 rgba(0,0,0,0.1)',
+        border: '0.5px solid rgba(255,255,255,0.35)',
         zIndex: 2,
       }}
       animate={{ y: [0, -2, 0] }}
       transition={{ duration: 2.5 + index * 0.3, repeat: Infinity, ease: 'easeInOut', delay: index * 0.15 }}
     >
-      <span style={{ fontSize: 16 }}>{agent.emoji}</span>
+      {/* Specular highlight */}
+      <div className="absolute top-1 left-1.5 w-4 h-2 rounded-full opacity-60 pointer-events-none"
+        style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
+      <span style={{ fontSize: 18, position: 'relative', zIndex: 1 }}>{agent.emoji}</span>
     </motion.div>
   );
 }
@@ -75,25 +79,30 @@ function MembraneBlob({ room, agents, onPress }) {
           }}
         />
 
-        {/* Center Vertex bubble — large */}
+        {/* Center Vertex bubble — large Apple glass sphere */}
         <motion.div
-          className="absolute flex items-center justify-center rounded-full"
+          className="absolute flex items-center justify-center rounded-full overflow-hidden"
           style={{
-            width: 72, height: 72,
+            width: 76, height: 76,
             left: '50%', top: '50%',
             transform: 'translate(-50%, -50%)',
-            background: `radial-gradient(circle at 35% 30%, ${room.color}ee, ${room.color}88)`,
-            boxShadow: `0 0 24px ${room.color}88, inset 0 2px 0 rgba(255,255,255,0.25)`,
-            border: '1px solid rgba(255,255,255,0.2)',
+            background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.32), rgba(255,255,255,0.08))`,
+            backdropFilter: 'saturate(180%) blur(20px)',
+            WebkitBackdropFilter: 'saturate(180%) blur(20px)',
+            boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -2px 0 rgba(0,0,0,0.15)`,
+            border: '0.5px solid rgba(255,255,255,0.45)',
             zIndex: 3,
           }}
           animate={{ scale: [1, 1.04, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
         >
-          {/* Shine */}
-          <div className="absolute top-2 left-2.5 w-5 h-2.5 rounded-full opacity-30"
-            style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
-          <img src={vertexLogo} alt="Vertex" className="w-9 h-9 object-contain" />
+          {/* Large specular highlight */}
+          <div className="absolute top-2 left-3 w-10 h-5 rounded-full opacity-50 pointer-events-none"
+            style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.95), transparent)' }} />
+          {/* Bottom darkening */}
+          <div className="absolute bottom-0 inset-x-0 h-8 rounded-b-full opacity-20 pointer-events-none"
+            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }} />
+          <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
         </motion.div>
 
         {/* Small agent bubbles clustered around center */}
@@ -165,17 +174,17 @@ export default function RoomsView() {
     <div className="min-h-screen flex flex-col"
       style={{ background: 'radial-gradient(ellipse at 50% 20%, #0d0820 0%, #000 70%)' }}>
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-6 pt-12 pb-4 flex-shrink-0">
-        <button onClick={() => navigate('/')} className="text-gray-500 hover:text-white transition-colors">
-          <ArrowLeft className="w-5 h-5" />
+      {/* Header — iOS nav bar style */}
+      <div className="ios-nav-bar flex items-center justify-between px-5 pt-14 pb-4 flex-shrink-0">
+        <button onClick={() => navigate('/')} className="flex items-center gap-1 active:opacity-50 transition-opacity">
+          <ArrowLeft className="w-5 h-5" style={{ color: 'var(--ios-blue)', strokeWidth: 2 }} />
         </button>
-        <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">AI Rooms</h1>
+        <h1 style={{ fontSize: 17, fontWeight: 600, color: 'rgba(255,255,255,0.92)', letterSpacing: -0.3 }}>AI Rooms</h1>
         <button
           onClick={() => setShowNewRoom(true)}
-          className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+          className="active:opacity-50 transition-opacity"
         >
-          <Plus className="w-4 h-4" />
+          <Plus className="w-6 h-6" style={{ color: 'var(--ios-blue)', strokeWidth: 2 }} />
         </button>
       </div>
 
