@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Edit2, ArrowLeft } from 'lucide-react';
+import { Plus, X, Edit2, ArrowLeft, Sparkles } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,6 +34,46 @@ export default function AIRoom() {
   const [longPressAgent, setLongPressAgent] = useState(null);
   const [form, setForm] = useState({ name: '', emoji: '🤖', description: '', prompt: '' });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+
+  const handleGeneratePrompt = async () => {
+    if (!form.name.trim()) return;
+    setGeneratingPrompt(true);
+    try {
+      const isLocalhost = window.location.hostname === 'localhost';
+      const url = isLocalhost ? '/api/claude/v1/messages' : 'https://api.anthropic.com/v1/messages';
+      const headers = { 'content-type': 'application/json' };
+      if (!isLocalhost) {
+        const { getSetting } = await import('@/api/appSettings');
+        const key = (await getSetting('anthropicApiKey')) || localStorage.getItem('anthropicApiKey');
+        if (key) {
+          headers['x-api-key'] = key;
+          headers['anthropic-version'] = '2023-06-01';
+          headers['anthropic-dangerous-direct-browser-access'] = 'true';
+        }
+      }
+      const context = [form.name, form.description, form.prompt].filter(Boolean).join(' — ');
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5',
+          max_tokens: 600,
+          messages: [{
+            role: 'user',
+            content: `Write a detailed system prompt for an AI agent with this description: "${context}".
+The prompt should define the AI's personality, expertise, tone, and how it responds.
+Keep it under 200 words. Be specific and vivid. Write in second person ("You are...").
+Return ONLY the prompt text, nothing else.`
+          }]
+        })
+      });
+      const data = await res.json();
+      const generated = data.content?.[0]?.text;
+      if (generated) setForm(f => ({ ...f, prompt: generated.trim() }));
+    } catch {}
+    finally { setGeneratingPrompt(false); }
+  };
   const [tappedId, setTappedId] = useState(null);
 
   useEffect(() => { loadAgents(); }, []);
@@ -279,9 +319,20 @@ export default function AIRoom() {
               </div>
 
               <div className="mb-6">
-                <label className="text-xs text-gray-400 mb-1.5 block">System Prompt * <span className="text-gray-600">(how this AI behaves)</span></label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-gray-400">System Prompt * <span className="text-gray-600">(how this AI behaves)</span></label>
+                  <button
+                    onClick={handleGeneratePrompt}
+                    disabled={!form.name.trim() || generatingPrompt}
+                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-lg transition-all disabled:opacity-40"
+                    style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}
+                  >
+                    <Sparkles className="w-3 h-3" />
+                    {generatingPrompt ? 'Generating...' : 'Generate Prompt'}
+                  </button>
+                </div>
                 <textarea value={form.prompt} onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
-                  placeholder="You are Elon Musk. Respond with his direct, first-principles thinking style..."
+                  placeholder="Describe your AI or click Generate Prompt after filling in the name..."
                   rows={5}
                   className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500 resize-none" />
               </div>
