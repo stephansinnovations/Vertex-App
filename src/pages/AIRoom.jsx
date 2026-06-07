@@ -35,6 +35,7 @@ export default function AIRoom() {
   const [form, setForm] = useState({ name: '', emoji: '🤖', description: '', prompt: '' });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [prevPrompt, setPrevPrompt] = useState(null);
 
   const handleGeneratePrompt = async () => {
     if (!form.name.trim()) return;
@@ -70,7 +71,10 @@ Return ONLY the prompt text, nothing else.`
       });
       const data = await res.json();
       const generated = data.content?.[0]?.text;
-      if (generated) setForm(f => ({ ...f, prompt: generated.trim() }));
+      if (generated) {
+        setPrevPrompt(form.prompt);
+        setForm(f => ({ ...f, prompt: generated.trim() }));
+      }
     } catch {}
     finally { setGeneratingPrompt(false); }
   };
@@ -321,15 +325,25 @@ Return ONLY the prompt text, nothing else.`
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs text-gray-400">System Prompt * <span className="text-gray-600">(how this AI behaves)</span></label>
-                  <button
-                    onClick={handleGeneratePrompt}
-                    disabled={!form.name.trim() || generatingPrompt}
-                    className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-lg transition-all disabled:opacity-40"
-                    style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    {generatingPrompt ? 'Generating...' : 'Generate Prompt'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {prevPrompt !== null && (
+                      <button
+                        onClick={() => { setForm(f => ({ ...f, prompt: prevPrompt })); setPrevPrompt(null); }}
+                        className="text-xs text-gray-500 hover:text-white transition-colors px-2 py-1 rounded-lg hover:bg-zinc-800"
+                      >
+                        Undo
+                      </button>
+                    )}
+                    <button
+                      onClick={handleGeneratePrompt}
+                      disabled={!form.name.trim() || generatingPrompt}
+                      className="flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-lg transition-all disabled:opacity-40"
+                      style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      {generatingPrompt ? 'Generating...' : 'Generate Prompt'}
+                    </button>
+                  </div>
                 </div>
                 <textarea value={form.prompt} onChange={e => setForm(f => ({ ...f, prompt: e.target.value }))}
                   placeholder="Describe your AI or click Generate Prompt after filling in the name..."
