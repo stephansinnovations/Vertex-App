@@ -182,12 +182,13 @@ Return ONLY the prompt text, nothing else.`
       {/* Orbital Layout */}
       <div className="flex-1 relative z-10 overflow-hidden" style={{ minHeight: 420 }}>
 
-        {/* Everything is centered using left:50% top:50% on the outer wrapper */}
-        <div className="absolute" style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}>
+        {/* Center within the flex-1 area, not the full page */}
+        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="relative">
 
           {/* Orbit ring */}
           {orbitAgents.length > 0 && (
-            <div className="absolute rounded-full border border-white/5"
+            <div className="absolute rounded-full border border-white/5 pointer-events-none"
               style={{ width: ORBIT_R * 2, height: ORBIT_R * 2, left: -ORBIT_R, top: -ORBIT_R }} />
           )}
 
@@ -201,7 +202,7 @@ Return ONLY the prompt text, nothing else.`
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2 + i * 0.1, type: 'spring', stiffness: 260, damping: 18 }}
                 className="absolute flex flex-col items-center gap-1.5"
-                style={{ left: pos.x, top: pos.y, transform: 'translate(-50%, -50%)' }}
+                style={{ left: pos.x, top: pos.y, transform: 'translate(-50%, -60%)' }}
               >
                 <motion.div
                   animate={tappedId === agent.id ? { scale: 0.88 } : { scale: [1, 1.04, 1] }}
@@ -242,7 +243,7 @@ Return ONLY the prompt text, nothing else.`
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 260, damping: 18 }}
             className="absolute flex flex-col items-center gap-2"
-            style={{ left: 0, top: 0, transform: 'translate(-50%, -50%)' }}
+            style={{ left: 0, top: 0, transform: 'translate(-50%, -60%)' }}
           >
             <motion.div
               animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
@@ -277,6 +278,7 @@ Return ONLY the prompt text, nothing else.`
               animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 2, repeat: Infinity }} />
           </motion.div>
 
+        </div>
         </div>
       </div>
 
