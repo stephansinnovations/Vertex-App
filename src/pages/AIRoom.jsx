@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, X, Edit2, ArrowLeft, Sparkles } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
@@ -28,11 +28,16 @@ const breathe = {
 export default function AIRoom() {
   const navigate = useNavigate();
   const { open: openChat } = useVertexChat();
+  const roomId = new URLSearchParams(window.location.search).get('room');
+  const [roomInfo, setRoomInfo] = useState(null);
   const [agents, setAgents] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState(null);
   const [longPressAgent, setLongPressAgent] = useState(null);
   const [form, setForm] = useState({ name: '', emoji: '🤖', description: '', prompt: '' });
+  const [pinchZooming, setPinchZooming] = useState(false);
+  const pinchStartDist = useRef(null);
+  const containerRef = useRef(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [prevPrompt, setPrevPrompt] = useState(null);
@@ -81,14 +86,44 @@ Return ONLY the prompt text, nothing else.`
   };
   const [tappedId, setTappedId] = useState(null);
 
-  useEffect(() => { loadAgents(); }, []);
+  useEffect(() => { loadAgents(); }, [roomId]);
 
   const loadAgents = async () => {
     try {
-      const { data } = await supabase.from('ai_agents').select('*').order('created_at');
+      // Load room info
+      if (roomId) {
+        const { data: room } = await supabase.from('ai_rooms').select('*').eq('id', roomId).single();
+        setRoomInfo(room);
+      }
+      // Load agents for this room
+      let query = supabase.from('ai_agents').select('*').order('created_at');
+      if (roomId) query = query.eq('room_id', roomId);
+      const { data } = await query;
       setAgents(data || []);
     } catch { setAgents([]); }
   };
+
+  // Pinch to zoom out → go to RoomsView
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      pinchStartDist.current = Math.hypot(dx, dy);
+    }
+  };
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2 && pinchStartDist.current) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.hypot(dx, dy);
+      if (pinchStartDist.current - dist > 60) {
+        pinchStartDist.current = null;
+        setPinchZooming(true);
+        setTimeout(() => navigate('/Rooms'), 400);
+      }
+    }
+  };
+  const handleTouchEnd = () => { pinchStartDist.current = null; };
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.prompt.trim()) return;
@@ -102,6 +137,7 @@ Return ONLY the prompt text, nothing else.`
         await supabase.from('ai_agents').insert({
           name: form.name.trim(), emoji: form.emoji,
           description: form.description.trim(), prompt: form.prompt.trim(),
+          room_id: roomId || null,
         });
       }
       await loadAgents();
@@ -156,13 +192,24 @@ Return ONLY the prompt text, nothing else.`
   };
 
   return (
-    <div className="min-h-screen flex flex-col" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}>
+    <motion.div
+      ref={containerRef}
+      className="min-h-screen flex flex-col"
+      style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}
+      animate={pinchZooming ? { scale: 0.3, opacity: 0 } : { scale: 1, opacity: 1 }}
+      transition={{ duration: 0.35, ease: 'easeInOut' }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-6 pt-12 pb-4">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-white transition-colors">
+        <button onClick={() => navigate('/Rooms')} className="text-gray-500 hover:text-white transition-colors">
           <ArrowLeft className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">AI Room</h1>
+        <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">
+          {roomInfo?.name || 'AI Room'}
+        </h1>
         <button
           onClick={() => { setEditingAgent(null); setForm({ name: '', emoji: '🤖', description: '', prompt: '' }); setShowForm(true); }}
           className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
@@ -410,6 +457,6 @@ Return ONLY the prompt text, nothing else.`
           </>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

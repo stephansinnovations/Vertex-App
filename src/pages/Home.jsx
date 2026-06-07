@@ -76,7 +76,7 @@ export default function Home() {
       <div className="fixed bottom-0 left-0 right-0 z-40">
         {/* Row 1 — Vertex AI centered, transparent */}
         <div className="flex justify-center pt-3 pb-1">
-          <button onClick={() => navigate('/AIRoom')} className="flex flex-col items-center gap-1">
+          <button onClick={() => navigate('/Rooms')} className="flex flex-col items-center gap-1">
             <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain rounded-2xl shadow-lg" />
           </button>
         </div>
