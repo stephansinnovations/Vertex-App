@@ -47,20 +47,20 @@ function AgentBubble({ agent, index, total }) {
   );
 }
 
-function MembraneBlob({ room, agents, onPress }) {
+function MembraneBlob({ room, agents, onPress, index }) {
   const SIZE = 160;
 
   return (
     <motion.div
-      initial={{ scale: 0, opacity: 0 }}
+      initial={{ scale: 0.2, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+      exit={{ scale: 2, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 220, damping: 18, delay: index * 0.08 }}
       className="flex flex-col items-center gap-3 cursor-pointer select-none"
       style={{ width: SIZE, minWidth: SIZE, maxWidth: SIZE }}
       onTouchEnd={onPress}
       onClick={onPress}
-      whileTap={{ scale: 0.93 }}
+      whileTap={{ scale: 0.9 }}
     >
       {/* Cluster bubble */}
       <div className="relative" style={{ width: SIZE, height: SIZE }}>
@@ -156,13 +156,22 @@ export default function RoomsView() {
     }
   };
 
+  const [exiting, setExiting] = useState(false);
   const enterRoom = (room) => {
-    navigate(`/AIRoom?room=${room.id}`);
+    setExiting(true);
+    setTimeout(() => navigate(`/AIRoom?room=${room.id}`), 350);
   };
 
   return (
-    <div className="min-h-screen flex flex-col"
-      style={{ background: 'radial-gradient(ellipse at 50% 20%, #0d0820 0%, #000 70%)' }}>
+    <motion.div
+      className="min-h-screen flex flex-col"
+      style={{ background: 'radial-gradient(ellipse at 50% 20%, #0d0820 0%, #000 70%)' }}
+      initial={{ scale: 2.5, opacity: 0 }}
+      animate={exiting ? { scale: 0.3, opacity: 0 } : { scale: 1, opacity: 1 }}
+      transition={exiting
+        ? { duration: 0.35, ease: [0.4, 0, 1, 1] }
+        : { duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+    >
 
       {/* Header — iOS nav bar style */}
       <div className="ios-nav-bar flex items-center justify-between px-5 pt-14 pb-4 flex-shrink-0">
@@ -192,12 +201,13 @@ export default function RoomsView() {
           <div className="w-6 h-6 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
         ) : (
           <AnimatePresence>
-            {rooms.map(room => (
+            {rooms.map((room, i) => (
               <MembraneBlob
                 key={room.id}
                 room={room}
                 agents={agentsByRoom[room.id] || []}
                 onPress={() => enterRoom(room)}
+                index={i}
               />
             ))}
           </AnimatePresence>
@@ -255,6 +265,6 @@ export default function RoomsView() {
           </>
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }
