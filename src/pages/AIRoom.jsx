@@ -140,7 +140,16 @@ Return ONLY the prompt text, nothing else.`
     if (pressTimer) clearTimeout(pressTimer);
   };
 
-  const allAgents = [DEFAULT_AGENT, ...agents];
+  const orbitAgents = agents; // custom agents only — Vertex is center
+
+  // Calculate circular positions for orbit agents
+  const getOrbitPos = (index, total, radius) => {
+    const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
+    return {
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+    };
+  };
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}>
@@ -166,78 +175,104 @@ Return ONLY the prompt text, nothing else.`
           style={{ background: 'radial-gradient(circle, #a78bfa, transparent)', filter: 'blur(50px)' }} />
       </div>
 
-      {/* Bubble Grid */}
-      <div className="flex-1 flex flex-wrap justify-center gap-10 px-8 pt-10 pb-32 relative z-10">
-        {allAgents.map((agent, i) => (
+      {/* Orbital Layout */}
+      <div className="flex-1 flex items-center justify-center relative z-10">
+        <div className="relative flex items-center justify-center"
+          style={{ width: 340, height: 340 }}>
+
+          {/* Orbit ring */}
+          {orbitAgents.length > 0 && (
+            <div className="absolute rounded-full border border-white/5"
+              style={{ width: 280, height: 280 }} />
+          )}
+
+          {/* Orbit agents */}
+          {orbitAgents.map((agent, i) => {
+            const pos = getOrbitPos(i, orbitAgents.length, 130);
+            return (
+              <motion.div
+                key={agent.id}
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.2 + i * 0.1, type: 'spring', stiffness: 260, damping: 18 }}
+                className="absolute flex flex-col items-center gap-1.5"
+                style={{ left: '50%', top: '50%', transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }}
+              >
+                <motion.div
+                  animate={tappedId === agent.id ? { scale: 0.88 } : { scale: [1, 1.04, 1] }}
+                  transition={tappedId === agent.id ? {} : { duration: 3 + i * 0.5, repeat: Infinity, ease: 'easeInOut' }}
+                  onPointerDown={() => handlePressStart(agent)}
+                  onPointerUp={handlePressEnd}
+                  onPointerLeave={handlePressEnd}
+                  onClick={() => handleTap(agent)}
+                  className="relative cursor-pointer select-none"
+                  style={{ touchAction: 'none' }}
+                >
+                  <motion.div className="absolute inset-0 rounded-full"
+                    animate={{ opacity: [0.2, 0.5, 0.2] }}
+                    transition={{ duration: 2.5 + i * 0.3, repeat: Infinity }}
+                    style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.15), transparent)', margin: -10, filter: 'blur(6px)' }}
+                  />
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center relative overflow-hidden"
+                    style={{
+                      background: 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)',
+                      boxShadow: '0 0 16px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.08)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                    }}>
+                    <div className="absolute top-1.5 left-2 w-4 h-2 rounded-full opacity-20"
+                      style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
+                    <span className="text-2xl">{agent.emoji}</span>
+                  </div>
+                </motion.div>
+                <span className="text-white/60 text-[10px] font-medium text-center tracking-wide max-w-[70px] leading-tight">
+                  {agent.name}
+                </span>
+              </motion.div>
+            );
+          })}
+
+          {/* Center — Vertex App */}
           <motion.div
-            key={agent.id}
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: i * 0.08, type: 'spring', stiffness: 260, damping: 18 }}
-            className="flex flex-col items-center gap-3"
+            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+            className="absolute flex flex-col items-center gap-2"
+            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
           >
             <motion.div
-              animate={tappedId === agent.id ? { scale: 0.88 } : breathe.animate}
-              onPointerDown={() => handlePressStart(agent)}
-              onPointerUp={() => { handlePressEnd(); }}
-              onPointerLeave={handlePressEnd}
-              onClick={() => handleTap(agent)}
+              animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
+              transition={tappedId === 'default' ? {} : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+              onClick={() => handleTap(DEFAULT_AGENT)}
               className="relative cursor-pointer select-none"
               style={{ touchAction: 'none' }}
             >
-              {/* Outer glow ring */}
+              {/* Pulsing glow */}
               <motion.div
                 className="absolute inset-0 rounded-full"
-                animate={{ opacity: [0.3, 0.7, 0.3] }}
-                transition={{ duration: 2.5 + i * 0.3, repeat: Infinity, ease: 'easeInOut' }}
+                animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.2, 1] }}
+                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
                 style={{
-                  background: agent.is_default
-                    ? 'radial-gradient(circle, rgba(139,92,246,0.4), transparent)'
-                    : 'radial-gradient(circle, rgba(255,255,255,0.15), transparent)',
-                  margin: -12,
-                  borderRadius: '50%',
-                  filter: 'blur(8px)',
+                  background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent)',
+                  margin: -20, filter: 'blur(16px)',
                 }}
               />
-
-              {/* Main bubble */}
-              <div
-                className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden"
+              <div className="w-28 h-28 rounded-full flex items-center justify-center relative overflow-hidden"
                 style={{
-                  background: agent.is_default
-                    ? 'radial-gradient(circle at 35% 35%, #3b1f8c, #1a0a4a)'
-                    : 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)',
-                  boxShadow: agent.is_default
-                    ? '0 0 30px rgba(139,92,246,0.4), inset 0 1px 0 rgba(255,255,255,0.1)'
-                    : '0 0 20px rgba(255,255,255,0.1), inset 0 1px 0 rgba(255,255,255,0.08)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                }}
-              >
-                {/* Shine */}
-                <div className="absolute top-2 left-3 w-6 h-3 rounded-full opacity-20"
+                  background: 'radial-gradient(circle at 35% 35%, #3b1f8c, #1a0a4a)',
+                  boxShadow: '0 0 40px rgba(139,92,246,0.5), inset 0 1px 0 rgba(255,255,255,0.15)',
+                  border: '1px solid rgba(139,92,246,0.4)',
+                }}>
+                <div className="absolute top-3 left-4 w-8 h-4 rounded-full opacity-20"
                   style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
-
-                {agent.is_default ? (
-                  <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain" />
-                ) : (
-                  <span className="text-4xl">{agent.emoji}</span>
-                )}
+                <img src={vertexLogo} alt="Vertex" className="w-16 h-16 object-contain" />
               </div>
             </motion.div>
-
-            {/* Name */}
-            <span className="text-white/70 text-xs font-medium text-center tracking-wide max-w-[90px] leading-tight">
-              {agent.name}
-            </span>
-
-            {/* Presence dot */}
-            <motion.div
-              className="w-1.5 h-1.5 rounded-full bg-green-400"
-              animate={{ opacity: [0.4, 1, 0.4] }}
-              transition={{ duration: 2, repeat: Infinity, delay: i * 0.4 }}
-            />
+            <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">Vertex App</span>
+            <motion.div className="w-1.5 h-1.5 rounded-full bg-green-400"
+              animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 2, repeat: Infinity }} />
           </motion.div>
-        ))}
+
+        </div>
       </div>
 
 
