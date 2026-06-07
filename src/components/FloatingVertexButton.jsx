@@ -30,7 +30,7 @@ export default function FloatingVertexButton() {
     clearTimeout(timerRef.current);
     setPressing(false);
     if (!firedRef.current) {
-      navigate('/AIRoom'); // short tap → open AI Room
+      navigate('/Rooms'); // short tap → go to AI Rooms
     }
     firedRef.current = false;
   };
