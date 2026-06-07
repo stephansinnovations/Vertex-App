@@ -252,7 +252,7 @@ export default function HomeShortcuts() {
               <div className="flex flex-col items-center">
                 <div className="relative" style={{ width: ICON_SIZE, height: ICON_SIZE }}>
                   <div
-                    className="w-full h-full relative flex items-center justify-center overflow-hidden"
+                    className="w-full h-full relative flex items-center justify-center"
                     style={{
                       borderRadius: 18,
                       background: 'rgba(255,255,255,0.13)',

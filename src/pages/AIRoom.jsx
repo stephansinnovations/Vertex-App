@@ -264,18 +264,15 @@ Return ONLY the prompt text, nothing else.`
                     transition={{ duration: 2.5 + i * 0.3, repeat: Infinity }}
                     style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.15), transparent)', margin: -10, filter: 'blur(6px)' }}
                   />
-                  <div className="w-24 h-24 rounded-full flex items-center justify-center relative overflow-hidden"
+                  <div className="w-24 h-24 rounded-full flex items-center justify-center relative"
                     style={{
                       background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.22), rgba(255,255,255,0.05))',
-                      backdropFilter: 'saturate(180%) blur(16px)',
-                      WebkitBackdropFilter: 'saturate(180%) blur(16px)',
+                      backdropFilter: 'saturate(180%) blur(20px)',
+                      WebkitBackdropFilter: 'saturate(180%) blur(20px)',
                       boxShadow: '0 6px 24px rgba(0,0,0,0.25), inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)',
                       border: '0.5px solid rgba(255,255,255,0.35)',
                     }}>
-                    {/* Specular highlight */}
-                    <div className="absolute top-2 left-3 w-8 h-4 rounded-full opacity-50 pointer-events-none"
-                      style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
-                    <span className="text-4xl relative z-10">{agent.emoji}</span>
+                    <span className="text-4xl">{agent.emoji}</span>
                   </div>
                 </motion.div>
                 <span className="text-[11px] font-medium text-center leading-tight max-w-[80px]"
@@ -311,7 +308,7 @@ Return ONLY the prompt text, nothing else.`
                   margin: -20, filter: 'blur(16px)',
                 }}
               />
-              <div className="w-16 h-16 rounded-full flex items-center justify-center relative overflow-hidden"
+              <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
                 style={{
                   background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.28), rgba(139,92,246,0.15))',
                   backdropFilter: 'saturate(180%) blur(20px)',
@@ -319,9 +316,7 @@ Return ONLY the prompt text, nothing else.`
                   boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.15)',
                   border: '0.5px solid rgba(255,255,255,0.45)',
                 }}>
-                <div className="absolute top-1.5 left-2 w-7 h-3.5 rounded-full opacity-50 pointer-events-none"
-                  style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.95), transparent)' }} />
-                <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
+                <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain" />
               </div>
             </motion.div>
             <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">Vertex App</span>

@@ -81,7 +81,7 @@ function MembraneBlob({ room, agents, onPress }) {
 
         {/* Center Vertex bubble — large Apple glass sphere */}
         <motion.div
-          className="absolute flex items-center justify-center rounded-full overflow-hidden"
+          className="absolute flex items-center justify-center rounded-full"
           style={{
             width: 76, height: 76,
             left: '50%', top: '50%',
@@ -96,13 +96,7 @@ function MembraneBlob({ room, agents, onPress }) {
           animate={{ scale: [1, 1.04, 1] }}
           transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
         >
-          {/* Large specular highlight */}
-          <div className="absolute top-2 left-3 w-10 h-5 rounded-full opacity-50 pointer-events-none"
-            style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.95), transparent)' }} />
-          {/* Bottom darkening */}
-          <div className="absolute bottom-0 inset-x-0 h-8 rounded-b-full opacity-20 pointer-events-none"
-            style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)' }} />
-          <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
+          <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain" />
         </motion.div>
 
         {/* Small agent bubbles clustered around center */}
