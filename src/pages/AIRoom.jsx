@@ -261,20 +261,20 @@ Return ONLY the prompt text, nothing else.`
                   className="relative cursor-pointer select-none"
                   style={{ touchAction: 'none' }}
                 >
-                  {/* Color glow pulse */}
+                  {/* Color glow pulse — same as AI Rooms */}
                   <motion.div className="absolute inset-0 rounded-full pointer-events-none"
                     animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.25, 1] }}
                     transition={{ duration: 2.5 + i * 0.3, repeat: Infinity, ease: 'easeInOut', delay: i * 0.2 }}
-                    style={{ background: `radial-gradient(circle, ${glow}88, transparent)`, margin: -10, filter: 'blur(8px)' }}
+                    style={{ background: `radial-gradient(circle, ${glow}88, transparent)`, margin: -8, filter: 'blur(6px)' }}
                   />
-                  {/* Glass bubble */}
-                  <div className="w-24 h-24 rounded-full flex items-center justify-center relative"
+                  {/* Glass bubble — identical to AI Rooms AgentBubble */}
+                  <div className="w-14 h-14 rounded-full flex items-center justify-center relative"
                     style={{
-                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.22), rgba(255,255,255,0.05))',
-                      boxShadow: `0 6px 24px rgba(0,0,0,0.2), 0 0 12px ${glow}44, inset 0 1.5px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)`,
+                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.25), rgba(255,255,255,0.06))',
+                      boxShadow: `0 4px 12px rgba(0,0,0,0.25), 0 0 8px ${glow}55, inset 0 1px 0 rgba(255,255,255,0.55), inset 0 -1px 0 rgba(0,0,0,0.1)`,
                       border: '0.5px solid rgba(255,255,255,0.35)',
                     }}>
-                    <span className="text-4xl">{agent.emoji}</span>
+                    <span className="text-2xl">{agent.emoji}</span>
                   </div>
                 </motion.div>
                 <span className="text-[11px] font-medium text-center leading-tight max-w-[80px]"
