@@ -96,7 +96,7 @@ export default function Home() {
         {/* Vertex AI bubble — floating above dock */}
         <div className="flex justify-center pb-3">
           <motion.button
-            onClick={() => navigate('/Rooms')}
+            onClick={() => navigate('/AIRoom')}
             whileTap={{ scale: 0.88 }}
             className="relative select-none"
             style={{ filter: 'drop-shadow(0 8px 24px rgba(139,92,246,0.5))' }}
