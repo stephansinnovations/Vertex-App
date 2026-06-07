@@ -146,14 +146,12 @@ Return ONLY the prompt text, nothing else.`
 
   const orbitAgents = agents; // custom agents only — Vertex is center
 
-  const ORBIT_R = 150;
-  const BOX = ORBIT_R * 2 + 120; // total box size
-  const C = BOX / 2; // center point
+  const ORBIT_R = 140;
   const getOrbitPos = (index, total) => {
     const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
     return {
-      left: C + Math.cos(angle) * ORBIT_R,
-      top: C + Math.sin(angle) * ORBIT_R,
+      x: Math.cos(angle) * ORBIT_R,
+      y: Math.sin(angle) * ORBIT_R,
     };
   };
 
@@ -182,13 +180,14 @@ Return ONLY the prompt text, nothing else.`
       </div>
 
       {/* Orbital Layout — centered in remaining space */}
-      <div className="flex-1 flex items-center justify-center z-10" style={{ minHeight: 420 }}>
-        <div className="relative" style={{ width: ORBIT_R * 2 + 120, height: ORBIT_R * 2 + 120 }}>
+      <div className="flex-1 flex items-center justify-center z-10">
+        <div className="relative flex items-center justify-center"
+          style={{ width: '100%', height: ORBIT_R * 2 + 120 }}>
 
           {/* Orbit ring */}
           {orbitAgents.length > 0 && (
             <div className="absolute rounded-full border border-white/5 pointer-events-none"
-              style={{ width: ORBIT_R * 2, height: ORBIT_R * 2, left: C - ORBIT_R, top: C - ORBIT_R }} />
+              style={{ width: ORBIT_R * 2, height: ORBIT_R * 2 }} />
           )}
 
           {/* Orbit agents */}
@@ -201,7 +200,7 @@ Return ONLY the prompt text, nothing else.`
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2 + i * 0.1, type: 'spring', stiffness: 260, damping: 18 }}
                 className="absolute flex flex-col items-center gap-1.5"
-                style={{ left: pos.left, top: pos.top, transform: 'translate(-50%, -50%)' }}
+                style={{ transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }}
               >
                 <motion.div
                   animate={tappedId === agent.id ? { scale: 0.88 } : { scale: [1, 1.04, 1] }}
@@ -242,7 +241,7 @@ Return ONLY the prompt text, nothing else.`
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 260, damping: 18 }}
             className="absolute flex flex-col items-center gap-2"
-            style={{ left: C, top: C, transform: 'translate(-50%, -50%)' }}
+            style={{ transform: 'translate(-50%, -50%)' }}
           >
             <motion.div
               animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
