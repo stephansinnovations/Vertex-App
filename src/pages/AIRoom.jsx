@@ -187,7 +187,7 @@ Return ONLY the prompt text, nothing else.`
           {/* Orbit ring */}
           {orbitAgents.length > 0 && (
             <div className="absolute rounded-full border border-white/5 pointer-events-none"
-              style={{ width: ORBIT_R * 2, height: ORBIT_R * 2 }} />
+              style={{ width: ORBIT_R * 2, height: ORBIT_R * 2, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }} />
           )}
 
           {/* Orbit agents */}
@@ -200,7 +200,7 @@ Return ONLY the prompt text, nothing else.`
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ delay: 0.2 + i * 0.1, type: 'spring', stiffness: 260, damping: 18 }}
                 className="absolute flex flex-col items-center gap-1.5"
-                style={{ transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }}
+                style={{ left: '50%', top: '50%', transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))` }}
               >
                 <motion.div
                   animate={tappedId === agent.id ? { scale: 0.88 } : { scale: [1, 1.04, 1] }}
@@ -241,7 +241,7 @@ Return ONLY the prompt text, nothing else.`
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 260, damping: 18 }}
             className="absolute flex flex-col items-center gap-2"
-            style={{ transform: 'translate(-50%, -50%)' }}
+            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
           >
             <motion.div
               animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
