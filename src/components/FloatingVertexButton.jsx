@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useVertexChat } from '@/lib/VertexChatContext';
-import vertexLogo from '@/assets/Vertex-logo.webp';
+import { motion } from 'framer-motion';
 
 const LONG_PRESS_MS = 500;
 
@@ -22,7 +22,7 @@ export default function FloatingVertexButton() {
     timerRef.current = setTimeout(() => {
       firedRef.current = true;
       setPressing(false);
-      open(); // long press → open default chat
+      open();
     }, LONG_PRESS_MS);
   };
 
@@ -30,7 +30,7 @@ export default function FloatingVertexButton() {
     clearTimeout(timerRef.current);
     setPressing(false);
     if (!firedRef.current) {
-      navigate('/Rooms'); // short tap → go to AI Rooms
+      navigate('/Rooms');
     }
     firedRef.current = false;
   };
@@ -47,14 +47,33 @@ export default function FloatingVertexButton() {
       onPointerUp={endPress}
       onPointerLeave={cancelPress}
       onContextMenu={e => e.preventDefault()}
-      className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 select-none"
-      style={{
-        filter: 'drop-shadow(0 4px 16px rgba(0,0,0,0.5))',
-        transform: `translateX(-50%) scale(${pressing ? 0.9 : 1})`,
-        transition: 'transform 0.15s ease',
-      }}
+      className="fixed bottom-6 left-1/2 z-30 select-none"
+      style={{ transform: `translateX(-50%) scale(${pressing ? 0.88 : 1})`, transition: 'transform 0.15s ease' }}
     >
-      <img src={vertexLogo} alt="Vertex AI" className="w-14 h-14 object-contain rounded-2xl" />
+      <div className="relative flex items-center justify-center">
+        {/* Outer pulsing glow */}
+        <motion.div
+          className="absolute inset-0 rounded-full pointer-events-none"
+          animate={{ opacity: [0.2, 0.6, 0.2], scale: [1, 1.5, 1] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.7), transparent)', margin: -20, filter: 'blur(16px)' }}
+        />
+        {/* Inner tight glow */}
+        <motion.div
+          className="absolute inset-0 rounded-full pointer-events-none"
+          animate={{ opacity: [0.4, 0.9, 0.4] }}
+          transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.8), transparent)', margin: -6, filter: 'blur(6px)' }}
+        />
+        {/* The orb */}
+        <div className="w-14 h-14 rounded-full"
+          style={{
+            background: 'radial-gradient(circle at 35% 28%, rgba(210,160,255,0.95), rgba(109,40,217,0.9))',
+            boxShadow: '0 0 32px rgba(139,92,246,0.9), 0 0 64px rgba(139,92,246,0.4), inset 0 2px 0 rgba(255,255,255,0.55), inset 0 -2px 4px rgba(80,0,180,0.5)',
+            border: '0.5px solid rgba(210,160,255,0.5)',
+          }}
+        />
+      </div>
     </button>
   );
 }
