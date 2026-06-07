@@ -300,20 +300,28 @@ Return ONLY the prompt text, nothing else.`
               className="relative cursor-pointer select-none"
               style={{ touchAction: 'none' }}
             >
+              {/* Outer far glow */}
               <motion.div
-                className="absolute inset-0 rounded-full"
-                animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.2, 1] }}
+                className="absolute inset-0 rounded-full pointer-events-none"
+                animate={{ opacity: [0.2, 0.6, 0.2], scale: [1, 1.5, 1] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent)', margin: -20, filter: 'blur(16px)' }}
+                style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.6), transparent)', margin: -28, filter: 'blur(20px)' }}
               />
-              <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
+              {/* Inner tight glow */}
+              <motion.div
+                className="absolute inset-0 rounded-full pointer-events-none"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.7), transparent)', margin: -8, filter: 'blur(8px)' }}
+              />
+              {/* The orb */}
+              <div className="w-16 h-16 rounded-full"
                 style={{
-                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.3), rgba(139,92,246,0.2))',
-                  boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -1px 0 rgba(0,0,0,0.15)',
-                  border: '0.5px solid rgba(255,255,255,0.5)',
-                }}>
-                <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain" />
-              </div>
+                  background: 'radial-gradient(circle at 35% 28%, rgba(200,150,255,0.9), rgba(109,40,217,0.85))',
+                  boxShadow: '0 0 40px rgba(139,92,246,0.8), 0 0 80px rgba(139,92,246,0.3), inset 0 2px 0 rgba(255,255,255,0.5), inset 0 -2px 4px rgba(80,0,180,0.4)',
+                  border: '0.5px solid rgba(200,150,255,0.5)',
+                }}
+              />
             </motion.div>
             <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">Vertex App</span>
           </motion.div>
