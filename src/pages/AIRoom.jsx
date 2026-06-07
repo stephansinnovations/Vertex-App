@@ -146,14 +146,20 @@ Return ONLY the prompt text, nothing else.`
 
   const orbitAgents = agents; // custom agents only — Vertex is center
 
-  // Calculate circular positions — radius grows with agent count to prevent overlap
-  const getOrbitRadius = (total) => Math.max(130, total * 28);
+  // Calculate circular positions — minimum 160px between agent centers
+  const getOrbitRadius = (total) => {
+    if (total === 0) return 160;
+    // Ensure agents are spaced at least 90px apart on the circumference
+    const minRadius = (total * 90) / (2 * Math.PI);
+    return Math.max(160, minRadius);
+  };
   const getOrbitPos = (index, total) => {
     const radius = getOrbitRadius(total);
     const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
     return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
   };
-  const containerSize = Math.max(340, getOrbitRadius(orbitAgents.length) * 2 + 120);
+  const orbitRadius = getOrbitRadius(orbitAgents.length);
+  const containerSize = orbitRadius * 2 + 160;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}>
@@ -187,7 +193,7 @@ Return ONLY the prompt text, nothing else.`
           {/* Orbit ring */}
           {orbitAgents.length > 0 && (
             <div className="absolute rounded-full border border-white/5"
-              style={{ width: getOrbitRadius(orbitAgents.length) * 2, height: getOrbitRadius(orbitAgents.length) * 2 }} />
+              style={{ width: orbitRadius * 2, height: orbitRadius * 2 }} />
           )}
 
           {/* Orbit agents */}
