@@ -281,7 +281,7 @@ Return ONLY the prompt text, nothing else.`
             );
           })}
 
-          {/* Center — Vertex App */}
+          {/* Center — Vertex App (opens AI Rooms) */}
           <motion.div
             initial={{ scale: 0, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
@@ -292,19 +292,15 @@ Return ONLY the prompt text, nothing else.`
             <motion.div
               animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
               transition={tappedId === 'default' ? {} : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-              onClick={() => handleTap(DEFAULT_AGENT)}
+              onClick={() => navigate('/')}
               className="relative cursor-pointer select-none"
               style={{ touchAction: 'none' }}
             >
-              {/* Pulsing glow */}
               <motion.div
                 className="absolute inset-0 rounded-full"
                 animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.2, 1] }}
                 transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                style={{
-                  background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent)',
-                  margin: -20, filter: 'blur(16px)',
-                }}
+                style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent)', margin: -20, filter: 'blur(16px)' }}
               />
               <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
                 style={{
@@ -319,6 +315,7 @@ Return ONLY the prompt text, nothing else.`
             <motion.div className="w-1.5 h-1.5 rounded-full bg-green-400"
               animate={{ opacity: [0.4, 1, 0.4] }} transition={{ duration: 2, repeat: Infinity }} />
           </motion.div>
+
 
         </div>
       </div>
