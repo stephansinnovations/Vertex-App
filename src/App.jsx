@@ -49,38 +49,21 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   : <>{children}</>;
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, isAuthenticated } = useAuth();
+  const { isLoadingAuth, isAuthenticated } = useAuth();
+  const isLoginPage = window.location.pathname === '/Login';
 
-  const needsLogin = !isLoadingAuth && !isLoadingPublicSettings && (
-    !isAuthenticated || authError?.type === 'auth_required'
-  );
-
-  useEffect(() => {
-    if (needsLogin) {
-      navigateToLogin();
-    }
-  }, [needsLogin]);
-
-  // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  // Show spinner while checking auth
+  if (isLoadingAuth) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+      <div className="fixed inset-0 flex items-center justify-center bg-black">
+        <div className="w-8 h-8 border-4 border-zinc-700 border-t-white rounded-full animate-spin"></div>
       </div>
     );
   }
 
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      return null;
-    }
-  }
-
-  // If not authenticated, show nothing while redirecting
-  if (!isAuthenticated) {
+  // If not authenticated and not already on login page, redirect
+  if (!isAuthenticated && !isLoginPage) {
+    window.location.href = '/Login';
     return null;
   }
 
