@@ -146,20 +146,11 @@ Return ONLY the prompt text, nothing else.`
 
   const orbitAgents = agents; // custom agents only — Vertex is center
 
-  // Calculate circular positions — minimum 160px between agent centers
-  const getOrbitRadius = (total) => {
-    if (total === 0) return 160;
-    // Ensure agents are spaced at least 90px apart on the circumference
-    const minRadius = (total * 90) / (2 * Math.PI);
-    return Math.max(160, minRadius);
-  };
+  const orbitRadius = Math.max(150, (orbitAgents.length * 85) / (2 * Math.PI));
   const getOrbitPos = (index, total) => {
-    const radius = getOrbitRadius(total);
     const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
-    return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
+    return { x: Math.cos(angle) * orbitRadius, y: Math.sin(angle) * orbitRadius };
   };
-  const orbitRadius = getOrbitRadius(orbitAgents.length);
-  const containerSize = orbitRadius * 2 + 160;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: 'radial-gradient(ellipse at 50% 30%, #1a1a2e 0%, #000 70%)' }}>
@@ -186,14 +177,20 @@ Return ONLY the prompt text, nothing else.`
       </div>
 
       {/* Orbital Layout */}
-      <div className="flex-1 flex items-center justify-center relative z-10 overflow-auto py-8">
-        <div className="relative flex items-center justify-center"
-          style={{ width: containerSize, height: containerSize }}>
+      <div className="flex-1 relative z-10 overflow-auto">
+        <div className="relative mx-auto"
+          style={{ width: orbitRadius * 2 + 160, height: orbitRadius * 2 + 160, minHeight: 400 }}>
 
           {/* Orbit ring */}
           {orbitAgents.length > 0 && (
             <div className="absolute rounded-full border border-white/5"
-              style={{ width: orbitRadius * 2, height: orbitRadius * 2 }} />
+              style={{
+                width: orbitRadius * 2,
+                height: orbitRadius * 2,
+                left: '50%',
+                top: '50%',
+                transform: 'translate(-50%, -50%)'
+              }} />
           )}
 
           {/* Orbit agents */}
@@ -247,7 +244,7 @@ Return ONLY the prompt text, nothing else.`
             animate={{ scale: 1, opacity: 1 }}
             transition={{ type: 'spring', stiffness: 260, damping: 18 }}
             className="absolute flex flex-col items-center gap-2"
-            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -54%)' }}
           >
             <motion.div
               animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
