@@ -10,8 +10,43 @@ const ROOM_COLORS = [
   '#10b981', '#3b82f6', '#ef4444', '#8b5cf6',
 ];
 
+// Position small bubbles around the center in a tight cluster
+function getClusterPos(index, total) {
+  if (total === 0) return { x: 0, y: 0 };
+  const angle = (index / total) * 2 * Math.PI - Math.PI / 2;
+  const r = total <= 3 ? 52 : total <= 6 ? 58 : 64;
+  return { x: Math.cos(angle) * r, y: Math.sin(angle) * r };
+}
+
+function AgentBubble({ agent, index, total }) {
+  const pos = getClusterPos(index, total);
+  const size = 36;
+  const colors = ['#6366f1','#a78bfa','#ec4899','#f59e0b','#10b981','#3b82f6'];
+  const color = colors[index % colors.length];
+
+  return (
+    <motion.div
+      className="absolute flex items-center justify-center rounded-full"
+      style={{
+        width: size, height: size,
+        left: `calc(50% + ${pos.x}px)`,
+        top: `calc(50% + ${pos.y}px)`,
+        transform: 'translate(-50%, -50%)',
+        background: `radial-gradient(circle at 35% 30%, ${color}cc, ${color}66)`,
+        boxShadow: `0 0 10px ${color}66, inset 0 1px 0 rgba(255,255,255,0.2)`,
+        border: '1px solid rgba(255,255,255,0.15)',
+        zIndex: 2,
+      }}
+      animate={{ y: [0, -2, 0] }}
+      transition={{ duration: 2.5 + index * 0.3, repeat: Infinity, ease: 'easeInOut', delay: index * 0.15 }}
+    >
+      <span style={{ fontSize: 16 }}>{agent.emoji}</span>
+    </motion.div>
+  );
+}
+
 function MembraneBlob({ room, agents, onPress }) {
-  const emojis = agents.slice(0, 6);
+  const SIZE = 160;
 
   return (
     <motion.div
@@ -24,57 +59,49 @@ function MembraneBlob({ room, agents, onPress }) {
       onClick={onPress}
       whileTap={{ scale: 0.93 }}
     >
-      {/* Membrane */}
-      <div className="relative" style={{ width: 130, height: 130 }}>
-        {/* Outer glow */}
+      {/* Cluster bubble */}
+      <div className="relative" style={{ width: SIZE, height: SIZE }}>
+
+        {/* Outer ambient glow */}
         <motion.div
-          className="absolute inset-0 rounded-full"
-          animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.08, 1] }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute inset-0 rounded-full pointer-events-none"
+          animate={{ opacity: [0.2, 0.5, 0.2], scale: [1, 1.1, 1] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: 'easeInOut' }}
           style={{
-            background: `radial-gradient(circle, ${room.color}66, transparent)`,
-            filter: 'blur(16px)',
-            margin: -16,
+            background: `radial-gradient(circle, ${room.color}55, transparent)`,
+            filter: 'blur(20px)',
+            margin: -20,
           }}
         />
 
-        {/* Membrane surface */}
-        <div
-          className="w-full h-full rounded-full relative overflow-hidden"
+        {/* Center Vertex bubble — large */}
+        <motion.div
+          className="absolute flex items-center justify-center rounded-full"
           style={{
-            background: `radial-gradient(circle at 35% 30%, ${room.color}44, ${room.color}11)`,
-            border: `1px solid ${room.color}55`,
-            boxShadow: `0 0 30px ${room.color}33, inset 0 1px 0 rgba(255,255,255,0.15)`,
-            backdropFilter: 'blur(4px)',
+            width: 72, height: 72,
+            left: '50%', top: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: `radial-gradient(circle at 35% 30%, ${room.color}ee, ${room.color}88)`,
+            boxShadow: `0 0 24px ${room.color}88, inset 0 2px 0 rgba(255,255,255,0.25)`,
+            border: '1px solid rgba(255,255,255,0.2)',
+            zIndex: 3,
           }}
+          animate={{ scale: [1, 1.04, 1] }}
+          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
         >
           {/* Shine */}
-          <div className="absolute top-3 left-4 w-10 h-5 rounded-full opacity-20"
+          <div className="absolute top-2 left-2.5 w-5 h-2.5 rounded-full opacity-30"
             style={{ background: 'linear-gradient(135deg, white, transparent)' }} />
+          <img src={vertexLogo} alt="Vertex" className="w-9 h-9 object-contain" />
+        </motion.div>
 
-          {/* Agent emojis floating inside */}
-          {emojis.length > 0 ? (
-            <div className="absolute inset-0 flex flex-wrap items-center justify-center gap-1 p-4">
-              {emojis.map((agent, i) => (
-                <motion.span
-                  key={agent.id}
-                  className="text-xl"
-                  animate={{ y: [0, -3, 0] }}
-                  transition={{ duration: 2 + i * 0.4, repeat: Infinity, ease: 'easeInOut', delay: i * 0.2 }}
-                >
-                  {agent.emoji}
-                </motion.span>
-              ))}
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <img src={vertexLogo} alt="Vertex" className="w-12 h-12 object-contain opacity-60" />
-            </div>
-          )}
-        </div>
+        {/* Small agent bubbles clustered around center */}
+        {agents.slice(0, 8).map((agent, i) => (
+          <AgentBubble key={agent.id} agent={agent} index={i} total={Math.min(agents.length, 8)} />
+        ))}
       </div>
 
-      {/* Name */}
+      {/* Room name */}
       <span className="text-white/70 text-sm font-semibold tracking-wide">{room.name}</span>
 
       {/* Presence dot */}
