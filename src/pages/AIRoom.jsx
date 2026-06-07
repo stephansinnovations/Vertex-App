@@ -277,8 +277,8 @@ Return ONLY the prompt text, nothing else.`
                     {/* Curved reflection */}
                     <div className="absolute pointer-events-none" style={{
                       top: '11%', left: '18%', width: '40%', height: '16%',
-                      borderRadius: '50%', background: 'rgba(255,255,255,0.5)',
-                      filter: 'blur(2px)', transform: 'rotate(-35deg)',
+                      borderRadius: '50%', background: 'rgba(255,255,255,0.18)',
+                      filter: 'blur(3.5px)', transform: 'rotate(-35deg)',
                     }} />
                     <span className="text-4xl relative z-10">{agent.emoji}</span>
                   </div>
@@ -321,8 +321,8 @@ Return ONLY the prompt text, nothing else.`
                 {/* Curved reflection */}
                 <div className="absolute pointer-events-none" style={{
                   top: '11%', left: '18%', width: '40%', height: '16%',
-                  borderRadius: '50%', background: 'rgba(255,255,255,0.5)',
-                  filter: 'blur(2px)', transform: 'rotate(-35deg)',
+                  borderRadius: '50%', background: 'rgba(255,255,255,0.18)',
+                  filter: 'blur(3.5px)', transform: 'rotate(-35deg)',
                 }} />
                 <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
               </div>
