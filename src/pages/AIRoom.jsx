@@ -126,10 +126,15 @@ Return ONLY the prompt text, nothing else.`
     }, 180);
   };
 
-  // Long press → show edit/delete
+  // Long press → open edit form directly
   let pressTimer = null;
   const handlePressStart = (agent) => {
-    pressTimer = setTimeout(() => setLongPressAgent(agent), 500);
+    if (agent.is_default) return;
+    pressTimer = setTimeout(() => {
+      setEditingAgent(agent);
+      setForm({ name: agent.name, emoji: agent.emoji, description: agent.description || '', prompt: agent.prompt });
+      setShowForm(true);
+    }, 500);
   };
   const handlePressEnd = () => {
     if (pressTimer) clearTimeout(pressTimer);
@@ -235,45 +240,6 @@ Return ONLY the prompt text, nothing else.`
         ))}
       </div>
 
-      {/* Long press context menu */}
-      <AnimatePresence>
-        {longPressAgent && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/60 z-40" onClick={() => setLongPressAgent(null)} />
-            <motion.div
-              initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 100, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl p-6 z-50"
-            >
-              <div className="flex items-center gap-4 mb-5">
-                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center text-2xl">
-                  {longPressAgent.emoji}
-                </div>
-                <div>
-                  <p className="text-white font-bold">{longPressAgent.name}</p>
-                  <p className="text-gray-500 text-sm">{longPressAgent.description}</p>
-                </div>
-                <button onClick={() => setLongPressAgent(null)} className="ml-auto text-gray-500"><X className="w-5 h-5" /></button>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { setEditingAgent(longPressAgent); setForm({ name: longPressAgent.name, emoji: longPressAgent.emoji, description: longPressAgent.description || '', prompt: longPressAgent.prompt }); setLongPressAgent(null); setShowForm(true); }}
-                  className="flex-1 bg-zinc-800 text-white py-3 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-zinc-700"
-                >
-                  <Edit2 className="w-4 h-4" /> Edit
-                </button>
-                <button
-                  onClick={() => setConfirmDeleteId(longPressAgent.id)}
-                  className="flex-1 bg-red-900/40 text-red-400 py-3 rounded-xl text-sm flex items-center justify-center gap-2 hover:bg-red-900/60"
-                >
-                  <X className="w-4 h-4" /> Delete
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Add/Edit Form */}
       <AnimatePresence>
@@ -353,9 +319,18 @@ Return ONLY the prompt text, nothing else.`
               </div>
 
               <button onClick={handleSave} disabled={!form.name.trim() || !form.prompt.trim()}
-                className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40">
+                className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40 mb-3">
                 {editingAgent ? 'Save Changes' : 'Create Agent'}
               </button>
+
+              {editingAgent && (
+                <button
+                  onClick={() => { setConfirmDeleteId(editingAgent.id); setShowForm(false); }}
+                  className="w-full flex items-center justify-center gap-2 bg-red-900/20 border border-red-900/40 text-red-400 font-medium py-3 rounded-xl hover:bg-red-900/40 transition-colors text-sm"
+                >
+                  <X className="w-4 h-4" /> Delete Agent
+                </button>
+              )}
             </motion.div>
           </>
         )}
