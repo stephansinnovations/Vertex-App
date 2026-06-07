@@ -55,7 +55,7 @@ function MembraneBlob({ room, agents, onPress }) {
       exit={{ scale: 0, opacity: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 20 }}
       className="flex flex-col items-center gap-3 cursor-pointer select-none"
-      style={{ width: SIZE }}
+      style={{ width: SIZE, minWidth: SIZE, maxWidth: SIZE }}
       onTouchEnd={onPress}
       onClick={onPress}
       whileTap={{ scale: 0.93 }}
@@ -103,7 +103,9 @@ function MembraneBlob({ room, agents, onPress }) {
       </div>
 
       {/* Room name */}
-      <span className="text-white/70 text-sm font-semibold tracking-wide text-center block w-full">{room.name}</span>
+      <div style={{ width: SIZE, textAlign: 'center' }}>
+        <span className="text-white/70 text-sm font-semibold tracking-wide">{room.name}</span>
+      </div>
 
       {/* Presence dot */}
       <motion.div
