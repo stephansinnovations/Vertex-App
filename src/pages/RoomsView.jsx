@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, X, Check, ArrowLeft } from 'lucide-react';
+import { Plus, X, Check, ArrowLeft, Sparkles, Code2 } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import vertexLogo from '@/assets/Vertex-logo.webp';
 
@@ -169,6 +169,69 @@ export default function RoomsView() {
   const [showNewRoom, setShowNewRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomColor, setNewRoomColor] = useState('#6366f1');
+  // App attached at room-creation time (optional). Code is stored now; running it
+  // is a later phase. Code comes from pasting, or from Claude generating it.
+  const [addApp, setAddApp] = useState(false);
+  const [appName, setAppName] = useState('');
+  const [appMethod, setAppMethod] = useState('paste'); // 'paste' | 'claude'
+  const [appCode, setAppCode] = useState('');
+  const [appPrompt, setAppPrompt] = useState('');
+  const [generatingApp, setGeneratingApp] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  const resetNewRoom = () => {
+    setShowNewRoom(false);
+    setNewRoomName('');
+    setAddApp(false);
+    setAppName('');
+    setAppMethod('paste');
+    setAppCode('');
+    setAppPrompt('');
+  };
+
+  // Have Claude generate the app's code from a description. Stores the result in
+  // appCode (a single self-contained HTML file).
+  const generateAppCode = async () => {
+    if (!appPrompt.trim()) return;
+    setGeneratingApp(true);
+    try {
+      const isLocalhost = window.location.hostname === 'localhost';
+      const url = isLocalhost ? '/api/claude/v1/messages' : 'https://api.anthropic.com/v1/messages';
+      const headers = { 'content-type': 'application/json' };
+      if (!isLocalhost) {
+        const { getSetting } = await import('@/api/appSettings');
+        const key = (await getSetting('anthropicApiKey')) || localStorage.getItem('anthropicApiKey');
+        if (key) {
+          headers['x-api-key'] = key;
+          headers['anthropic-version'] = '2023-06-01';
+          headers['anthropic-dangerous-direct-browser-access'] = 'true';
+        }
+      }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 8096,
+          messages: [{
+            role: 'user',
+            content: `Build a single self-contained HTML file for this app: "${appPrompt.trim()}"${appName.trim() ? ` (app name: ${appName.trim()})` : ''}.
+Include all CSS and JavaScript inline in the one file. No external build step, no imports from a bundler — only CDN <script>/<link> tags if truly needed.
+Return ONLY the raw HTML, starting with <!doctype html>. No explanation, no markdown fences.`
+          }]
+        })
+      });
+      const data = await res.json();
+      let code = data.content?.[0]?.text?.trim() || '';
+      // Strip accidental markdown fences if the model added them.
+      code = code.replace(/^```(?:html)?\s*/i, '').replace(/\s*```$/, '').trim();
+      if (code) setAppCode(code);
+    } catch {
+      alert('Could not generate the app. Check your connection / Anthropic key in Settings.');
+    } finally {
+      setGeneratingApp(false);
+    }
+  };
 
   useEffect(() => { loadAll(); }, []);
 
@@ -188,15 +251,22 @@ export default function RoomsView() {
   };
 
   const createRoom = async () => {
-    if (!newRoomName.trim()) return;
-    const { data } = await supabase.from('ai_rooms').insert({
-      name: newRoomName.trim(),
-      color: newRoomColor,
-    }).select().single();
+    if (!newRoomName.trim() || creating) return;
+    setCreating(true);
+    const row = { name: newRoomName.trim(), color: newRoomColor };
+    if (addApp && appName.trim()) {
+      row.app = appName.trim();
+      row.app_code = appCode || null;
+    }
+    const { data, error } = await supabase.from('ai_rooms').insert(row).select().single();
+    setCreating(false);
+    if (error) {
+      alert("Couldn't create the room. If you attached an app, make sure ai_rooms has an \"app_code\" column in Supabase.");
+      return;
+    }
     if (data) {
       setRooms(prev => [...prev, data]);
-      setShowNewRoom(false);
-      setNewRoomName('');
+      resetNewRoom();
     }
   };
 
@@ -263,15 +333,15 @@ export default function RoomsView() {
         {showNewRoom && (
           <>
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/70 z-40" onClick={() => setShowNewRoom(false)} />
+              className="fixed inset-0 bg-black/70 z-40" onClick={resetNewRoom} />
             <motion.div
               initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl z-50 p-6"
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl z-50 p-6 max-h-[90vh] overflow-y-auto"
             >
               <div className="flex items-center justify-between mb-5">
                 <h2 className="text-lg font-bold text-white">New Room</h2>
-                <button onClick={() => setShowNewRoom(false)} className="text-gray-400 hover:text-white">
+                <button onClick={resetNewRoom} className="text-gray-400 hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
               </div>
@@ -301,9 +371,90 @@ export default function RoomsView() {
                 </div>
               </div>
 
-              <button onClick={createRoom} disabled={!newRoomName.trim()}
+              {/* App (optional) */}
+              <div className="mb-6 border-t border-zinc-800 pt-5">
+                <button
+                  onClick={() => setAddApp(v => !v)}
+                  className="w-full flex items-center justify-between mb-1"
+                >
+                  <span className="text-sm font-semibold text-white">Add an app</span>
+                  <span className={`w-10 h-6 rounded-full flex items-center px-0.5 transition-colors ${addApp ? 'bg-indigo-500 justify-end' : 'bg-zinc-700 justify-start'}`}>
+                    <span className="w-5 h-5 rounded-full bg-white" />
+                  </span>
+                </button>
+                <p className="text-xs text-gray-500">Attach an app to this room. Its agents become the app's functions.</p>
+
+                {addApp && (
+                  <div className="mt-4 space-y-4">
+                    <input
+                      value={appName}
+                      onChange={e => setAppName(e.target.value)}
+                      placeholder="App name — e.g. Inventory, Hardware…"
+                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+
+                    {/* Method toggle */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setAppMethod('paste')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-colors ${appMethod === 'paste' ? 'bg-white/10 border-white/30 text-white' : 'bg-black border-zinc-700 text-gray-400'}`}
+                      >
+                        <Code2 className="w-4 h-4" /> Paste code
+                      </button>
+                      <button
+                        onClick={() => setAppMethod('claude')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium border transition-colors ${appMethod === 'claude' ? 'bg-white/10 border-white/30 text-white' : 'bg-black border-zinc-700 text-gray-400'}`}
+                      >
+                        <Sparkles className="w-4 h-4" /> Claude codes it
+                      </button>
+                    </div>
+
+                    {appMethod === 'paste' ? (
+                      <textarea
+                        value={appCode}
+                        onChange={e => setAppCode(e.target.value)}
+                        placeholder="Paste your app code here…"
+                        rows={6}
+                        className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-xs font-mono focus:outline-none focus:border-zinc-500 resize-none"
+                      />
+                    ) : (
+                      <>
+                        <textarea
+                          value={appPrompt}
+                          onChange={e => setAppPrompt(e.target.value)}
+                          placeholder="Describe the app you want Claude to build…"
+                          rows={3}
+                          className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500 resize-none"
+                        />
+                        <button
+                          onClick={generateAppCode}
+                          disabled={!appPrompt.trim() || generatingApp}
+                          className="w-full flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl transition-all disabled:opacity-40"
+                          style={{ background: 'rgba(139,92,246,0.2)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}
+                        >
+                          <Sparkles className="w-4 h-4" />
+                          {generatingApp ? 'Generating…' : appCode ? 'Regenerate with Claude' : 'Generate with Claude'}
+                        </button>
+                        {appCode && (
+                          <div className="text-xs text-gray-400">
+                            <span className="text-green-400">✓ Generated</span> — {appCode.length.toLocaleString()} chars. Editable below.
+                            <textarea
+                              value={appCode}
+                              onChange={e => setAppCode(e.target.value)}
+                              rows={6}
+                              className="mt-2 w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-xs font-mono focus:outline-none focus:border-zinc-500 resize-none"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <button onClick={createRoom} disabled={!newRoomName.trim() || creating || (addApp && !appName.trim())}
                 className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40">
-                Create Room
+                {creating ? 'Creating…' : 'Create Room'}
               </button>
             </motion.div>
           </>
