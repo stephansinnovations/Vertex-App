@@ -1,12 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Edit2, ArrowLeft, Sparkles } from 'lucide-react';
+import { Plus, X, Edit2, ArrowLeft, Sparkles, Settings, Trash2 } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import vertexLogo from '@/assets/Vertex-logo.webp';
 
 const EMOJI_OPTIONS = ['🤖','🧠','💡','🔧','⚡','🚐','📐','📊','🦁','🎯','🔥','🌊','🏔️','🧬','🎸','🚀','👔','🦅','💼','🎓','🧑‍🔬','🧑‍💻','🎤','📚'];
+
+// Which app is attached to a room. The `app` column on ai_rooms is authoritative
+// ('vertex' | <id> | null). Before that column exists (pre-migration), fall back to
+// name so the Vertex Room still shows the Vertex app. The Vertex symbol is reserved
+// for app === 'vertex'; every other app is a plain glass bubble.
+function getRoomApp(room) {
+  if (!room) return null;
+  if (room.app === undefined) {
+    return room.name?.trim().toLowerCase().includes('vertex') ? 'vertex' : null;
+  }
+  return room.app;
+}
 
 const DEFAULT_AGENT = {
   id: 'default',
@@ -42,6 +54,8 @@ export default function AIRoom() {
   const [generatingPrompt, setGeneratingPrompt] = useState(false);
   const [prevPrompt, setPrevPrompt] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [removingApp, setRemovingApp] = useState(false);
 
   const handleGeneratePrompt = async () => {
     if (!form.name.trim()) return;
@@ -153,6 +167,20 @@ Return ONLY the prompt text, nothing else.`
     await loadAgents();
   };
 
+  // Detach the app from this room (room keeps its agents; the app bubble disappears).
+  const handleRemoveApp = async () => {
+    if (!roomId) return;
+    setRemovingApp(true);
+    const { error } = await supabase.from('ai_rooms').update({ app: null }).eq('id', roomId);
+    setRemovingApp(false);
+    if (error) {
+      alert("Couldn't remove the app. Make sure the ai_rooms table has an \"app\" column in Supabase.");
+      return;
+    }
+    setRoomInfo(r => (r ? { ...r, app: null } : r));
+    setShowSettings(false);
+  };
+
   // Single tap → open chat or go home
   const handleTap = (agent) => {
     if (agent.is_default) {
@@ -210,12 +238,22 @@ Return ONLY the prompt text, nothing else.`
         <h1 className="text-lg font-bold text-white tracking-widest uppercase opacity-60">
           {roomInfo?.name || 'Vertex Room'}
         </h1>
-        <button
-          onClick={() => { setEditingAgent(null); setForm({ name: '', emoji: '🤖', description: '', prompt: '' }); setShowForm(true); }}
-          className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            aria-label="Room settings"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => { setEditingAgent(null); setForm({ name: '', emoji: '🤖', description: '', prompt: '' }); setShowForm(true); }}
+            className="w-8 h-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
+            aria-label="Add agent"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
       {/* Ambient fog */}
@@ -291,44 +329,60 @@ Return ONLY the prompt text, nothing else.`
             );
           })}
 
-          {/* Center — Vertex App (opens AI Rooms) */}
-          <motion.div
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 18 }}
-            className="absolute flex flex-col items-center gap-2"
-            style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
-          >
-            <motion.div
-              animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
-              transition={tappedId === 'default' ? {} : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-              onClick={() => navigate('/')}
-              className="relative cursor-pointer select-none"
-              style={{ touchAction: 'none' }}
-            >
+          {/* Center — the room's attached app (Vertex symbol only for the Vertex app).
+              No center bubble when the room has no app (agents-only room). */}
+          {(() => {
+            const appId = getRoomApp(roomInfo);
+            if (!appId) return null;
+            const isVertex = appId === 'vertex';
+            return (
               <motion.div
-                className="absolute inset-0 rounded-full"
-                animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.2, 1] }}
-                transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent)', margin: -20, filter: 'blur(16px)' }}
-              />
-              <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
-                style={{
-                  background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(139,92,246,0.08))',
-                  boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -1px 0 rgba(0,0,0,0.15)',
-                  border: '0.3px solid rgba(255,255,255,0.35)',
-                }}>
-                {/* Curved reflection */}
-                <div className="absolute pointer-events-none" style={{
-                  top: '11%', left: '18%', width: '40%', height: '16%',
-                  borderRadius: '50%', background: 'rgba(255,255,255,0.18)',
-                  filter: 'blur(3.5px)', transform: 'rotate(-35deg)',
-                }} />
-                <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
-              </div>
-            </motion.div>
-            <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">Vertex App</span>
-          </motion.div>
+                initial={{ scale: 0, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 18 }}
+                className="absolute flex flex-col items-center gap-2"
+                style={{ left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+              >
+                <motion.div
+                  animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
+                  transition={tappedId === 'default' ? {} : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                  onClick={() => { if (isVertex) navigate('/'); }}
+                  className="relative cursor-pointer select-none"
+                  style={{ touchAction: 'none' }}
+                >
+                  <motion.div
+                    className="absolute inset-0 rounded-full"
+                    animate={{ opacity: [0.3, 0.8, 0.3], scale: [1, 1.2, 1] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+                    style={{ background: 'radial-gradient(circle, rgba(139,92,246,0.5), transparent)', margin: -20, filter: 'blur(16px)' }}
+                  />
+                  <div className="w-16 h-16 rounded-full flex items-center justify-center relative"
+                    style={{
+                      background: 'radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(139,92,246,0.08))',
+                      boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -1px 0 rgba(0,0,0,0.15)',
+                      border: '0.3px solid rgba(255,255,255,0.35)',
+                    }}>
+                    {/* Curved reflection */}
+                    <div className="absolute pointer-events-none" style={{
+                      top: '11%', left: '18%', width: '40%', height: '16%',
+                      borderRadius: '50%', background: 'rgba(255,255,255,0.18)',
+                      filter: 'blur(3.5px)', transform: 'rotate(-35deg)',
+                    }} />
+                    {isVertex ? (
+                      <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
+                    ) : (
+                      <span className="relative z-10" style={{ fontSize: 24, fontWeight: 700, letterSpacing: -1, color: 'rgba(255,255,255,0.9)' }}>
+                        {(roomInfo?.name?.trim()?.[0] || appId[0] || '◆').toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+                <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">
+                  {isVertex ? 'Vertex App' : (roomInfo?.name || 'App')}
+                </span>
+              </motion.div>
+            );
+          })()}
 
 
         </div>
@@ -425,6 +479,56 @@ Return ONLY the prompt text, nothing else.`
                   <X className="w-4 h-4" /> Delete Agent
                 </button>
               )}
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Room Settings */}
+      <AnimatePresence>
+        {showSettings && (
+          <>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/70 z-40" onClick={() => setShowSettings(false)} />
+            <motion.div
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 rounded-t-2xl z-50 p-6"
+            >
+              <div className="flex items-center justify-between mb-5">
+                <h2 className="text-lg font-bold text-white">Room Settings</h2>
+                <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+              </div>
+
+              <div className="mb-2">
+                <span className="text-xs text-gray-400 block mb-1">Room</span>
+                <span className="text-white font-medium">{roomInfo?.name || 'Room'}</span>
+              </div>
+
+              <div className="mt-5">
+                <span className="text-xs text-gray-400 block mb-2">App</span>
+                {getRoomApp(roomInfo) ? (
+                  <>
+                    <div className="flex items-center justify-between bg-black border border-zinc-800 rounded-xl px-4 py-3 mb-3">
+                      <span className="text-white text-sm">
+                        {getRoomApp(roomInfo) === 'vertex' ? 'Vertex App' : (roomInfo?.name || 'App')}
+                      </span>
+                      <span className="text-[11px] text-gray-500 uppercase tracking-wide">attached</span>
+                    </div>
+                    <button
+                      onClick={handleRemoveApp}
+                      disabled={removingApp}
+                      className="w-full flex items-center justify-center gap-2 bg-red-900/20 border border-red-900/40 text-red-400 font-medium py-3 rounded-xl hover:bg-red-900/40 transition-colors text-sm disabled:opacity-40"
+                    >
+                      <Trash2 className="w-4 h-4" /> {removingApp ? 'Removing…' : 'Remove app from room'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-gray-500 text-sm">
+                    No app attached to this room.
+                  </div>
+                )}
+              </div>
             </motion.div>
           </>
         )}

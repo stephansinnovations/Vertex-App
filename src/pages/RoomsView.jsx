@@ -68,8 +68,20 @@ function AgentBubble({ agent, index, total }) {
   );
 }
 
+// Which app is attached to a room. `app` column is authoritative ('vertex' | <id> |
+// null); pre-migration fall back to name so the Vertex Room still shows the Vertex app.
+function getRoomApp(room) {
+  if (!room) return null;
+  if (room.app === undefined) {
+    return room.name?.trim().toLowerCase().includes('vertex') ? 'vertex' : null;
+  }
+  return room.app;
+}
+
 function MembraneBlob({ room, agents, onPress, index }) {
   const SIZE = 160;
+  const appId = getRoomApp(room);
+  const isVertexApp = appId === 'vertex';
 
   return (
     <motion.div
@@ -98,29 +110,41 @@ function MembraneBlob({ room, agents, onPress, index }) {
           }}
         />
 
-        {/* Center Vertex bubble — large Apple glass sphere */}
-        <motion.div
-          className="absolute flex items-center justify-center rounded-full"
-          style={{
-            width: 76, height: 76,
-            left: '50%', top: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(255,255,255,0.03))`,
-            boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -2px 0 rgba(0,0,0,0.15)`,
-            border: '0.3px solid rgba(255,255,255,0.3)',
-            zIndex: 3,
-          }}
-          animate={{ scale: [1, 1.04, 1] }}
-          transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-        >
-          {/* Curved reflection */}
-          <div className="absolute pointer-events-none" style={{
-            top: '11%', left: '18%', width: '40%', height: '16%',
-            borderRadius: '50%', background: 'rgba(255,255,255,0.18)',
-            filter: 'blur(3.5px)', transform: 'rotate(-35deg)',
-          }} />
-          <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
-        </motion.div>
+        {/* Center app bubble — only when an app is attached. Vertex symbol for the
+            Vertex app; a plain glass sphere with the room initial otherwise. */}
+        {appId && (
+          <motion.div
+            className="absolute flex items-center justify-center rounded-full"
+            style={{
+              width: 76, height: 76,
+              left: '50%', top: '50%',
+              transform: 'translate(-50%, -50%)',
+              background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.12), rgba(255,255,255,0.03))`,
+              boxShadow: `0 8px 32px ${room.color}55, 0 2px 8px rgba(0,0,0,0.4), inset 0 2px 0 rgba(255,255,255,0.65), inset 0 -2px 0 rgba(0,0,0,0.15)`,
+              border: '0.3px solid rgba(255,255,255,0.3)',
+              zIndex: 3,
+            }}
+            animate={{ scale: [1, 1.04, 1] }}
+            transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+          >
+            {/* Curved reflection */}
+            <div className="absolute pointer-events-none" style={{
+              top: '11%', left: '18%', width: '40%', height: '16%',
+              borderRadius: '50%', background: 'rgba(255,255,255,0.18)',
+              filter: 'blur(3.5px)', transform: 'rotate(-35deg)',
+            }} />
+            {isVertexApp ? (
+              <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
+            ) : (
+              <span className="relative z-10" style={{
+                fontSize: 30, fontWeight: 700, letterSpacing: -1,
+                color: 'rgba(255,255,255,0.88)', textShadow: `0 1px 6px ${room.color}aa`,
+              }}>
+                {(room.name?.trim()?.[0] || appId[0] || '◆').toUpperCase()}
+              </span>
+            )}
+          </motion.div>
+        )}
 
         {/* Small agent bubbles clustered around center */}
         {agents.slice(0, 8).map((agent, i) => (
