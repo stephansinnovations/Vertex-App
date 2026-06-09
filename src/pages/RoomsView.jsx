@@ -140,7 +140,7 @@ function MembraneBlob({ room, agents, onPress, index }) {
                 fontSize: 30, fontWeight: 700, letterSpacing: -1,
                 color: 'rgba(255,255,255,0.88)', textShadow: `0 1px 6px ${room.color}aa`,
               }}>
-                {(room.name?.trim()?.[0] || appId[0] || '◆').toUpperCase()}
+                {(appId?.trim()?.[0] || '◆').toUpperCase()}
               </span>
             )}
           </motion.div>

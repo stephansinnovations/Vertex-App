@@ -56,6 +56,8 @@ export default function AIRoom() {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
   const [removingApp, setRemovingApp] = useState(false);
+  const [newAppName, setNewAppName] = useState('');
+  const [addingApp, setAddingApp] = useState(false);
 
   const handleGeneratePrompt = async () => {
     if (!form.name.trim()) return;
@@ -178,6 +180,23 @@ Return ONLY the prompt text, nothing else.`
       return;
     }
     setRoomInfo(r => (r ? { ...r, app: null } : r));
+    setShowSettings(false);
+  };
+
+  // Attach an app to this room. The app name is stored in ai_rooms.app; agents in
+  // the room act as the app's functions. 'vertex' is reserved for the Vertex app.
+  const handleAddApp = async () => {
+    const name = newAppName.trim();
+    if (!name || !roomId) return;
+    setAddingApp(true);
+    const { error } = await supabase.from('ai_rooms').update({ app: name }).eq('id', roomId);
+    setAddingApp(false);
+    if (error) {
+      alert("Couldn't add the app. Make sure the ai_rooms table has an \"app\" column in Supabase.");
+      return;
+    }
+    setRoomInfo(r => (r ? { ...r, app: name } : r));
+    setNewAppName('');
     setShowSettings(false);
   };
 
@@ -372,13 +391,13 @@ Return ONLY the prompt text, nothing else.`
                       <img src={vertexLogo} alt="Vertex" className="w-10 h-10 object-contain relative z-10" />
                     ) : (
                       <span className="relative z-10" style={{ fontSize: 24, fontWeight: 700, letterSpacing: -1, color: 'rgba(255,255,255,0.9)' }}>
-                        {(roomInfo?.name?.trim()?.[0] || appId[0] || '◆').toUpperCase()}
+                        {(appId?.trim()?.[0] || '◆').toUpperCase()}
                       </span>
                     )}
                   </div>
                 </motion.div>
                 <span className="text-white/80 text-xs font-semibold tracking-widest uppercase">
-                  {isVertex ? 'Vertex App' : (roomInfo?.name || 'App')}
+                  {isVertex ? 'Vertex App' : appId}
                 </span>
               </motion.div>
             );
@@ -511,7 +530,7 @@ Return ONLY the prompt text, nothing else.`
                   <>
                     <div className="flex items-center justify-between bg-black border border-zinc-800 rounded-xl px-4 py-3 mb-3">
                       <span className="text-white text-sm">
-                        {getRoomApp(roomInfo) === 'vertex' ? 'Vertex App' : (roomInfo?.name || 'App')}
+                        {getRoomApp(roomInfo) === 'vertex' ? 'Vertex App' : getRoomApp(roomInfo)}
                       </span>
                       <span className="text-[11px] text-gray-500 uppercase tracking-wide">attached</span>
                     </div>
@@ -524,9 +543,26 @@ Return ONLY the prompt text, nothing else.`
                     </button>
                   </>
                 ) : (
-                  <div className="bg-black border border-zinc-800 rounded-xl px-4 py-3 text-gray-500 text-sm">
-                    No app attached to this room.
-                  </div>
+                  <>
+                    <p className="text-gray-500 text-xs mb-2">
+                      Attach an app to this room. Its agents become the app's functions.
+                    </p>
+                    <input
+                      value={newAppName}
+                      onChange={e => setNewAppName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleAddApp(); }}
+                      placeholder="App name — e.g. Inventory, Hardware…"
+                      autoFocus
+                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500 mb-3"
+                    />
+                    <button
+                      onClick={handleAddApp}
+                      disabled={!newAppName.trim() || addingApp}
+                      className="w-full flex items-center justify-center gap-2 bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors text-sm disabled:opacity-40"
+                    >
+                      <Plus className="w-4 h-4" /> {addingApp ? 'Adding…' : 'Add app to room'}
+                    </button>
+                  </>
                 )}
               </div>
             </motion.div>
