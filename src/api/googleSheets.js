@@ -36,6 +36,91 @@ export async function getSheetTabs(spreadsheetId) {
   return { data: { tabs } };
 }
 
+// Add a new tab (worksheet) to the spreadsheet.
+export async function addSheetTab(spreadsheetId, title, accessToken) {
+  const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: title.trim() } } }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Add tab failed (${res.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
+// Add a new category (a dark-background header row) at the end of a tab. Copies
+// the format of an existing category header so it matches your layout; if the tab
+// has none yet, applies a default black header style so the parser detects it.
+export async function addCategory(spreadsheetId, sheetName, categoryName, accessToken) {
+  const range = encodeURIComponent(sheetName);
+  const readUrl = `${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}`;
+  const readRes = await fetch(readUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read sheet (${readRes.status})`);
+  const data = await readRes.json();
+
+  const sheet = data.sheets?.[0];
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId == null) throw new Error('Sheet tab not found');
+  const colCount = sheet?.properties?.gridProperties?.columnCount ?? 26;
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+
+  let sampleHeaderRow = -1;
+  let lastUsedRow = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const first = (rows[i].values ?? [])[0];
+    const val = first?.formattedValue?.trim();
+    if (val) lastUsedRow = i;
+    const bg = first?.effectiveFormat?.backgroundColor;
+    if (val && sampleHeaderRow === -1 && isDarkBackground(bg) && !isGrayBackground(bg)) {
+      sampleHeaderRow = i;
+    }
+  }
+
+  const insertAt = lastUsedRow + 1;
+
+  const requests = [
+    { insertDimension: { range: { sheetId, dimension: 'ROWS', startIndex: insertAt, endIndex: insertAt + 1 } } },
+    {
+      updateCells: {
+        rows: [{ values: [{ userEnteredValue: { stringValue: categoryName.trim() } }] }],
+        fields: 'userEnteredValue',
+        start: { sheetId, rowIndex: insertAt, columnIndex: 0 },
+      },
+    },
+  ];
+
+  if (sampleHeaderRow !== -1) {
+    requests.push({
+      copyPaste: {
+        source: { sheetId, startRowIndex: sampleHeaderRow, endRowIndex: sampleHeaderRow + 1, startColumnIndex: 0, endColumnIndex: colCount },
+        destination: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
+        pasteType: 'PASTE_FORMAT',
+      },
+    });
+  } else {
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
+        cell: { userEnteredFormat: { backgroundColor: { red: 0, green: 0, blue: 0 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat)',
+      },
+    });
+  }
+
+  const writeRes = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  });
+  if (!writeRes.ok) {
+    const t = await writeRes.text();
+    throw new Error(`Add category failed (${writeRes.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
 // Insert a new part row directly under its category header, preserving the
 // sheet's layout. Reuses the same color-based parsing (dark row = category
 // header) to locate where the category's rows end, then inserts a row there.

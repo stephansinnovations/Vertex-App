@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
-import { getSheetTabs, getSheetCategories, addPartToCategory } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { getSetting } from '@/api/appSettings';
 
@@ -193,19 +193,39 @@ function SheetFolder({ tab, spreadsheetId }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [addingCat, setAddingCat] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [savingCat, setSavingCat] = useState(false);
+  const [catErr, setCatErr] = useState(null);
+
+  const loadCategories = () => {
+    setLoading(true);
+    return getSheetCategories(spreadsheetId, tab)
+      .then(res => { setCategories(res.data.categories || []); setLoaded(true); })
+      .catch(() => setCategories([]))
+      .finally(() => setLoading(false));
+  };
 
   const handleToggle = () => {
     const next = !open;
     setOpen(next);
-    if (next && !loaded) {
-      setLoading(true);
-      getSheetCategories(spreadsheetId, tab)
-        .then(res => {
-          setCategories(res.data.categories || []);
-          setLoaded(true);
-        })
-        .catch(() => setCategories([]))
-        .finally(() => setLoading(false));
+    if (next && !loaded) loadCategories();
+  };
+
+  const submitCategory = async () => {
+    if (!newCatName.trim() || savingCat) return;
+    setSavingCat(true);
+    setCatErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await addCategory(spreadsheetId, tab, newCatName.trim(), token);
+      setNewCatName('');
+      setAddingCat(false);
+      await loadCategories();
+    } catch (e) {
+      setCatErr(e.message || 'Failed to add category');
+    } finally {
+      setSavingCat(false);
     }
   };
 
@@ -237,6 +257,38 @@ function SheetFolder({ tab, spreadsheetId }) {
           {categories.map((cat, i) => (
             <CategoryRow key={cat.name + i} category={cat} />
           ))}
+
+          {/* Add category */}
+          {!loading && (
+            <div className="px-10 py-3 border-t border-zinc-900">
+              {addingCat ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newCatName}
+                      onChange={e => setNewCatName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') submitCategory(); }}
+                      placeholder="New category name…"
+                      autoFocus
+                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                    <button onClick={submitCategory} disabled={!newCatName.trim() || savingCat}
+                      className="bg-white text-black text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-40">
+                      {savingCat ? '…' : 'Add'}
+                    </button>
+                    <button onClick={() => { setAddingCat(false); setNewCatName(''); setCatErr(null); }}
+                      className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
+                  </div>
+                  {catErr && <p className="text-red-400 text-xs">{catErr}</p>}
+                </div>
+              ) : (
+                <button onClick={() => setAddingCat(true)}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
+                  <Plus className="w-4 h-4" /> Add category
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -259,6 +311,30 @@ export default function PartsLibrary() {
   const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
   const [saving, setSaving] = useState(false);
   const [addErr, setAddErr] = useState(null);
+
+  // Add Tab flow
+  const [addingTab, setAddingTab] = useState(false);
+  const [newTabName, setNewTabName] = useState('');
+  const [savingTab, setSavingTab] = useState(false);
+  const [tabErr, setTabErr] = useState(null);
+
+  const submitTab = async () => {
+    if (!newTabName.trim() || savingTab) return;
+    setSavingTab(true);
+    setTabErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await addSheetTab(spreadsheetId, newTabName.trim(), token);
+      const res = await getSheetTabs(spreadsheetId);
+      setSheetTabs(res.data.tabs || []);
+      setNewTabName('');
+      setAddingTab(false);
+    } catch (e) {
+      setTabErr(e.message || 'Failed to add tab');
+    } finally {
+      setSavingTab(false);
+    }
+  };
 
   const openAdd = () => {
     setAddErr(null);
@@ -370,6 +446,38 @@ export default function PartsLibrary() {
           {!loading && !error && sheetTabs.length === 0 && (
             <div className="px-6 py-5 text-center">
               <p className="text-gray-600 text-sm">Link a Master Sheet to see folders</p>
+            </div>
+          )}
+
+          {/* Add tab */}
+          {!loading && spreadsheetId && (
+            <div className="px-6 py-4 border-t border-zinc-800">
+              {addingTab ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={newTabName}
+                      onChange={e => setNewTabName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') submitTab(); }}
+                      placeholder="New tab name…"
+                      autoFocus
+                      className="flex-1 bg-black border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
+                    />
+                    <button onClick={submitTab} disabled={!newTabName.trim() || savingTab}
+                      className="bg-white text-black text-sm font-semibold px-4 py-2.5 rounded-lg disabled:opacity-40">
+                      {savingTab ? '…' : 'Add'}
+                    </button>
+                    <button onClick={() => { setAddingTab(false); setNewTabName(''); setTabErr(null); }}
+                      className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
+                  </div>
+                  {tabErr && <p className="text-red-400 text-xs">{tabErr}</p>}
+                </div>
+              ) : (
+                <button onClick={() => setAddingTab(true)}
+                  className="flex items-center gap-2 text-gray-400 hover:text-white text-sm font-medium transition-colors">
+                  <Plus className="w-4 h-4" /> Add tab
+                </button>
+              )}
             </div>
           )}
         </div>
