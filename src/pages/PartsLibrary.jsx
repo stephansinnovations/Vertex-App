@@ -454,6 +454,8 @@ export default function PartsLibrary() {
   const [search, setSearch] = useState('');
   const [allParts, setAllParts] = useState(null);
   const [loadingAll, setLoadingAll] = useState(false);
+  const searchRef = useRef(null);
+  const intentDone = useRef(false);
 
   useEffect(() => {
     if (!search.trim() || allParts || loadingAll || !spreadsheetId || sheetTabs.length === 0) return;
@@ -664,6 +666,29 @@ export default function PartsLibrary() {
     loadSheet();
   }, []);
 
+  // Deep-link shortcuts from the Inventory page (?focus=search | ?add=1 | ?photo=1).
+  useEffect(() => {
+    if (intentDone.current || loading) return;
+    const p = new URLSearchParams(window.location.search);
+    const focus = p.get('focus') === 'search';
+    const add = p.get('add') === '1';
+    const photo = p.get('photo') === '1';
+    if (!focus && !add && !photo) { intentDone.current = true; return; }
+    if (focus) {
+      if (sheetTabs.length === 0) return; // search box not rendered yet
+      intentDone.current = true;
+      setTimeout(() => searchRef.current?.focus(), 60);
+    } else if (sheetTabs.length > 0) {
+      intentDone.current = true;
+      openAdd();
+      if (photo) setTimeout(() => photoInputRef.current?.click(), 200);
+    } else {
+      return; // wait for tabs to load
+    }
+    // Clear the query so a refresh doesn't re-trigger.
+    window.history.replaceState(null, '', '/PartsLibrary');
+  }, [loading, sheetTabs]);
+
   return (
     <div className="min-h-screen flex justify-center p-6">
       <div className="w-full max-w-2xl">
@@ -701,6 +726,7 @@ export default function PartsLibrary() {
           <div className="relative mb-4">
             <Search className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
+              ref={searchRef}
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Search parts…"

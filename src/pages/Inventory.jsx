@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Package, Layers, ScanLine } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Package, Layers, Search, Plus, Camera } from 'lucide-react';
 import { motion } from 'framer-motion';
 import LongPressRow from '@/components/LongPressRow';
 
@@ -50,17 +50,43 @@ export default function Inventory() {
           );
         })}
 
-        {/* Scan Parts */}
+        {/* Search Parts Library */}
         <button
-          onClick={() => navigate('/GeminiScanner')}
+          onClick={() => navigate('/PartsLibrary?focus=search')}
+          className="w-full flex items-center justify-between px-6 py-5 cursor-pointer rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 transition-colors duration-150"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+        >
+          <div className="flex items-center gap-3">
+            <Search className="w-5 h-5 text-gray-400" />
+            <span className="text-lg font-medium tracking-wide text-white">Search Parts</span>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-500" />
+        </button>
+
+        {/* Add Part */}
+        <button
+          onClick={() => navigate('/PartsLibrary?add=1')}
+          className="w-full flex items-center justify-between px-6 py-5 cursor-pointer rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-900 transition-colors duration-150"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
+        >
+          <div className="flex items-center gap-3">
+            <Plus className="w-5 h-5 text-gray-400" />
+            <span className="text-lg font-medium tracking-wide text-white">Add Part</span>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-500" />
+        </button>
+
+        {/* Photo → Add Part (replaces Scan Parts) */}
+        <button
+          onClick={() => navigate('/PartsLibrary?photo=1')}
           className="w-full flex items-center justify-between px-6 py-5 cursor-pointer rounded-2xl border border-blue-900/50 bg-blue-950/30 hover:bg-blue-950/50 transition-colors duration-150"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.5)' }}
         >
           <div className="flex items-center gap-3">
-            <ScanLine className="w-5 h-5 text-blue-400" />
+            <Camera className="w-5 h-5 text-blue-400" />
             <div className="text-left">
-              <span className="text-lg font-medium tracking-wide text-white block">Scan Parts</span>
-              <span className="text-xs text-blue-400/70">Live AI recognition</span>
+              <span className="text-lg font-medium tracking-wide text-white block">Photo → Add Part</span>
+              <span className="text-xs text-blue-400/70">Snap a part, AI fills it in</span>
             </div>
           </div>
           <ChevronRight className="w-5 h-5 text-gray-500" />
