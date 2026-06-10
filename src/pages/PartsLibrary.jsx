@@ -581,7 +581,9 @@ export default function PartsLibrary() {
   const openAdd = () => {
     setAddErr(null);
     setQuickAdd(null);
-    setAddTab(sheetTabs[0] || '');
+    setAddTab(''); // default to the "Select a category" placeholder
+    setAddCategory('');
+    setAddCats([]);
     setShowAdd(true);
   };
 
@@ -865,6 +867,7 @@ export default function PartsLibrary() {
               }}
               className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500">
               <option value="__add_tab__">＋ Add new category</option>
+              <option value="">Select a category</option>
               {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             {quickAdd === 'tab'
@@ -878,7 +881,7 @@ export default function PartsLibrary() {
                 if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
                 setQuickAdd(null); setAddCategory(e.target.value);
               }}
-              disabled={loadingCats}
+              disabled={loadingCats || !addTab}
               className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
               <option value="__add_cat__">＋ Add subcategory</option>
               <option value="">{loadingCats ? 'Loading subcategories…' : 'Select a subcategory'}</option>
@@ -937,7 +940,7 @@ export default function PartsLibrary() {
 
             {addErr && <p className="text-red-400 text-xs mb-3">{addErr}</p>}
 
-            <button onClick={submitPart} disabled={!pForm.partName.trim() || !addCategory || saving}
+            <button onClick={submitPart} disabled={!addTab || !pForm.partName.trim() || !addCategory || saving}
               className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
               {saving ? 'Adding…' : <><Check className="w-4 h-4" /> Add to sheet</>}
             </button>
