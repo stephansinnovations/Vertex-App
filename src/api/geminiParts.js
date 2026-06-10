@@ -14,6 +14,20 @@ async function getGeminiKey() {
   return key;
 }
 
+// Google Search grounding cites redirect URLs (vertexaisearch.cloud.google.com/
+// grounding-api-redirect/…) that expire and don't reliably open. If the model
+// returns one (or nothing), fall back to a durable Google search URL for the part.
+function cleanLink(link, query) {
+  const bad = !link
+    || /vertexaisearch\.cloud\.google\.com|grounding-api-redirect|google\.com\/url\?/i.test(link)
+    || !/^https?:\/\//i.test(link);
+  if (bad) {
+    const q = (query || '').trim();
+    return q ? `https://www.google.com/search?q=${encodeURIComponent(q + ' buy')}` : '';
+  }
+  return link;
+}
+
 function parseJson(text) {
   let raw = (text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   const s = raw.indexOf('{');
@@ -72,6 +86,9 @@ export async function identifyPartFromImage(base64, mimeType = 'image/jpeg') {
             + `find a real product page where it can be purchased. `
             + `Return ONLY a JSON object with keys: partName, supplier, partNum, price, supplierLink, "function" `
             + `(all strings; use "" if unknown). "supplier" is the store or brand at supplierLink. `
+            + `supplierLink MUST be a real, directly-clickable destination URL to a product or store page — `
+            + `NEVER a redirect or tracking URL (no vertexaisearch.cloud.google.com, no grounding-api-redirect, `
+            + `no google.com/url links). If you can't find a real product URL, leave supplierLink as "". `
             + `No markdown, no commentary.`,
         },
         { inline_data: { mime_type: mimeType, data: base64 } },
@@ -81,12 +98,13 @@ export async function identifyPartFromImage(base64, mimeType = 'image/jpeg') {
     generationConfig: { temperature: 0.2 },
   });
   const o = parseJson(text);
+  const partName = o.partName || '';
   return {
-    partName: o.partName || '',
+    partName,
     supplier: o.supplier || '',
     partNum: o.partNum || '',
     price: o.price || '',
-    supplierLink: o.supplierLink || '',
+    supplierLink: cleanLink(o.supplierLink || '', [partName, o.supplier].filter(Boolean).join(' ')),
     function: o.function || '',
   };
 }
