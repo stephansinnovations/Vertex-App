@@ -1,11 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Package, Users, Bus, UserCircle, Settings } from 'lucide-react';
+import { FileText, Package, Users, Bus, UserCircle } from 'lucide-react';
 import vertexLogo from '@/assets/Vertex-logo.webp';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
-import { useShortcut } from '@/lib/ShortcutContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
 
 const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8b7f61/0e0de3cfb_VertexBannerLogoPrint.png';
@@ -35,33 +34,6 @@ export default function Home() {
   const navigate = useNavigate();
   const { open: openChat } = useVertexChat();
 
-  const [pos, setPos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('settingsBtnPos')) || { x: 20, y: window.innerHeight - 80 }; }
-    catch { return { x: 20, y: window.innerHeight - 80 }; }
-  });
-  const dragging = useRef(false);
-  const offset = useRef({ x: 0, y: 0 });
-
-  const onPointerDown = (e) => {
-    dragging.current = false;
-    offset.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-  };
-  const onPointerMove = (e) => {
-    dragging.current = true;
-    setPos({
-      x: Math.max(0, Math.min(window.innerWidth - 48, e.clientX - offset.current.x)),
-      y: Math.max(0, Math.min(window.innerHeight - 48, e.clientY - offset.current.y)),
-    });
-  };
-  const onPointerUp = () => {
-    window.removeEventListener('pointermove', onPointerMove);
-    window.removeEventListener('pointerup', onPointerUp);
-    setPos(prev => { localStorage.setItem('settingsBtnPos', JSON.stringify(prev)); return prev; });
-    if (!dragging.current) navigate('/Profile');
-  };
-
   return (
     <motion.div
       className="min-h-screen flex flex-col items-center justify-center"
@@ -70,15 +42,6 @@ export default function Home() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
-      {/* Draggable Settings button — Apple glass style */}
-      <div
-        onPointerDown={onPointerDown}
-        style={{ position: 'fixed', left: pos.x, top: pos.y, zIndex: 60, touchAction: 'none', cursor: 'grab' }}
-        className="w-11 h-11 rounded-full apple-glass flex items-center justify-center shadow-lg select-none active:scale-90 transition-transform"
-      >
-        <Settings className="w-5 h-5" style={{ color: 'rgba(255,255,255,0.7)', strokeWidth: 1.8 }} />
-      </div>
-
       {/* Shortcuts grid */}
       <HomeShortcuts />
 
