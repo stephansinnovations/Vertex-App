@@ -45,7 +45,7 @@ export async function addSheetTab(spreadsheetId, title, accessToken) {
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Add tab failed (${res.status}): ${t.slice(0, 160)}`);
+    throw new Error(`Add category failed (${res.status}): ${t.slice(0, 160)}`);
   }
   return true;
 }
@@ -62,7 +62,7 @@ export async function addCategory(spreadsheetId, sheetName, categoryName, access
 
   const sheet = data.sheets?.[0];
   const sheetId = sheet?.properties?.sheetId;
-  if (sheetId == null) throw new Error('Sheet tab not found');
+  if (sheetId == null) throw new Error('Category not found');
   const colCount = sheet?.properties?.gridProperties?.columnCount ?? 26;
   const rows = sheet?.data?.[0]?.rowData ?? [];
 
@@ -116,7 +116,7 @@ export async function addCategory(spreadsheetId, sheetName, categoryName, access
   });
   if (!writeRes.ok) {
     const t = await writeRes.text();
-    throw new Error(`Add category failed (${writeRes.status}): ${t.slice(0, 160)}`);
+    throw new Error(`Add subcategory failed (${writeRes.status}): ${t.slice(0, 160)}`);
   }
   return true;
 }
@@ -138,7 +138,7 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
   const sheet = data.sheets?.[0];
   const sheetId = sheet?.properties?.sheetId;
   const rows = sheet?.data?.[0]?.rowData ?? [];
-  if (sheetId == null) throw new Error('Sheet tab not found');
+  if (sheetId == null) throw new Error('Category not found');
   const colCount = sheet?.properties?.gridProperties?.columnCount ?? 26;
 
   const target = categoryName.trim().toLowerCase();
@@ -162,7 +162,7 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
     }
   }
 
-  if (headerRow === -1) throw new Error(`Category "${categoryName}" not found in "${sheetName}"`);
+  if (headerRow === -1) throw new Error(`Subcategory "${categoryName}" not found in "${sheetName}"`);
 
   const insertAt = lastRowInCategory + 1; // 0-based row index to insert at
 
@@ -228,7 +228,7 @@ export async function deletePartRow(spreadsheetId, sheetName, categoryName, part
 
   const sheet = data.sheets?.[0];
   const sheetId = sheet?.properties?.sheetId;
-  if (sheetId == null) throw new Error('Sheet tab not found');
+  if (sheetId == null) throw new Error('Category not found');
   const rows = sheet?.data?.[0]?.rowData ?? [];
 
   const targetCat = categoryName.trim().toLowerCase();

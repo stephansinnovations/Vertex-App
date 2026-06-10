@@ -237,7 +237,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
       )}
       {open && category.parts.length === 0 && (
         <div className="px-10 pb-3">
-          <p className="text-gray-600 text-sm">No parts found in this category</p>
+          <p className="text-gray-600 text-sm">No parts found in this subcategory</p>
         </div>
       )}
 
@@ -347,7 +347,7 @@ function SheetFolder({ tab, spreadsheetId }) {
       setAddingCat(false);
       await loadCategories();
     } catch (e) {
-      setCatErr(e.message || 'Failed to add category');
+      setCatErr(e.message || 'Failed to add subcategory');
     } finally {
       setSavingCat(false);
     }
@@ -370,12 +370,12 @@ function SheetFolder({ tab, spreadsheetId }) {
         <div className="bg-black border-t border-zinc-800">
           {loading && (
             <div className="px-10 py-3">
-              <p className="text-gray-500 text-sm">Loading categories...</p>
+              <p className="text-gray-500 text-sm">Loading subcategories...</p>
             </div>
           )}
           {!loading && categories.length === 0 && loaded && (
             <div className="px-10 py-3">
-              <p className="text-gray-600 text-sm">No black-highlighted categories found</p>
+              <p className="text-gray-600 text-sm">No black-highlighted subcategories found</p>
             </div>
           )}
           {categories.map((cat, i) => (
@@ -392,7 +392,7 @@ function SheetFolder({ tab, spreadsheetId }) {
                       value={newCatName}
                       onChange={e => setNewCatName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') submitCategory(); }}
-                      placeholder="New category name…"
+                      placeholder="New subcategory name…"
                       autoFocus
                       className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
                     />
@@ -408,7 +408,7 @@ function SheetFolder({ tab, spreadsheetId }) {
               ) : (
                 <button onClick={() => setAddingCat(true)}
                   className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
-                  <Plus className="w-4 h-4" /> Add category
+                  <Plus className="w-4 h-4" /> Add subcategory
                 </button>
               )}
             </div>
@@ -566,7 +566,7 @@ export default function PartsLibrary() {
       setNewTabName('');
       setAddingTab(false);
     } catch (e) {
-      setTabErr(e.message || 'Failed to add tab');
+      setTabErr(e.message || 'Failed to add category');
     } finally {
       setSavingTab(false);
     }
@@ -658,7 +658,7 @@ export default function PartsLibrary() {
         const res = await getSheetTabs(id);
         setSheetTabs(res.data.tabs || []);
       } catch {
-        setError('Could not load sheet tabs');
+        setError('Could not load categories');
       } finally {
         setLoading(false);
       }
@@ -772,7 +772,7 @@ export default function PartsLibrary() {
         <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-zinc-800" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
           {loading && (
             <div className="px-6 py-4">
-              <p className="text-gray-500 text-sm">Loading sheets...</p>
+              <p className="text-gray-500 text-sm">Loading categories...</p>
             </div>
           )}
           {error && (
@@ -785,7 +785,7 @@ export default function PartsLibrary() {
           ))}
           {!loading && !error && sheetTabs.length === 0 && (
             <div className="px-6 py-5 text-center">
-              <p className="text-gray-600 text-sm">Link a Master Sheet to see folders</p>
+              <p className="text-gray-600 text-sm">Link a Master Sheet to see categories</p>
             </div>
           )}
 
@@ -799,7 +799,7 @@ export default function PartsLibrary() {
                       value={newTabName}
                       onChange={e => setNewTabName(e.target.value)}
                       onKeyDown={e => { if (e.key === 'Enter') submitTab(); }}
-                      placeholder="New tab name…"
+                      placeholder="New category name…"
                       autoFocus
                       className="flex-1 bg-black border border-zinc-700 rounded-lg px-3 py-2.5 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
                     />
@@ -815,7 +815,7 @@ export default function PartsLibrary() {
               ) : (
                 <button onClick={() => setAddingTab(true)}
                   className="flex items-center gap-2 text-gray-400 hover:text-white text-sm font-medium transition-colors">
-                  <Plus className="w-4 h-4" /> Add tab
+                  <Plus className="w-4 h-4" /> Add category
                 </button>
               )}
             </div>
@@ -858,34 +858,34 @@ export default function PartsLibrary() {
             {photoErr && <p className="text-red-400 text-xs mb-3">{photoErr}</p>}
             <p className="text-gray-600 text-[11px] text-center mb-4">Take a photo of the part — AI identifies it and finds a buy link.</p>
 
-            <label className="text-xs text-gray-400 mb-1.5 block">Sheet (tab)</label>
+            <label className="text-xs text-gray-400 mb-1.5 block">Category</label>
             <select value={addTab} onChange={e => {
                 if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
                 setQuickAdd(null); setAddTab(e.target.value);
               }}
               className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500">
-              <option value="__add_tab__">＋ Add new sheet tab</option>
+              <option value="__add_tab__">＋ Add new category</option>
               {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             {quickAdd === 'tab'
-              ? <QuickCreateRow placeholder="New tab name…" value={quickName} onChange={setQuickName}
+              ? <QuickCreateRow placeholder="New category name…" value={quickName} onChange={setQuickName}
                   onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
                   saving={quickSaving} err={quickErr} />
               : <div className="mb-2" />}
 
-            <label className="text-xs text-gray-400 mb-1.5 block">Category</label>
+            <label className="text-xs text-gray-400 mb-1.5 block">Subcategory</label>
             <select value={addCategory} onChange={e => {
                 if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
                 setQuickAdd(null); setAddCategory(e.target.value);
               }}
               disabled={loadingCats}
               className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
-              <option value="__add_cat__">＋ Add category</option>
-              <option value="">{loadingCats ? 'Loading categories…' : 'Select a category'}</option>
+              <option value="__add_cat__">＋ Add subcategory</option>
+              <option value="">{loadingCats ? 'Loading subcategories…' : 'Select a subcategory'}</option>
               {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
             </select>
             {quickAdd === 'cat'
-              ? <QuickCreateRow placeholder="New category name…" value={quickName} onChange={setQuickName}
+              ? <QuickCreateRow placeholder="New subcategory name…" value={quickName} onChange={setQuickName}
                   onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
                   saving={quickSaving} err={quickErr} />
               : <div className="mb-2" />}
