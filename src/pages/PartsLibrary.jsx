@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles, Camera } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
-import { extractPartFromUrl } from '@/api/extractPart';
+import { extractPartFromUrl, identifyPartFromImage } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -337,8 +337,41 @@ export default function PartsLibrary() {
   const [addErr, setAddErr] = useState(null);
   const [aiFilling, setAiFilling] = useState(false);
   const [aiErr, setAiErr] = useState(null);
+  const photoInputRef = useRef(null);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [photoErr, setPhotoErr] = useState(null);
 
-  // Read the supplier link with Claude and auto-fill the part fields.
+  // Take/upload a photo → Gemini identifies the part and finds a buy link.
+  const handlePhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setPhotoLoading(true);
+    setPhotoErr(null);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(',')[1]);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      });
+      const r = await identifyPartFromImage(base64, file.type || 'image/jpeg');
+      setPForm(f => ({
+        ...f,
+        partName: r.partName || f.partName,
+        supplier: r.supplier || f.supplier,
+        partNum: r.partNum || f.partNum,
+        price: r.price || f.price,
+        supplierLink: r.supplierLink || f.supplierLink,
+      }));
+    } catch (err) {
+      setPhotoErr(err.message || 'Could not identify the part');
+    } finally {
+      setPhotoLoading(false);
+    }
+  };
+
+  // Read the supplier link with Gemini and auto-fill the part fields.
   const handleAiFill = async () => {
     if (aiFilling) return;
     setAiFilling(true);
@@ -582,6 +615,21 @@ export default function PartsLibrary() {
                 <p className="text-amber-300 text-xs">Google sign-in isn't configured yet (VITE_GOOGLE_OAUTH_CLIENT_ID). Adding a part will fail until it's set.</p>
               </div>
             )}
+
+            {/* Identify from a photo (Gemini vision + Google Search) */}
+            <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
+              onChange={handlePhoto} className="hidden" />
+            <button
+              onClick={() => photoInputRef.current?.click()}
+              disabled={photoLoading}
+              className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-xl mb-2 transition-all disabled:opacity-60"
+              style={{ background: 'rgba(59,130,246,0.18)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.35)' }}
+            >
+              <Camera className="w-4 h-4" />
+              {photoLoading ? 'Identifying part…' : 'Identify from photo'}
+            </button>
+            {photoErr && <p className="text-red-400 text-xs mb-3">{photoErr}</p>}
+            <p className="text-gray-600 text-[11px] text-center mb-4">Take a photo of the part — AI identifies it and finds a buy link.</p>
 
             <label className="text-xs text-gray-400 mb-1.5 block">Sheet (tab)</label>
             <select value={addTab} onChange={e => {
