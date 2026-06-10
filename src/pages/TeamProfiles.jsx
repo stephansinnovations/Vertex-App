@@ -1,16 +1,33 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { supabase } from '@/api/supabaseClient';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, User, Mail, Phone, Briefcase, ChevronRight, X } from 'lucide-react';
+import { ArrowLeft, User, Mail, Phone, Briefcase, ChevronRight } from 'lucide-react';
+
+function RoleBadge({ role }) {
+  const admin = role === 'admin';
+  return (
+    <span
+      className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full"
+      style={admin
+        ? { background: 'rgba(139,92,246,0.18)', color: '#c4b5fd', border: '1px solid rgba(139,92,246,0.35)' }
+        : { background: 'rgba(255,255,255,0.06)', color: '#9ca3af', border: '1px solid rgba(255,255,255,0.12)' }}
+    >
+      {admin ? 'Admin' : 'Member'}
+    </span>
+  );
+}
 
 export default function TeamProfiles() {
   const navigate = useNavigate();
   const [selected, setSelected] = useState(null);
 
   const { data: users = [], isLoading } = useQuery({
-    queryKey: ['all-users'],
-    queryFn: () => base44.entities.User.list(),
+    queryKey: ['all-profiles'],
+    queryFn: async () => {
+      const { data } = await supabase.from('profiles').select('*').order('created_at');
+      return data || [];
+    },
   });
 
   if (selected) {
@@ -20,7 +37,10 @@ export default function TeamProfiles() {
           <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-white transition-colors mb-6 flex items-center gap-2">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-4xl font-bold text-white tracking-tight mb-8">{selected.full_name || 'Employee'}</h1>
+          <div className="flex items-center gap-3 mb-8">
+            <h1 className="text-4xl font-bold text-white tracking-tight">{selected.full_name || selected.email || 'Employee'}</h1>
+            <RoleBadge role={selected.role} />
+          </div>
 
           <div className="flex justify-center mb-8">
             <div className="w-24 h-24 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center">
@@ -90,7 +110,10 @@ export default function TeamProfiles() {
                     {u.job_title && <p className="text-gray-500 text-xs">{u.job_title}</p>}
                   </div>
                 </div>
-                <ChevronRight className="w-4 h-4 text-gray-500" />
+                <div className="flex items-center gap-3">
+                  <RoleBadge role={u.role} />
+                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                </div>
               </div>
             ))}
           </div>

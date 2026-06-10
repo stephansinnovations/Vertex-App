@@ -200,7 +200,16 @@ admin's device, so this is low-risk.)
 
 Each phase ships independently and is verifiable.
 
-## 9. Open decisions (need your input)
+## 8a. Decisions (locked 2026-06-09)
+
+1. **Parts:** Option A — UX-level `added_by` gate; keep the Google Sheet.
+2. **API keys:** members may **read** the shared keys; only admins **edit** settings.
+3. **Local data:** non-admins **do** have important local data → migration must be careful
+   and **per-device** (run on each user's device; only migrate user-created records, never
+   the seed SOPs/WorkOrders, to avoid cross-device duplication).
+4. **Members:** may **create/edit their own** SOPs/builds (and delete only their own).
+
+## 9. Open decisions (resolved — see §8a)
 
 1. **Parts enforcement:** OK with **Option A** (UX-level `added_by`, since the sheet is
    shared) for now, or do you want parts fully moved into Supabase (Option C)?

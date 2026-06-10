@@ -6,6 +6,7 @@ import { pagesConfig } from './pages.config'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import AdminRoute from '@/components/AdminRoute';
 import { ShortcutProvider } from '@/lib/ShortcutContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { ThemeProvider } from '@/lib/ThemeContext';
@@ -107,12 +108,12 @@ const AuthenticatedApp = () => {
       <Route path="/Profile" element={<Profile />} />
       <Route path="/MyProfile" element={<MyProfile />} />
       <Route path="/TeamProfiles" element={<TeamProfiles />} />
-      <Route path="/Vertex" element={<Vertex />} />
+      <Route path="/Vertex" element={<AdminRoute><Vertex /></AdminRoute>} />
       <Route path="/BuildPhases" element={<BuildPhases />} />
       <Route path="/PhaseDetail" element={<PhaseDetail />} />
-      <Route path="/AIRoom" element={<AIRoom />} />
-      <Route path="/Rooms" element={<RoomsView />} />
-      <Route path="/Settings" element={<Settings />} />
+      <Route path="/AIRoom" element={<AdminRoute><AIRoom /></AdminRoute>} />
+      <Route path="/Rooms" element={<AdminRoute><RoomsView /></AdminRoute>} />
+      <Route path="/Settings" element={<AdminRoute><Settings /></AdminRoute>} />
       <Route path="/Login" element={<Login />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
