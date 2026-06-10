@@ -144,7 +144,6 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
   const target = categoryName.trim().toLowerCase();
   let headerRow = -1;
   let lastRowInCategory = -1;
-  let samplePartRow = -1; // an existing part row in this category, to copy formatting from
   let inCategory = false;
 
   for (let i = 0; i < rows.length; i++) {
@@ -160,7 +159,6 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
       if (val.toLowerCase() === target) { headerRow = i; inCategory = true; lastRowInCategory = i; }
     } else if (inCategory) {
       lastRowInCategory = i; // a part row under this category
-      if (samplePartRow === -1) samplePartRow = i;
     }
   }
 
@@ -195,25 +193,16 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
     },
   ];
 
-  // Match an existing part row's formatting; if this is the first part in the
-  // category, apply a plain (non-dark) style so it isn't mistaken for a header.
-  if (samplePartRow !== -1) {
-    requests.push({
-      copyPaste: {
-        source: { sheetId, startRowIndex: samplePartRow, endRowIndex: samplePartRow + 1, startColumnIndex: 0, endColumnIndex: colCount },
-        destination: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
-        pasteType: 'PASTE_FORMAT',
-      },
-    });
-  } else {
-    requests.push({
-      repeatCell: {
-        range: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
-        cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 1, blue: 1 }, textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 }, bold: false } } },
-        fields: 'userEnteredFormat(backgroundColor,textFormat)',
-      },
-    });
-  }
+  // Always give the part row a plain white, non-bold style. The parser detects a
+  // part by its row NOT being dark (or gray), so this guarantees it's picked up —
+  // no matter where it lands (e.g. directly under a freshly-created dark header).
+  requests.push({
+    repeatCell: {
+      range: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
+      cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 1, blue: 1 }, textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 }, bold: false } } },
+      fields: 'userEnteredFormat(backgroundColor,textFormat)',
+    },
+  });
 
   // 3. Apply the write.
   const writeRes = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
