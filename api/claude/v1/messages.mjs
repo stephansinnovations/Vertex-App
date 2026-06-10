@@ -6,7 +6,7 @@ export default async function handler(req) {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Headers': 'Content-Type, anthropic-beta, anthropic-version',
       },
     });
   }
@@ -25,13 +25,18 @@ export default async function handler(req) {
 
   const body = await req.text();
 
+  // Forward optional beta/version headers from the client (e.g. web-fetch tool).
+  const headers = {
+    'content-type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': req.headers.get('anthropic-version') || '2023-06-01',
+  };
+  const beta = req.headers.get('anthropic-beta');
+  if (beta) headers['anthropic-beta'] = beta;
+
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers,
     body,
   });
 
