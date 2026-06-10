@@ -36,6 +36,90 @@ export async function getSheetTabs(spreadsheetId) {
   return { data: { tabs } };
 }
 
+// Insert a new part row directly under its category header, preserving the
+// sheet's layout. Reuses the same color-based parsing (dark row = category
+// header) to locate where the category's rows end, then inserts a row there.
+// `inheritFromBefore` makes the new row copy the formatting of the row above,
+// so it matches the existing part rows. Requires a write-scoped access token.
+export async function addPartToCategory(spreadsheetId, sheetName, categoryName, part, accessToken) {
+  // 1. Read the grid (with the user's token so private sheets work too) to find
+  //    the sheetId and the category's row block.
+  const range = encodeURIComponent(sheetName);
+  const readUrl = `${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}`;
+  const readRes = await fetch(readUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read sheet (${readRes.status})`);
+  const data = await readRes.json();
+
+  const sheet = data.sheets?.[0];
+  const sheetId = sheet?.properties?.sheetId;
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+  if (sheetId == null) throw new Error('Sheet tab not found');
+
+  const target = categoryName.trim().toLowerCase();
+  let headerRow = -1;
+  let lastRowInCategory = -1;
+  let inCategory = false;
+
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i].values ?? [];
+    const first = cells[0];
+    const bg = first?.effectiveFormat?.backgroundColor;
+    const val = first?.formattedValue?.trim();
+    if (!val) continue;
+    if (isGrayBackground(bg)) continue;
+
+    if (isDarkBackground(bg)) {
+      if (inCategory) break; // hit the next category header → category block ended
+      if (val.toLowerCase() === target) { headerRow = i; inCategory = true; lastRowInCategory = i; }
+    } else if (inCategory) {
+      lastRowInCategory = i; // a part row under this category
+    }
+  }
+
+  if (headerRow === -1) throw new Error(`Category "${categoryName}" not found in "${sheetName}"`);
+
+  const insertAt = lastRowInCategory + 1; // 0-based row index to insert at
+
+  // 2. Build the values for the new row (cols A–D: name, supplier, part#, price).
+  const supplierCell = part.supplierLink
+    ? { userEnteredValue: { formulaValue: `=HYPERLINK("${part.supplierLink}","${(part.supplier || '').replace(/"/g, '""')}")` } }
+    : { userEnteredValue: { stringValue: part.supplier || '' } };
+  const rowValues = [
+    { userEnteredValue: { stringValue: part.partName || '' } },
+    supplierCell,
+    { userEnteredValue: { stringValue: part.partNum || '' } },
+    { userEnteredValue: { stringValue: part.price || '' } },
+  ];
+
+  const requests = [
+    {
+      insertDimension: {
+        range: { sheetId, dimension: 'ROWS', startIndex: insertAt, endIndex: insertAt + 1 },
+        inheritFromBefore: true, // copy formatting from the row above (keeps the layout)
+      },
+    },
+    {
+      updateCells: {
+        rows: [{ values: rowValues }],
+        fields: 'userEnteredValue',
+        start: { sheetId, rowIndex: insertAt, columnIndex: 0 },
+      },
+    },
+  ];
+
+  // 3. Apply the write.
+  const writeRes = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests }),
+  });
+  if (!writeRes.ok) {
+    const t = await writeRes.text();
+    throw new Error(`Write failed (${writeRes.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
 export async function getSheetCategories(spreadsheetId, sheetName) {
   const range = encodeURIComponent(sheetName);
   const url = `${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}&key=${API_KEY}`;

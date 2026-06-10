@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
-import { getSheetTabs, getSheetCategories } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory } from '@/api/googleSheets';
+import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -249,6 +250,57 @@ export default function PartsLibrary() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Add Part flow
+  const [showAdd, setShowAdd] = useState(false);
+  const [addTab, setAddTab] = useState('');
+  const [addCats, setAddCats] = useState([]);
+  const [loadingCats, setLoadingCats] = useState(false);
+  const [addCategory, setAddCategory] = useState('');
+  const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+  const [saving, setSaving] = useState(false);
+  const [addErr, setAddErr] = useState(null);
+
+  const openAdd = () => {
+    setAddErr(null);
+    setAddTab(sheetTabs[0] || '');
+    setShowAdd(true);
+  };
+
+  // Load categories for the chosen tab so the user can pick where the part goes.
+  useEffect(() => {
+    if (!showAdd || !addTab || !spreadsheetId) return;
+    setLoadingCats(true);
+    setAddCategory('');
+    getSheetCategories(spreadsheetId, addTab)
+      .then(res => setAddCats(res.data.categories || []))
+      .catch(() => setAddCats([]))
+      .finally(() => setLoadingCats(false));
+  }, [showAdd, addTab, spreadsheetId]);
+
+  const submitPart = async () => {
+    if (!pForm.partName.trim() || !addCategory || saving) return;
+    setSaving(true);
+    setAddErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await addPartToCategory(spreadsheetId, addTab, addCategory, {
+        partName: pForm.partName.trim(),
+        supplier: pForm.supplier.trim(),
+        supplierLink: pForm.supplierLink.trim(),
+        partNum: pForm.partNum.trim(),
+        price: pForm.price.trim(),
+      }, token);
+      setShowAdd(false);
+      setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+      // Force the relevant folder to re-fetch by reloading the page's sheet view.
+      window.location.reload();
+    } catch (e) {
+      setAddErr(e.message || 'Failed to add part');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     const loadSheet = async () => {
       try {
@@ -280,6 +332,14 @@ export default function PartsLibrary() {
             <h1 className="text-4xl font-bold text-white tracking-tight">Parts Library</h1>
             <p className="text-gray-400 mt-1">Manage your parts and components</p>
           </div>
+          {sheetTabs.length > 0 && (
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-2 bg-zinc-800 border border-zinc-700 text-white font-semibold text-sm px-4 py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Add Part
+            </button>
+          )}
           <button
             onClick={() => navigate('/MasterSheet')}
             className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
@@ -314,6 +374,83 @@ export default function PartsLibrary() {
           )}
         </div>
       </div>
+
+      {/* Add Part modal */}
+      {showAdd && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => !saving && setShowAdd(false)} />
+          <div className="relative w-full sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-white">Add Part to Master Sheet</h2>
+              <button onClick={() => !saving && setShowAdd(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!isGoogleOAuthConfigured() && (
+              <div className="mb-4 flex items-start gap-2 bg-amber-900/20 border border-amber-900/40 rounded-xl px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                <p className="text-amber-300 text-xs">Google sign-in isn't configured yet (VITE_GOOGLE_OAUTH_CLIENT_ID). Adding a part will fail until it's set.</p>
+              </div>
+            )}
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Sheet (tab)</label>
+            <select value={addTab} onChange={e => setAddTab(e.target.value)}
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500">
+              {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Category</label>
+            <select value={addCategory} onChange={e => setAddCategory(e.target.value)}
+              disabled={loadingCats}
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
+              <option value="">{loadingCats ? 'Loading categories…' : 'Select a category'}</option>
+              {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+            </select>
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Part name *</label>
+            <input value={pForm.partName} onChange={e => setPForm(f => ({ ...f, partName: e.target.value }))}
+              placeholder="e.g. 12V LED strip"
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Supplier</label>
+                <input value={pForm.supplier} onChange={e => setPForm(f => ({ ...f, supplier: e.target.value }))}
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Price</label>
+                <input value={pForm.price} onChange={e => setPForm(f => ({ ...f, price: e.target.value }))}
+                  placeholder="$0.00"
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Part #</label>
+                <input value={pForm.partNum} onChange={e => setPForm(f => ({ ...f, partNum: e.target.value }))}
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Supplier link</label>
+                <input value={pForm.supplierLink} onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
+                  placeholder="https://…"
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+            </div>
+
+            {addErr && <p className="text-red-400 text-xs mb-3">{addErr}</p>}
+
+            <button onClick={submitPart} disabled={!pForm.partName.trim() || !addCategory || saving}
+              className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+              {saving ? 'Adding…' : <><Check className="w-4 h-4" /> Add to sheet</>}
+            </button>
+            <p className="text-gray-600 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
