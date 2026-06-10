@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles, Camera, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles, Camera, Trash2, Search } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -449,6 +449,37 @@ export default function PartsLibrary() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Search across all tabs/categories. Parts load lazily per folder, so the first
+  // search fetches every tab's parts once and caches the flat list.
+  const [search, setSearch] = useState('');
+  const [allParts, setAllParts] = useState(null);
+  const [loadingAll, setLoadingAll] = useState(false);
+
+  useEffect(() => {
+    if (!search.trim() || allParts || loadingAll || !spreadsheetId || sheetTabs.length === 0) return;
+    setLoadingAll(true);
+    Promise.all(sheetTabs.map(t =>
+      getSheetCategories(spreadsheetId, t)
+        .then(r => ({ tab: t, cats: r.data.categories || [] }))
+        .catch(() => ({ tab: t, cats: [] }))
+    )).then(results => {
+      const flat = [];
+      results.forEach(({ tab, cats }) =>
+        cats.forEach(c => (c.parts || []).forEach(p => flat.push({ ...p, tab, category: c.name })))
+      );
+      setAllParts(flat);
+    }).finally(() => setLoadingAll(false));
+  }, [search, allParts, loadingAll, spreadsheetId, sheetTabs]);
+
+  const q = search.trim().toLowerCase();
+  const searchResults = q && allParts
+    ? allParts.filter(p =>
+        (p.partName || '').toLowerCase().includes(q)
+        || (p.supplier || '').toLowerCase().includes(q)
+        || (p.partNum || '').toLowerCase().includes(q)
+        || (p.category || '').toLowerCase().includes(q))
+    : [];
+
   // Add Part flow
   const [showAdd, setShowAdd] = useState(false);
   const [addTab, setAddTab] = useState('');
@@ -665,7 +696,53 @@ export default function PartsLibrary() {
           </button>
         </div>
 
-        {/* Menu Card */}
+        {/* Search */}
+        {sheetTabs.length > 0 && (
+          <div className="relative mb-4">
+            <Search className="w-4 h-4 text-gray-500 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search parts…"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-11 pr-10 py-3 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-600"
+            />
+            {search && (
+              <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        )}
+
+        {q ? (
+          /* Search results */
+          <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-zinc-800" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
+            {loadingAll && (
+              <div className="px-6 py-4"><p className="text-gray-500 text-sm">Searching all parts…</p></div>
+            )}
+            {!loadingAll && searchResults.length === 0 && (
+              <div className="px-6 py-5 text-center"><p className="text-gray-600 text-sm">No parts match “{search.trim()}”</p></div>
+            )}
+            {!loadingAll && searchResults.map((p, i) => (
+              <div key={p.tab + p.category + p.partName + i} className="flex items-start justify-between px-6 py-3 border-b border-zinc-900 last:border-b-0 gap-4">
+                <div className="min-w-0">
+                  <span className="text-white text-sm">{p.partName}</span>
+                  <div className="mt-0.5 flex items-center gap-2 flex-wrap">
+                    {p.supplierLink ? (
+                      <a href={p.supplierLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs underline underline-offset-2">{p.supplier || 'Link'}</a>
+                    ) : p.supplier ? (
+                      <span className="text-gray-500 text-xs">{p.supplier}</span>
+                    ) : null}
+                    {p.partNum && <span className="text-gray-400 font-mono text-xs">{p.partNum}</span>}
+                    {p.price && <span className="text-gray-400 text-xs">{p.price}</span>}
+                  </div>
+                  <div className="text-gray-600 text-[11px] mt-0.5">{p.tab} · {p.category}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+        /* Menu Card */
         <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-zinc-800" style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}>
           {loading && (
             <div className="px-6 py-4">
@@ -718,6 +795,7 @@ export default function PartsLibrary() {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Add Part modal */}
