@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
+import { extractPartFromUrl } from '@/api/extractPart';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -334,6 +335,29 @@ export default function PartsLibrary() {
   const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
   const [saving, setSaving] = useState(false);
   const [addErr, setAddErr] = useState(null);
+  const [aiFilling, setAiFilling] = useState(false);
+  const [aiErr, setAiErr] = useState(null);
+
+  // Read the supplier link with Claude and auto-fill the part fields.
+  const handleAiFill = async () => {
+    if (aiFilling) return;
+    setAiFilling(true);
+    setAiErr(null);
+    try {
+      const r = await extractPartFromUrl(pForm.supplierLink.trim());
+      setPForm(f => ({
+        ...f,
+        partName: r.partName || f.partName,
+        supplier: r.supplier || f.supplier,
+        partNum: r.partNum || f.partNum,
+        price: r.price || f.price,
+      }));
+    } catch (e) {
+      setAiErr(e.message || 'AI fill failed');
+    } finally {
+      setAiFilling(false);
+    }
+  };
 
   // Add Tab flow
   const [addingTab, setAddingTab] = useState(false);
@@ -623,6 +647,18 @@ export default function PartsLibrary() {
                   className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
               </div>
             </div>
+
+            {/* AI fill from link */}
+            <button
+              onClick={handleAiFill}
+              disabled={!pForm.supplierLink.trim() || aiFilling}
+              className="w-full flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl mb-3 transition-all disabled:opacity-40"
+              style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}
+            >
+              <Sparkles className="w-4 h-4" />
+              {aiFilling ? 'Reading the link…' : 'AI fill from link'}
+            </button>
+            {aiErr && <p className="text-red-400 text-xs mb-3">{aiErr}</p>}
 
             {addErr && <p className="text-red-400 text-xs mb-3">{addErr}</p>}
 
