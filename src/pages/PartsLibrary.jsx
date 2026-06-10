@@ -47,6 +47,33 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
   const [confirmDel, setConfirmDel] = useState(null); // the part pending deletion
   const [deleting, setDeleting] = useState(false);
   const [delErr, setDelErr] = useState(null);
+  const [addingPart, setAddingPart] = useState(false);
+  const [partForm, setPartForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+  const [savingPart, setSavingPart] = useState(false);
+  const [partErr, setPartErr] = useState(null);
+
+  const submitPart = async () => {
+    if (!partForm.partName.trim() || savingPart) return;
+    setSavingPart(true);
+    setPartErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await addPartToCategory(spreadsheetId, tab, category.name, {
+        partName: partForm.partName.trim(),
+        supplier: partForm.supplier.trim(),
+        supplierLink: partForm.supplierLink.trim(),
+        partNum: partForm.partNum.trim(),
+        price: partForm.price.trim(),
+      }, token);
+      setPartForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+      setAddingPart(false);
+      onChanged && onChanged();
+    } catch (e) {
+      setPartErr(e.message || 'Failed to add part');
+    } finally {
+      setSavingPart(false);
+    }
+  };
 
   const confirmDelete = async () => {
     if (!confirmDel || deleting) return;
@@ -211,6 +238,49 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
       {open && category.parts.length === 0 && (
         <div className="px-10 pb-3">
           <p className="text-gray-600 text-sm">No parts found in this category</p>
+        </div>
+      )}
+
+      {/* Add part to this category */}
+      {open && (
+        <div className="px-10 pb-3">
+          {addingPart ? (
+            <div className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-3 space-y-2">
+              <input value={partForm.partName} autoFocus
+                onChange={e => setPartForm(f => ({ ...f, partName: e.target.value }))}
+                onKeyDown={e => { if (e.key === 'Enter') submitPart(); }}
+                placeholder="Part name *"
+                className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+              <div className="grid grid-cols-2 gap-2">
+                <input value={partForm.supplier} onChange={e => setPartForm(f => ({ ...f, supplier: e.target.value }))}
+                  placeholder="Supplier"
+                  className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                <input value={partForm.price} onChange={e => setPartForm(f => ({ ...f, price: e.target.value }))}
+                  placeholder="Price"
+                  className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                <input value={partForm.partNum} onChange={e => setPartForm(f => ({ ...f, partNum: e.target.value }))}
+                  placeholder="Part #"
+                  className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                <input value={partForm.supplierLink} onChange={e => setPartForm(f => ({ ...f, supplierLink: e.target.value }))}
+                  placeholder="Link https://…"
+                  className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+              {partErr && <p className="text-red-400 text-xs">{partErr}</p>}
+              <div className="flex items-center gap-2">
+                <button onClick={submitPart} disabled={!partForm.partName.trim() || savingPart}
+                  className="flex-1 bg-white text-black text-sm font-semibold py-2 rounded-lg disabled:opacity-40">
+                  {savingPart ? 'Adding…' : 'Add part'}
+                </button>
+                <button onClick={() => { setAddingPart(false); setPartErr(null); setPartForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' }); }}
+                  className="text-gray-400 hover:text-white px-2"><X className="w-4 h-4" /></button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setAddingPart(true)}
+              className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
+              <Plus className="w-4 h-4" /> Add part
+            </button>
+          )}
         </div>
       )}
 
