@@ -139,10 +139,12 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
   const sheetId = sheet?.properties?.sheetId;
   const rows = sheet?.data?.[0]?.rowData ?? [];
   if (sheetId == null) throw new Error('Sheet tab not found');
+  const colCount = sheet?.properties?.gridProperties?.columnCount ?? 26;
 
   const target = categoryName.trim().toLowerCase();
   let headerRow = -1;
   let lastRowInCategory = -1;
+  let samplePartRow = -1; // an existing part row in this category, to copy formatting from
   let inCategory = false;
 
   for (let i = 0; i < rows.length; i++) {
@@ -158,6 +160,7 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
       if (val.toLowerCase() === target) { headerRow = i; inCategory = true; lastRowInCategory = i; }
     } else if (inCategory) {
       lastRowInCategory = i; // a part row under this category
+      if (samplePartRow === -1) samplePartRow = i;
     }
   }
 
@@ -180,7 +183,7 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
     {
       insertDimension: {
         range: { sheetId, dimension: 'ROWS', startIndex: insertAt, endIndex: insertAt + 1 },
-        inheritFromBefore: true, // copy formatting from the row above (keeps the layout)
+        inheritFromBefore: false, // don't inherit — the row above may be the dark header
       },
     },
     {
@@ -191,6 +194,26 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
       },
     },
   ];
+
+  // Match an existing part row's formatting; if this is the first part in the
+  // category, apply a plain (non-dark) style so it isn't mistaken for a header.
+  if (samplePartRow !== -1) {
+    requests.push({
+      copyPaste: {
+        source: { sheetId, startRowIndex: samplePartRow, endRowIndex: samplePartRow + 1, startColumnIndex: 0, endColumnIndex: colCount },
+        destination: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
+        pasteType: 'PASTE_FORMAT',
+      },
+    });
+  } else {
+    requests.push({
+      repeatCell: {
+        range: { sheetId, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount },
+        cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 1, blue: 1 }, textFormat: { foregroundColor: { red: 0, green: 0, blue: 0 }, bold: false } } },
+        fields: 'userEnteredFormat(backgroundColor,textFormat)',
+      },
+    });
+  }
 
   // 3. Apply the write.
   const writeRes = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
