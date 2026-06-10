@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSetting, setSetting } from '@/api/appSettings';
+import { useBackground, backgroundStyle } from '@/lib/BackgroundContext';
 
 const API_KEYS = [
   {
@@ -43,6 +44,21 @@ export default function Settings() {
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
+
+  // Backgrounds
+  const { backgrounds, activeId, setActive, addBackground, removeBackground } = useBackground();
+  const [addingBg, setAddingBg] = useState(false);
+  const [bgName, setBgName] = useState('');
+  const [bgValue, setBgValue] = useState('');
+  const BUILTINS = ['master-crafter', 'original'];
+
+  const submitBg = () => {
+    const value = bgValue.trim();
+    if (!value) return;
+    const type = /^https?:\/\//i.test(value) ? 'image' : 'css';
+    addBackground({ name: bgName.trim() || 'Custom', type, value });
+    setBgName(''); setBgValue(''); setAddingBg(false);
+  };
 
   useEffect(() => {
     Promise.all(
@@ -216,6 +232,71 @@ export default function Settings() {
             >
               {SHEET_LINKS.map((f, i) => renderField(f, i === SHEET_LINKS.length - 1))}
             </div>
+          </div>
+
+          {/* Backgrounds */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <ImageIcon className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Backgrounds</h2>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {backgrounds.map(bg => (
+                <div key={bg.id} className="relative">
+                  <button
+                    onClick={() => setActive(bg.id)}
+                    className={`w-full rounded-2xl overflow-hidden border text-left transition-colors ${bg.id === activeId ? 'border-white' : 'border-zinc-800 hover:border-zinc-600'}`}
+                  >
+                    <div className="h-20" style={backgroundStyle(bg)} />
+                    <div className="flex items-center justify-between px-3 py-2 bg-zinc-900/70">
+                      <span className="text-white text-sm truncate">{bg.name}</span>
+                      {bg.id === activeId && <Check className="w-4 h-4 text-green-400 flex-shrink-0" />}
+                    </div>
+                  </button>
+                  {!BUILTINS.includes(bg.id) && (
+                    <button
+                      onClick={() => removeBackground(bg.id)}
+                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 border border-white/10 flex items-center justify-center text-gray-300 hover:text-red-400"
+                      aria-label="Remove background"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {addingBg ? (
+              <div className="mt-3 bg-zinc-900/40 border border-zinc-800 rounded-2xl p-4 space-y-2">
+                <input
+                  value={bgName}
+                  onChange={e => setBgName(e.target.value)}
+                  placeholder="Name"
+                  className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
+                />
+                <textarea
+                  value={bgValue}
+                  onChange={e => setBgValue(e.target.value)}
+                  placeholder="Image URL (https://…) or CSS background (e.g. linear-gradient(…))"
+                  rows={3}
+                  className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-xs font-mono focus:outline-none focus:border-zinc-500 resize-none"
+                />
+                <div className="flex items-center gap-2">
+                  <button onClick={submitBg} disabled={!bgValue.trim()}
+                    className="flex-1 bg-white text-black text-sm font-semibold py-2 rounded-lg disabled:opacity-40">
+                    Save background
+                  </button>
+                  <button onClick={() => { setAddingBg(false); setBgName(''); setBgValue(''); }}
+                    className="text-gray-400 hover:text-white px-2"><X className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setAddingBg(true)}
+                className="mt-3 flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
+                <Plus className="w-4 h-4" /> Add background
+              </button>
+            )}
           </div>
 
           {/* Inventory */}

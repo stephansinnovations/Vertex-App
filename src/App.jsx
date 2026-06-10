@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AdminRoute from '@/components/AdminRoute';
+import { BackgroundProvider } from '@/lib/BackgroundContext';
 import { ShortcutProvider } from '@/lib/ShortcutContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { ThemeProvider } from '@/lib/ThemeContext';
@@ -130,6 +131,7 @@ function GlobalVertexChat() {
 function App() {
   return (
     <ThemeProvider>
+      <BackgroundProvider>
       <VertexChatProvider>
         <AuthProvider>
           <ShortcutProvider>
@@ -145,6 +147,7 @@ function App() {
           </ShortcutProvider>
         </AuthProvider>
       </VertexChatProvider>
+      </BackgroundProvider>
     </ThemeProvider>
   );
 }
