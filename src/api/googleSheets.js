@@ -205,6 +205,60 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
   return true;
 }
 
+// Delete a part's row from the sheet. Locates the row by part name (and part
+// number, when present) within its category, then removes that single row.
+export async function deletePartRow(spreadsheetId, sheetName, categoryName, part, accessToken) {
+  const range = encodeURIComponent(sheetName);
+  const readUrl = `${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}`;
+  const readRes = await fetch(readUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read sheet (${readRes.status})`);
+  const data = await readRes.json();
+
+  const sheet = data.sheets?.[0];
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId == null) throw new Error('Sheet tab not found');
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+
+  const targetCat = categoryName.trim().toLowerCase();
+  const targetName = (part.partName || '').trim().toLowerCase();
+  const targetNum = (part.partNum || '').trim().toLowerCase();
+  let inCategory = false;
+  let rowIndex = -1;
+
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i].values ?? [];
+    const first = cells[0];
+    const bg = first?.effectiveFormat?.backgroundColor;
+    const val = first?.formattedValue?.trim();
+    if (!val) continue;
+    if (isGrayBackground(bg)) continue;
+
+    if (isDarkBackground(bg)) {
+      if (inCategory) break; // moved past the category block
+      if (val.toLowerCase() === targetCat) inCategory = true;
+    } else if (inCategory) {
+      const name = val.toLowerCase();
+      const num = (cells[2]?.formattedValue?.trim() || '').toLowerCase();
+      if (name === targetName && (!targetNum || num === targetNum)) { rowIndex = i; break; }
+    }
+  }
+
+  if (rowIndex === -1) throw new Error(`Part "${part.partName}" not found in "${categoryName}"`);
+
+  const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      requests: [{ deleteDimension: { range: { sheetId, dimension: 'ROWS', startIndex: rowIndex, endIndex: rowIndex + 1 } } }],
+    }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Delete failed (${res.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
 export async function getSheetCategories(spreadsheetId, sheetName) {
   const range = encodeURIComponent(sheetName);
   const url = `${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}&key=${API_KEY}`;

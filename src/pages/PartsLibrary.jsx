@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles, Camera } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles, Camera, Trash2 } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
-import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { extractPartFromUrl, identifyPartFromImage } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
@@ -40,10 +40,29 @@ function getBuilds() {
   return buildsFetchPromise;
 }
 
-function CategoryRow({ category }) {
+function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
   const [builds, setBuilds] = useState(buildsCache || []);
+  const [confirmDel, setConfirmDel] = useState(null); // the part pending deletion
+  const [deleting, setDeleting] = useState(false);
+  const [delErr, setDelErr] = useState(null);
+
+  const confirmDelete = async () => {
+    if (!confirmDel || deleting) return;
+    setDeleting(true);
+    setDelErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await deletePartRow(spreadsheetId, tab, category.name, confirmDel, token);
+      setConfirmDel(null);
+      onChanged && onChanged();
+    } catch (e) {
+      setDelErr(e.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     getBuilds().then(data => setBuilds(data));
@@ -119,7 +138,7 @@ function CategoryRow({ category }) {
             }
 
             return (
-              <div key={i} className="flex items-center justify-between px-10 py-3 border-b border-zinc-900 last:border-b-0 hover:bg-zinc-800/30 transition-colors gap-4">
+              <div key={i} className="group flex items-center justify-between px-10 py-3 border-b border-zinc-900 last:border-b-0 hover:bg-zinc-800/30 transition-colors gap-4">
                 {/* Left: name + supplier + part# + price */}
                 <div className="flex-1 min-w-0">
                   <span className="text-white text-sm leading-snug">{part.partName}</span>
@@ -174,6 +193,15 @@ function CategoryRow({ category }) {
                     <span>{allocated}</span>
                     {statusIcon}
                   </div>
+
+                  {/* Low-key delete */}
+                  <button
+                    onClick={() => { setDelErr(null); setConfirmDel(part); }}
+                    title="Delete part"
+                    className="text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             );
@@ -183,6 +211,31 @@ function CategoryRow({ category }) {
       {open && category.parts.length === 0 && (
         <div className="px-10 pb-3">
           <p className="text-gray-600 text-sm">No parts found in this category</p>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !deleting && setConfirmDel(null)} />
+          <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm">
+            <h3 className="text-white font-bold text-lg mb-2">Delete part?</h3>
+            <p className="text-gray-300 text-sm mb-1">
+              <span className="text-white font-medium">{confirmDel.partName}</span> will be removed from the Master Sheet.
+            </p>
+            <p className="text-gray-600 text-xs mb-5">This can't be undone.</p>
+            {delErr && <p className="text-red-400 text-xs mb-3">{delErr}</p>}
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDel(null)} disabled={deleting}
+                className="flex-1 bg-zinc-800 text-white py-2.5 rounded-xl font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={confirmDelete} disabled={deleting}
+                className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white py-2.5 rounded-xl font-semibold hover:bg-red-500 transition-colors disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -256,7 +309,7 @@ function SheetFolder({ tab, spreadsheetId }) {
             </div>
           )}
           {categories.map((cat, i) => (
-            <CategoryRow key={cat.name + i} category={cat} />
+            <CategoryRow key={cat.name + i} category={cat} spreadsheetId={spreadsheetId} tab={tab} onChanged={loadCategories} />
           ))}
 
           {/* Add category */}
