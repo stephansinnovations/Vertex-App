@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
-import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { getSetting } from '@/api/appSettings';
 
@@ -218,7 +218,7 @@ function SheetFolder({ tab, spreadsheetId }) {
     setCatErr(null);
     try {
       const token = await getSheetsAccessToken();
-      await addCategory(spreadsheetId, tab, newCatName.trim(), token);
+      await addCategoryToSheet(spreadsheetId, tab, newCatName.trim(), token);
       setNewCatName('');
       setAddingCat(false);
       await loadCategories();
@@ -295,6 +295,29 @@ function SheetFolder({ tab, spreadsheetId }) {
   );
 }
 
+function QuickCreateRow({ placeholder, value, onChange, onSubmit, onCancel, saving, err }) {
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2">
+        <input
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onSubmit(); }}
+          placeholder={placeholder}
+          autoFocus
+          className="flex-1 bg-black border border-zinc-600 rounded-xl px-4 py-2.5 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-400"
+        />
+        <button onClick={onSubmit} disabled={!value.trim() || saving}
+          className="bg-white text-black text-sm font-semibold px-4 py-2.5 rounded-xl disabled:opacity-40">
+          {saving ? '…' : 'Add'}
+        </button>
+        <button onClick={onCancel} className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
+      </div>
+      {err && <p className="text-red-400 text-xs mt-1.5">{err}</p>}
+    </div>
+  );
+}
+
 export default function PartsLibrary() {
   const navigate = useNavigate();
   const [sheetTabs, setSheetTabs] = useState([]);
@@ -336,10 +359,44 @@ export default function PartsLibrary() {
     }
   };
 
+  // Inline "create from the dropdown" for the Add Part modal.
+  const [quickAdd, setQuickAdd] = useState(null); // 'tab' | 'cat' | null
+  const [quickName, setQuickName] = useState('');
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickErr, setQuickErr] = useState(null);
+
   const openAdd = () => {
     setAddErr(null);
+    setQuickAdd(null);
     setAddTab(sheetTabs[0] || '');
     setShowAdd(true);
+  };
+
+  const submitQuick = async () => {
+    const name = quickName.trim();
+    if (!name || quickSaving) return;
+    setQuickSaving(true);
+    setQuickErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      if (quickAdd === 'tab') {
+        await addSheetTab(spreadsheetId, name, token);
+        const res = await getSheetTabs(spreadsheetId);
+        setSheetTabs(res.data.tabs || []);
+        setAddTab(name); // selecting it loads its (empty) categories via the effect
+      } else {
+        await addCategoryToSheet(spreadsheetId, addTab, name, token);
+        const res = await getSheetCategories(spreadsheetId, addTab);
+        setAddCats(res.data.categories || []);
+        setAddCategory(name);
+      }
+      setQuickAdd(null);
+      setQuickName('');
+    } catch (e) {
+      setQuickErr(e.message || 'Failed');
+    } finally {
+      setQuickSaving(false);
+    }
   };
 
   // Load categories for the chosen tab so the user can pick where the part goes.
@@ -503,18 +560,36 @@ export default function PartsLibrary() {
             )}
 
             <label className="text-xs text-gray-400 mb-1.5 block">Sheet (tab)</label>
-            <select value={addTab} onChange={e => setAddTab(e.target.value)}
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500">
+            <select value={addTab} onChange={e => {
+                if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
+                setQuickAdd(null); setAddTab(e.target.value);
+              }}
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500">
+              <option value="__add_tab__">＋ Add new sheet tab</option>
               {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
+            {quickAdd === 'tab'
+              ? <QuickCreateRow placeholder="New tab name…" value={quickName} onChange={setQuickName}
+                  onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
+                  saving={quickSaving} err={quickErr} />
+              : <div className="mb-2" />}
 
             <label className="text-xs text-gray-400 mb-1.5 block">Category</label>
-            <select value={addCategory} onChange={e => setAddCategory(e.target.value)}
+            <select value={addCategory} onChange={e => {
+                if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
+                setQuickAdd(null); setAddCategory(e.target.value);
+              }}
               disabled={loadingCats}
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
+              <option value="__add_cat__">＋ Add category</option>
               <option value="">{loadingCats ? 'Loading categories…' : 'Select a category'}</option>
               {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
             </select>
+            {quickAdd === 'cat'
+              ? <QuickCreateRow placeholder="New category name…" value={quickName} onChange={setQuickName}
+                  onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
+                  saving={quickSaving} err={quickErr} />
+              : <div className="mb-2" />}
 
             <label className="text-xs text-gray-400 mb-1.5 block">Part name *</label>
             <input value={pForm.partName} onChange={e => setPForm(f => ({ ...f, partName: e.target.value }))}
