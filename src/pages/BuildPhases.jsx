@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, ChevronRight, Circle, ToggleLeft, ToggleRight, GripVertical, AlertTriangle, Package } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { getBuildPhases, saveBuildPhases } from '@/api/buildsDb';
+import { base44 } from '@/api/base44Client';
+import PartsBrowserSheet from '@/components/PartsBrowserSheet';
 
 function phaseProgress(phase) {
   const tasks = phase.tasks || [];
@@ -46,16 +48,43 @@ export default function BuildPhases() {
   const [editing, setEditing] = useState(false);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [addingPhase, setAddingPhase] = useState(false);
+  const [buildSheetUrl, setBuildSheetUrl] = useState('');
+  const [pickingPhase, setPickingPhase] = useState(false); // phase picker open
+  const [partsPhaseId, setPartsPhaseId] = useState(null);   // phase chosen → browser open
 
   useEffect(() => {
     let active = true;
-    getBuildPhases(buildId).then(p => { if (active) setPhases(p); });
+    Promise.all([getBuildPhases(buildId), base44.entities.Build.get(buildId)]).then(([p, b]) => {
+      if (!active) return;
+      setPhases(p);
+      setBuildSheetUrl(b?.build_sheet_url || '');
+    });
     return () => { active = false; };
   }, [buildId]);
+
+  const hasBuildSheet = !!buildSheetUrl.trim();
 
   const update = (updated) => {
     setPhases(updated);
     saveBuildPhases(buildId, updated);
+  };
+
+  // Add/inc a library part on a chosen phase (phase.parts).
+  const addPartToPhase = (phaseId, incoming) => {
+    const target = phases.find(p => p.id === phaseId);
+    const cur = target?.parts || [];
+    const existing = cur.find(p => p.from_library && p.name === incoming.name);
+    const parts = existing
+      ? cur.map(p => p === existing ? { ...p, qty: (p.qty || 1) + 1 } : p)
+      : [...cur, { ...incoming, id: `pp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, qty: 1 }];
+    update(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+  };
+  const decrementPartOnPhase = (phaseId, name) => {
+    const target = phases.find(p => p.id === phaseId);
+    const parts = (target?.parts || [])
+      .map(p => (p.from_library && p.name === name) ? { ...p, qty: (p.qty || 1) - 1 } : p)
+      .filter(p => (p.qty || 0) > 0);
+    update(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
   };
 
   const togglePhase = (id) => {
@@ -97,12 +126,22 @@ export default function BuildPhases() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setEditing(v => !v)}
-          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${editing ? 'border-yellow-500 text-yellow-400' : 'border-zinc-700 text-gray-400 hover:text-white'}`}
-        >
-          {editing ? 'Done' : 'Edit'}
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {hasBuildSheet && !editing && (
+            <button
+              onClick={() => setPickingPhase(true)}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-white text-black font-semibold hover:bg-gray-200 transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" /> Add a Part
+            </button>
+          )}
+          <button
+            onClick={() => setEditing(v => !v)}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${editing ? 'border-yellow-500 text-yellow-400' : 'border-zinc-700 text-gray-400 hover:text-white'}`}
+          >
+            {editing ? 'Done' : 'Edit'}
+          </button>
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -204,6 +243,39 @@ export default function BuildPhases() {
           </div>
         )}
       </div>
+
+      {/* Which-phase picker */}
+      {pickingPhase && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setPickingPhase(false)} />
+          <div className="relative w-full sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-6 max-h-[80vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-white mb-1">Add a part to…</h2>
+            <p className="text-gray-500 text-xs mb-4">Pick the phase this part belongs to.</p>
+            <div className="space-y-1.5">
+              {enabledPhases.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { setPartsPhaseId(p.id); setPickingPhase(false); }}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800 text-left transition-colors"
+                >
+                  <span className="text-white text-sm">{p.name}</span>
+                  <ChevronRight className="w-4 h-4 text-gray-500" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Parts browser for the chosen phase */}
+      {partsPhaseId && (
+        <PartsBrowserSheet
+          materials={(phases.find(p => p.id === partsPhaseId)?.parts || []).filter(p => p.from_library)}
+          onAdd={(part) => addPartToPhase(partsPhaseId, part)}
+          onDecrement={(name) => decrementPartOnPhase(partsPhaseId, name)}
+          onClose={() => setPartsPhaseId(null)}
+        />
+      )}
     </div>
   );
 }
