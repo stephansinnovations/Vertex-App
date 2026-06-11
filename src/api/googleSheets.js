@@ -69,6 +69,89 @@ export async function syncBuildSheetTabs(masterUrl, buildUrl, accessToken) {
   return { added: toAdd.length, total: masterTabs.length };
 }
 
+// Write a part into a BUILD sheet: tab = its Category, grouped under a Subcategory
+// header (created if missing), with a quantity column (E). If the part already
+// exists under that subcategory, just updates its qty.
+export async function addPartToBuildSheet(buildSheetUrl, part, accessToken) {
+  const ssId = extractSpreadsheetId(buildSheetUrl);
+  if (!ssId) throw new Error('Invalid build sheet URL');
+  const tab = part.category;
+  const subcat = (part.subcategory || 'Parts').trim();
+  if (!tab) throw new Error('Part is missing its category (tab)');
+
+  const range = encodeURIComponent(tab);
+  const readRes = await fetch(`${BASE}/${ssId}?includeGridData=true&ranges=${range}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read the build sheet (${readRes.status})`);
+  const data = await readRes.json();
+  const sheet = data.sheets?.[0];
+  const gid = sheet?.properties?.sheetId;
+  if (gid == null) throw new Error(`Category tab "${tab}" not found in the build sheet`);
+  const colCount = sheet?.properties?.gridProperties?.columnCount ?? 26;
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+
+  const targetSub = subcat.toLowerCase();
+  const targetName = (part.name || '').trim().toLowerCase();
+  let subHeaderRow = -1, lastInSub = -1, existingPartRow = -1, lastUsedRow = -1, sampleHeaderRow = -1, inSub = false;
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i].values ?? [];
+    const first = cells[0];
+    const val = first?.formattedValue?.trim();
+    const bg = first?.effectiveFormat?.backgroundColor;
+    if (val) lastUsedRow = i;
+    if (!val) continue;
+    if (isGrayBackground(bg)) continue;
+    if (isDarkBackground(bg)) {
+      if (sampleHeaderRow === -1) sampleHeaderRow = i;
+      if (inSub) break;
+      if (val.toLowerCase() === targetSub) { subHeaderRow = i; inSub = true; lastInSub = i; }
+    } else if (inSub) {
+      lastInSub = i;
+      if (val.toLowerCase() === targetName) existingPartRow = i;
+    }
+  }
+
+  const requests = [];
+  const qtyCell = { userEnteredValue: { numberValue: Number(part.qty) || 1 } };
+
+  if (existingPartRow !== -1) {
+    requests.push({ updateCells: { rows: [{ values: [qtyCell] }], fields: 'userEnteredValue', start: { sheetId: gid, rowIndex: existingPartRow, columnIndex: 4 } } });
+  } else {
+    let insertAt;
+    if (subHeaderRow === -1) {
+      const headerAt = lastUsedRow + 1;
+      requests.push({ insertDimension: { range: { sheetId: gid, dimension: 'ROWS', startIndex: headerAt, endIndex: headerAt + 1 } } });
+      requests.push({ updateCells: { rows: [{ values: [{ userEnteredValue: { stringValue: subcat } }] }], fields: 'userEnteredValue', start: { sheetId: gid, rowIndex: headerAt, columnIndex: 0 } } });
+      if (sampleHeaderRow !== -1) {
+        requests.push({ copyPaste: { source: { sheetId: gid, startRowIndex: sampleHeaderRow, endRowIndex: sampleHeaderRow + 1, startColumnIndex: 0, endColumnIndex: colCount }, destination: { sheetId: gid, startRowIndex: headerAt, endRowIndex: headerAt + 1, startColumnIndex: 0, endColumnIndex: colCount }, pasteType: 'PASTE_FORMAT' } });
+      } else {
+        requests.push({ repeatCell: { range: { sheetId: gid, startRowIndex: headerAt, endRowIndex: headerAt + 1, startColumnIndex: 0, endColumnIndex: colCount }, cell: { userEnteredFormat: { backgroundColor: { red: 0, green: 0, blue: 0 }, textFormat: { foregroundColor: { red: 1, green: 1, blue: 1 }, bold: true } } }, fields: 'userEnteredFormat(backgroundColor,textFormat)' } });
+      }
+      insertAt = headerAt + 1;
+    } else {
+      insertAt = lastInSub + 1;
+    }
+    const supplierCell = part.supplierLink
+      ? { userEnteredValue: { formulaValue: `=HYPERLINK("${part.supplierLink}","${(part.supplier || '').replace(/"/g, '""')}")` } }
+      : { userEnteredValue: { stringValue: part.supplier || '' } };
+    requests.push({ insertDimension: { range: { sheetId: gid, dimension: 'ROWS', startIndex: insertAt, endIndex: insertAt + 1 } } });
+    requests.push({ updateCells: { rows: [{ values: [
+      { userEnteredValue: { stringValue: part.name || '' } },
+      supplierCell,
+      { userEnteredValue: { stringValue: part.partNum || '' } },
+      { userEnteredValue: { stringValue: part.price || '' } },
+      qtyCell,
+    ] }], fields: 'userEnteredValue', start: { sheetId: gid, rowIndex: insertAt, columnIndex: 0 } } });
+    requests.push({ repeatCell: { range: { sheetId: gid, startRowIndex: insertAt, endRowIndex: insertAt + 1, startColumnIndex: 0, endColumnIndex: colCount }, cell: { userEnteredFormat: { backgroundColor: { red: 1, green: 1, blue: 1 }, textFormat: { bold: false } } }, fields: 'userEnteredFormat(backgroundColor,textFormat.bold)' } });
+  }
+
+  const writeRes = await fetch(`${BASE}/${ssId}:batchUpdate`, { method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ requests }) });
+  if (!writeRes.ok) {
+    const t = await writeRes.text();
+    throw new Error(`Build sheet write failed (${writeRes.status}): ${t.slice(0, 150)}`);
+  }
+  return true;
+}
+
 // Add a new tab (worksheet) to the spreadsheet.
 export async function addSheetTab(spreadsheetId, title, accessToken) {
   const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {

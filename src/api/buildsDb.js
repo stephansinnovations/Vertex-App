@@ -103,6 +103,20 @@ export async function saveBuildPhases(buildId, phases) {
   try { await buildsEntity.update(buildId, { phases }); } catch { /* non-fatal */ }
 }
 
+// Write a part into the build's Google Sheet (fire-and-forget; the part is already
+// on the phase regardless, so a sheet/auth failure must not block the UI).
+export async function pushPartToBuildSheet(buildSheetUrl, part) {
+  if (!buildSheetUrl || !part?.category) return;
+  try {
+    const { getSheetsAccessToken } = await import('@/api/googleAuth');
+    const { addPartToBuildSheet } = await import('@/api/googleSheets');
+    const token = await getSheetsAccessToken();
+    await addPartToBuildSheet(buildSheetUrl, part, token);
+  } catch (e) {
+    console.warn('Build sheet write skipped:', e?.message);
+  }
+}
+
 // One-time, per-device migration: push this device's localStorage builds (and their
 // phases) into Supabase so they appear everywhere. Deduped by name + van_model so
 // running it on multiple devices doesn't create copies. Open the app once on each

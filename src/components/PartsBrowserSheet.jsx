@@ -9,7 +9,7 @@ function extractSpreadsheetId(url) {
   } catch { return null; }
 }
 
-function PartRow({ part, onAdd, onDecrement, materials, showCategory }) {
+function PartRow({ part, onAdd, onDecrement, materials, showCategory, category, subcategory }) {
   const qty = materials?.find(m => m.from_library && m.name === part.partName)?.qty || 0;
 
   const handleAdd = () => {
@@ -20,6 +20,8 @@ function PartRow({ part, onAdd, onDecrement, materials, showCategory }) {
       supplierLink: part.supplierLink || '',
       price: part.price || '',
       from_library: true,
+      category: category || part._tab || '',       // Parts Library Category (build sheet tab)
+      subcategory: subcategory || part._category || '', // Subcategory (group within the tab)
     });
   };
 
@@ -125,9 +127,8 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
   };
 
   // Flat list of all parts across all loaded categories (for search)
-  const allLoadedParts = Object.values(categoryCache.current)
-    .flat()
-    .flatMap(cat => (cat.parts || []).map(p => ({ ...p, _category: cat.name })));
+  const allLoadedParts = Object.entries(categoryCache.current)
+    .flatMap(([tab, cats]) => cats.flatMap(cat => (cat.parts || []).map(p => ({ ...p, _category: cat.name, _tab: tab }))));
 
   const isSearching = query.trim().length > 0;
   const searchResults = isSearching
@@ -190,7 +191,7 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
               </div>
             ) : (
               searchResults.map((part, i) => (
-                <PartRow key={i} part={part} onAdd={onAdd} onDecrement={onDecrement} materials={materials} showCategory />
+                <PartRow key={i} part={part} onAdd={onAdd} onDecrement={onDecrement} materials={materials} showCategory category={part._tab} subcategory={part._category} />
               ))
             )
           ) : view === 'tabs' ? (
@@ -242,7 +243,7 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
               </div>
             ) : (
               currentParts.map((part, i) => (
-                <PartRow key={i} part={part} onAdd={onAdd} onDecrement={onDecrement} materials={materials} />
+                <PartRow key={i} part={part} onAdd={onAdd} onDecrement={onDecrement} materials={materials} category={selectedTab} subcategory={selectedCategory?.name} />
               ))
             )
           )}

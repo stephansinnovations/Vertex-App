@@ -5,7 +5,7 @@ import {
   ArrowLeft, Plus, AlertTriangle, CheckCircle2, Circle,
   ChevronDown, X, BookOpen, Package, Search, Check
 } from 'lucide-react';
-import { getBuildPhases, saveBuildPhases } from '@/api/buildsDb';
+import { getBuildPhases, saveBuildPhases, pushPartToBuildSheet } from '@/api/buildsDb';
 import { base44 } from '@/api/base44Client';
 
 const BLOCK_REASONS = ['Waiting on Parts', 'Waiting on Customer', 'Waiting on Subcontractor', 'Other'];
@@ -851,10 +851,12 @@ export default function PhaseDetail() {
   const addPhasePart = (incoming) => {
     const cur = phase.parts || [];
     const existing = cur.find(p => p.from_library && p.name === incoming.name);
+    const newQty = existing ? (existing.qty || 1) + 1 : 1;
     const parts = existing
-      ? cur.map(p => p === existing ? { ...p, qty: (p.qty || 1) + 1 } : p)
+      ? cur.map(p => p === existing ? { ...p, qty: newQty } : p)
       : [...cur, { ...incoming, id: `pp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, qty: 1 }];
     updatePhases(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+    pushPartToBuildSheet(buildSheetUrl, { ...incoming, qty: newQty });
   };
   const decrementPhasePart = (name) => {
     const parts = (phase.parts || [])

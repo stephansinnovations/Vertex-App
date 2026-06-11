@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Plus, ChevronRight, Circle, ToggleLeft, ToggleRight, GripVertical, AlertTriangle, Package } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { getBuildPhases, saveBuildPhases } from '@/api/buildsDb';
+import { getBuildPhases, saveBuildPhases, pushPartToBuildSheet } from '@/api/buildsDb';
 import { base44 } from '@/api/base44Client';
 import PartsBrowserSheet from '@/components/PartsBrowserSheet';
 
@@ -74,10 +74,12 @@ export default function BuildPhases() {
     const target = phases.find(p => p.id === phaseId);
     const cur = target?.parts || [];
     const existing = cur.find(p => p.from_library && p.name === incoming.name);
+    const newQty = existing ? (existing.qty || 1) + 1 : 1;
     const parts = existing
-      ? cur.map(p => p === existing ? { ...p, qty: (p.qty || 1) + 1 } : p)
+      ? cur.map(p => p === existing ? { ...p, qty: newQty } : p)
       : [...cur, { ...incoming, id: `pp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, qty: 1 }];
     update(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+    pushPartToBuildSheet(buildSheetUrl, { ...incoming, qty: newQty });
   };
   const decrementPartOnPhase = (phaseId, name) => {
     const target = phases.find(p => p.id === phaseId);
