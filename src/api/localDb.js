@@ -1,6 +1,7 @@
 import sopSeed from './seed-sops.json';
 import workOrderSeed from './seed-workorders.json';
 import { getSheetTabs, getSheetCategories } from './googleSheets';
+import { buildsEntity } from './buildsDb';
 
 // Seed localStorage — bump version string to force re-seed
 const SEED_VERSION = 'v3';
@@ -82,7 +83,8 @@ export const localClient = {
   entities: {
     SOP: makeEntity('SOP'),
     WorkOrder: makeEntity('WorkOrder'),
-    Build: makeEntity('Build'),
+    Build: buildsEntity, // Supabase-backed — syncs across devices
+
     MeetingNote: makeEntity('MeetingNote'),
     SOPPerformance: makeEntity('SOPPerformance'),
     StockItem: makeEntity('StockItem'),

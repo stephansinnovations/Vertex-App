@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { supabase } from '@/api/supabaseClient';
+import { migrateLocalBuilds } from '@/api/buildsDb';
 
 const AuthContext = createContext();
 
@@ -28,6 +29,7 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setIsLoadingProfile(false);
     }
+    migrateLocalBuilds(); // one-time per device: push local builds into Supabase
   };
 
   useEffect(() => {
