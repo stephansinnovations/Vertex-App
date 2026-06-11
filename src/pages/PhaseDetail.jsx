@@ -2,24 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PartsBrowserSheet from '@/components/PartsBrowserSheet';
 import {
-  ArrowLeft, Plus, Clock, AlertTriangle, CheckCircle2, Circle,
-  ChevronDown, X, BookOpen, Package, Search, Check, Trash2
+  ArrowLeft, Plus, AlertTriangle, CheckCircle2, Circle,
+  ChevronDown, X, BookOpen, Package, Search, Check
 } from 'lucide-react';
+import { getBuildPhases, saveBuildPhases } from '@/api/buildsDb';
 
 const BLOCK_REASONS = ['Waiting on Parts', 'Waiting on Customer', 'Waiting on Subcontractor', 'Other'];
 const STATUS_CYCLE = { not_started: 'in_progress', in_progress: 'done', done: 'not_started' };
-
-function loadPhases(buildId) {
-  try {
-    const stored = localStorage.getItem(`buildPhases_${buildId}`);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  return [];
-}
-
-function savePhases(buildId, phases) {
-  localStorage.setItem(`buildPhases_${buildId}`, JSON.stringify(phases));
-}
 
 function loadSOPs() {
   try {
@@ -830,15 +819,23 @@ export default function PhaseDetail() {
   const phaseId = params.get('phaseId');
   const expandTask = params.get('expandTask');
 
-  const [phases, setPhases] = useState(() => loadPhases(buildId));
+  const [phases, setPhases] = useState([]);
+  const [loadingPhases, setLoadingPhases] = useState(true);
   const [allSOPs] = useState(() => loadSOPs());
   const [addingTask, setAddingTask] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setLoadingPhases(true);
+    getBuildPhases(buildId).then(p => { if (active) { setPhases(p); setLoadingPhases(false); } });
+    return () => { active = false; };
+  }, [buildId]);
 
   const phase = phases.find(p => p.id === phaseId);
 
   const updatePhases = (updated) => {
     setPhases(updated);
-    savePhases(buildId, updated);
+    saveBuildPhases(buildId, updated);
   };
 
   const updateTask = (updatedTask) => {
@@ -862,6 +859,12 @@ export default function PhaseDetail() {
     ));
     setAddingTask(false);
   };
+
+  if (loadingPhases) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="w-6 h-6 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
+    </div>
+  );
 
   if (!phase) return (
     <div className="min-h-screen flex items-center justify-center">

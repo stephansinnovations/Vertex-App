@@ -1,35 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, ChevronRight, CheckCircle2, Circle, ToggleLeft, ToggleRight, GripVertical, AlertTriangle, Package } from 'lucide-react';
+import { ArrowLeft, Plus, ChevronRight, Circle, ToggleLeft, ToggleRight, GripVertical, AlertTriangle, Package } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-
-const DEFAULT_PHASES = [
-  { id: 'prep', name: 'Prep & Planning', tasks: [] },
-  { id: 'rust', name: 'Rust Treatment & Priming', tasks: [] },
-  { id: 'insulation', name: 'Insulation', tasks: [] },
-  { id: 'electrical_rough', name: 'Wiring', tasks: [] },
-  { id: 'flooring', name: 'Flooring', tasks: [] },
-  { id: 'walls', name: 'Wall Panels', tasks: [] },
-  { id: 'ceiling', name: 'Ceiling', tasks: [] },
-  { id: 'furniture', name: 'Furniture & Cabinetry', tasks: [] },
-  { id: 'electrical_final', name: 'Electrical Final', tasks: [] },
-  { id: 'plumbing', name: 'Plumbing', tasks: [] },
-  { id: 'qc', name: 'Final QC & Delivery', tasks: [] },
-];
-
-function loadPhases(buildId) {
-  try {
-    const stored = localStorage.getItem(`buildPhases_${buildId}`);
-    if (stored) return JSON.parse(stored);
-  } catch {}
-  const defaults = DEFAULT_PHASES.map(p => ({ ...p, enabled: true }));
-  localStorage.setItem(`buildPhases_${buildId}`, JSON.stringify(defaults));
-  return defaults;
-}
-
-function savePhases(buildId, phases) {
-  localStorage.setItem(`buildPhases_${buildId}`, JSON.stringify(phases));
-}
+import { getBuildPhases, saveBuildPhases } from '@/api/buildsDb';
 
 function phaseProgress(phase) {
   const tasks = phase.tasks || [];
@@ -69,14 +42,20 @@ export default function BuildPhases() {
   const buildId = params.get('id');
   const buildName = params.get('name') || 'Build';
 
-  const [phases, setPhases] = useState(() => loadPhases(buildId));
+  const [phases, setPhases] = useState([]);
   const [editing, setEditing] = useState(false);
   const [newPhaseName, setNewPhaseName] = useState('');
   const [addingPhase, setAddingPhase] = useState(false);
 
+  useEffect(() => {
+    let active = true;
+    getBuildPhases(buildId).then(p => { if (active) setPhases(p); });
+    return () => { active = false; };
+  }, [buildId]);
+
   const update = (updated) => {
     setPhases(updated);
-    savePhases(buildId, updated);
+    saveBuildPhases(buildId, updated);
   };
 
   const togglePhase = (id) => {

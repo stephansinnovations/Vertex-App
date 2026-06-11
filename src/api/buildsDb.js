@@ -49,6 +49,60 @@ export const buildsEntity = {
   },
 };
 
+// ── Phases template + per-build phase storage (synced via the build record) ──
+
+const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+function phase(name, tasks = []) {
+  const id = slug(name);
+  return { id, name, enabled: true, tasks: tasks.map((t, i) => ({ id: `${id}-t${i}`, name: t, status: 'not_started' })) };
+}
+
+export const DEFAULT_PHASES = [
+  phase('Customer meeting', ['Layout', 'Special Designs', 'Materials', 'Exterior components', 'Interior component placement']),
+  phase('Cabinet design', ['Vertex Standards: Cabinet tolerances & standards', 'Designsta: Component placing', 'Design: Electrical Cabinet', 'Design: Plumbing Cabinet', 'Design: Toilet drawer', 'Design: Galley', 'Design: Overheads', "Design: Bench's"]),
+  phase('Cabinets phase 1', ['CNC operation: Cabinets', 'Wood prep', 'Glue up']),
+  phase('Cabinets phase 2', ['Cabinet Sanding', 'Cabinet finishing']),
+  phase('Wall Panels Phase 1', ['CNC operation: Wall panels', 'Panel modifying', 'Fabric Wrapping']),
+  phase('Ceiling Panels Phase 1', ['CNC operation: Ceiling Panels', 'Panel modifying', 'Fabric Wrapping']),
+  phase('Cabinets phase 3', ['Cabinet Hardware install']),
+  phase('Electrical Cabinet phase 1', ['Component placing & Hole Cutting', 'Building Wire harness']),
+  phase('Exterior components Install'),
+  phase('Floor Install phase 1', ['CNC operation: Floor', 'Base Floor installation']),
+  phase('Van wiring'),
+  phase('Electrical Cabinet phase 2', ['Wire harness install', 'Interior Wire prep']),
+  phase('Insulation'),
+  phase('Ceiling panels phase 2', ['Ceiling Install']),
+  phase('Floor install phase 2', ['Cut & Install flooring']),
+  phase('Wall panels'),
+  phase('Cabinets Phase 4'),
+  phase('Electrical Cabinet phase 3', ['Final components install & Wiring']),
+];
+
+function cloneTemplate() { return JSON.parse(JSON.stringify(DEFAULT_PHASES)); }
+
+// Load a build's phases. If the build is on the old/empty template, seed the new
+// standard list once (detected by the presence of the "Customer meeting" phase).
+// Once a build has the new template, edits are preserved.
+export async function getBuildPhases(buildId) {
+  if (!buildId) return cloneTemplate();
+  try {
+    const build = await buildsEntity.get(buildId);
+    const cur = build?.phases;
+    const hasNewTemplate = Array.isArray(cur) && cur.some(p => p.name === 'Customer meeting');
+    if (hasNewTemplate) return cur;
+    const seeded = cloneTemplate();
+    await buildsEntity.update(buildId, { phases: seeded });
+    return seeded;
+  } catch {
+    return cloneTemplate();
+  }
+}
+
+export async function saveBuildPhases(buildId, phases) {
+  if (!buildId) return;
+  try { await buildsEntity.update(buildId, { phases }); } catch { /* non-fatal */ }
+}
+
 // One-time, per-device migration: push this device's localStorage builds (and their
 // phases) into Supabase so they appear everywhere. Deduped by name + van_model so
 // running it on multiple devices doesn't create copies. Open the app once on each
