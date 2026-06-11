@@ -6,6 +6,7 @@ import {
   ChevronDown, X, BookOpen, Package, Search, Check
 } from 'lucide-react';
 import { getBuildPhases, saveBuildPhases } from '@/api/buildsDb';
+import { base44 } from '@/api/base44Client';
 
 const BLOCK_REASONS = ['Waiting on Parts', 'Waiting on Customer', 'Waiting on Subcontractor', 'Other'];
 const STATUS_CYCLE = { not_started: 'in_progress', in_progress: 'done', done: 'not_started' };
@@ -821,21 +822,60 @@ export default function PhaseDetail() {
 
   const [phases, setPhases] = useState([]);
   const [loadingPhases, setLoadingPhases] = useState(true);
+  const [buildSheetUrl, setBuildSheetUrl] = useState('');
   const [allSOPs] = useState(() => loadSOPs());
   const [addingTask, setAddingTask] = useState(false);
+  const [phasePartsOpen, setPhasePartsOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
     setLoadingPhases(true);
-    getBuildPhases(buildId).then(p => { if (active) { setPhases(p); setLoadingPhases(false); } });
+    Promise.all([getBuildPhases(buildId), base44.entities.Build.get(buildId)]).then(([p, b]) => {
+      if (!active) return;
+      setPhases(p);
+      setBuildSheetUrl(b?.build_sheet_url || '');
+      setLoadingPhases(false);
+    });
     return () => { active = false; };
   }, [buildId]);
 
+  const hasBuildSheet = !!buildSheetUrl.trim();
   const phase = phases.find(p => p.id === phaseId);
 
   const updatePhases = (updated) => {
     setPhases(updated);
     saveBuildPhases(buildId, updated);
+  };
+
+  // Parts attached directly to this phase (separate from task parts).
+  const addPhasePart = (incoming) => {
+    const cur = phase.parts || [];
+    const existing = cur.find(p => p.from_library && p.name === incoming.name);
+    const parts = existing
+      ? cur.map(p => p === existing ? { ...p, qty: (p.qty || 1) + 1 } : p)
+      : [...cur, { ...incoming, id: `pp_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`, qty: 1 }];
+    updatePhases(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+  };
+  const decrementPhasePart = (name) => {
+    const parts = (phase.parts || [])
+      .map(p => (p.from_library && p.name === name) ? { ...p, qty: (p.qty || 1) - 1 } : p)
+      .filter(p => (p.qty || 0) > 0);
+    updatePhases(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+  };
+
+  // All parts in this phase: direct phase parts + parts on its tasks (merged by name).
+  const aggregatedParts = () => {
+    const map = new Map();
+    const push = (p) => {
+      const key = (p.name || '').trim().toLowerCase();
+      if (!key) return;
+      const ex = map.get(key);
+      if (ex) ex.qty += (p.qty || 1);
+      else map.set(key, { name: p.name, supplier: p.supplier, supplierLink: p.supplierLink, partNum: p.partNum, price: p.price, qty: p.qty || 1 });
+    };
+    (phase?.parts || []).forEach(push);
+    (phase?.tasks || []).forEach(t => (t.parts || []).forEach(push));
+    return [...map.values()];
   };
 
   const updateTask = (updatedTask) => {
@@ -904,6 +944,21 @@ export default function PhaseDetail() {
             {totalEst > 0 && <span> · {totalEst}h est{totalActual > 0 ? ` / ${totalActual}h actual` : ''}</span>}
           </p>
         </div>
+        {hasBuildSheet ? (
+          <button
+            onClick={() => setPhasePartsOpen(true)}
+            className="flex-shrink-0 flex items-center gap-1.5 bg-white text-black text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add part
+          </button>
+        ) : (
+          <button
+            onClick={() => navigate(`/BuildSheet?id=${buildId}&name=${encodeURIComponent(buildName)}`)}
+            className="flex-shrink-0 text-xs text-gray-500 hover:text-white underline underline-offset-2"
+          >
+            Link a build sheet to add parts
+          </button>
+        )}
       </div>
 
       {/* Progress bar */}
@@ -912,6 +967,38 @@ export default function PhaseDetail() {
           <div className="h-1 bg-white transition-all duration-500" style={{ width: `${(done / tasks.length) * 100}%` }} />
         </div>
       )}
+
+      {/* Parts in this phase */}
+      {(() => {
+        const parts = aggregatedParts();
+        if (parts.length === 0) return null;
+        return (
+          <div className="px-4 pt-4">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b border-zinc-800">
+                <Package className="w-4 h-4 text-gray-400" />
+                <span className="text-sm font-semibold text-white">Parts</span>
+                <span className="text-xs text-gray-500">{parts.length}</span>
+              </div>
+              {parts.map((p, i) => (
+                <div key={i} className="flex items-center justify-between px-4 py-2.5 border-b border-zinc-900 last:border-b-0">
+                  <div className="min-w-0">
+                    <span className="text-white text-sm">{p.name}</span>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      {p.supplierLink ? (
+                        <a href={p.supplierLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs underline underline-offset-2">{p.supplier || 'Link'}</a>
+                      ) : p.supplier ? <span className="text-gray-500 text-xs">{p.supplier}</span> : null}
+                      {p.partNum && <span className="text-gray-400 font-mono text-xs">{p.partNum}</span>}
+                      {p.price && <span className="text-gray-400 text-xs">{p.price}</span>}
+                    </div>
+                  </div>
+                  <span className="text-gray-300 text-sm font-semibold flex-shrink-0">×{p.qty}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Tasks */}
       <div className="flex-1 px-4 py-4 space-y-2">
@@ -938,6 +1025,15 @@ export default function PhaseDetail() {
           </button>
         )}
       </div>
+
+      {phasePartsOpen && (
+        <PartsBrowserSheet
+          materials={(phase.parts || []).filter(p => p.from_library)}
+          onAdd={addPhasePart}
+          onDecrement={decrementPhasePart}
+          onClose={() => setPhasePartsOpen(false)}
+        />
+      )}
     </div>
   );
 }
