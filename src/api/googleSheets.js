@@ -36,6 +36,39 @@ export async function getSheetTabs(spreadsheetId) {
   return { data: { tabs } };
 }
 
+export function extractSpreadsheetId(url) {
+  if (!url) return null;
+  const m = String(url).match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return m ? m[1] : null;
+}
+
+// Read a spreadsheet's tab titles using the user's OAuth token (works on private sheets).
+async function getTabsWithToken(spreadsheetId, accessToken) {
+  const res = await fetch(`${BASE}/${spreadsheetId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Could not read the build sheet (${res.status}). Make sure your Google account can edit it.`);
+  const data = await res.json();
+  return (data.sheets || []).map(s => s.properties.title);
+}
+
+// Mirror the Parts Library master sheet's Category tabs into a build sheet (tabs
+// only — no subcategories or parts). Adds any missing tabs; leaves existing alone.
+export async function syncBuildSheetTabs(masterUrl, buildUrl, accessToken) {
+  const masterId = extractSpreadsheetId(masterUrl);
+  const buildSheetId = extractSpreadsheetId(buildUrl);
+  if (!masterId) throw new Error('No Parts Library master sheet is linked (set it in Settings).');
+  if (!buildSheetId) throw new Error('This build has no valid Google Sheet URL.');
+
+  const masterTabs = (await getSheetTabs(masterId)).data.tabs || [];
+  const buildTabs = await getTabsWithToken(buildSheetId, accessToken);
+  const existing = new Set(buildTabs.map(t => t.trim().toLowerCase()));
+  const toAdd = masterTabs.filter(t => !existing.has(t.trim().toLowerCase()));
+
+  for (const name of toAdd) {
+    await addSheetTab(buildSheetId, name, accessToken);
+  }
+  return { added: toAdd.length, total: masterTabs.length };
+}
+
 // Add a new tab (worksheet) to the spreadsheet.
 export async function addSheetTab(spreadsheetId, title, accessToken) {
   const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ExternalLink, Settings as SettingsIcon, Check, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Settings as SettingsIcon, Check, X, RefreshCw } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { syncBuildSheetTabs } from '@/api/googleSheets';
+import { getSheetsAccessToken } from '@/api/googleAuth';
+import { getSetting } from '@/api/appSettings';
 
 export default function BuildSheet() {
   const navigate = useNavigate();
@@ -14,6 +17,27 @@ export default function BuildSheet() {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
+
+  // Mirror the Parts Library Category tabs into this build's sheet.
+  const syncTabs = async (targetUrl) => {
+    if (!targetUrl) return;
+    setSyncing(true);
+    setSyncStatus('');
+    try {
+      const masterUrl = await getSetting('masterSheetUrl');
+      const token = await getSheetsAccessToken();
+      const r = await syncBuildSheetTabs(masterUrl, targetUrl, token);
+      setSyncStatus(r.added > 0
+        ? `Added ${r.added} category tab${r.added === 1 ? '' : 's'} (${r.total} total).`
+        : `All ${r.total} category tabs already present.`);
+    } catch (e) {
+      setSyncStatus(e.message || 'Could not sync category tabs.');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -47,6 +71,7 @@ export default function BuildSheet() {
     } catch { /* non-fatal */ }
     setSaving(false);
     setEditing(false);
+    if (draft.trim()) syncTabs(draft.trim()); // set up the Category tabs in the new sheet
   };
 
   return (
@@ -64,6 +89,13 @@ export default function BuildSheet() {
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {url && (
+            <button onClick={() => syncTabs(url)} disabled={syncing}
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm px-3 py-1.5 rounded hover:bg-zinc-800 disabled:opacity-50"
+              title="Add the Parts Library Category tabs to this sheet">
+              <RefreshCw className={`w-4 h-4 ${syncing ? 'animate-spin' : ''}`} /> {syncing ? 'Syncing…' : 'Sync tabs'}
+            </button>
+          )}
+          {url && (
             <a href={url} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors text-sm px-3 py-1.5 rounded hover:bg-zinc-800">
               <ExternalLink className="w-4 h-4" /> Open
@@ -77,6 +109,12 @@ export default function BuildSheet() {
           </button>
         </div>
       </div>
+
+      {syncStatus && (
+        <div className="bg-zinc-900/60 border-b border-zinc-800 px-6 py-2">
+          <p className="text-xs text-gray-400">{syncStatus}</p>
+        </div>
+      )}
 
       {/* Per-build settings editor */}
       {editing && (
