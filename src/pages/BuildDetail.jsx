@@ -1,9 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, Package, Users, FileText, Settings, Trash2, GripVertical, Check, CheckSquare } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Package, Users, FileText, Settings, Trash2, GripVertical, Check, CheckSquare, FileSpreadsheet } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
-import { motion } from 'framer-motion';
 import LongPressRow from '@/components/LongPressRow';
 
 
@@ -133,22 +132,30 @@ export default function BuildDetail() {
 
       <div className="max-w-2xl mx-auto">
         {/* Header */}
-        <div className="mb-6 flex items-center gap-4">
+        <div className="mb-6 flex items-center gap-3">
           <button onClick={() => navigate('/Builds')} className="text-gray-400 hover:text-white transition-colors flex-shrink-0">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          {editing ? (
-            <input
-              ref={nameInputRef}
-              value={buildNameValue}
-              onChange={e => setBuildNameValue(e.target.value)}
-              onBlur={commitBuildRename}
-              onKeyDown={e => { if (e.key === 'Enter') { commitBuildRename(); nameInputRef.current?.blur(); } if (e.key === 'Escape') { setBuildNameValue(buildName); nameInputRef.current?.blur(); } }}
-              className="flex-1 text-4xl font-bold text-white tracking-tight bg-transparent border-b-2 border-zinc-600 focus:border-white focus:outline-none pb-1"
-            />
-          ) : (
-            <h1 className="text-4xl font-bold text-white tracking-tight">{buildNameValue}</h1>
-          )}
+          <div className="flex-1 min-w-0">
+            {editing ? (
+              <input
+                ref={nameInputRef}
+                value={buildNameValue}
+                onChange={e => setBuildNameValue(e.target.value)}
+                onBlur={commitBuildRename}
+                onKeyDown={e => { if (e.key === 'Enter') { commitBuildRename(); nameInputRef.current?.blur(); } if (e.key === 'Escape') { setBuildNameValue(buildName); nameInputRef.current?.blur(); } }}
+                className="w-full text-4xl font-bold text-white tracking-tight bg-transparent border-b-2 border-zinc-600 focus:border-white focus:outline-none pb-1"
+              />
+            ) : (
+              <h1 className="text-4xl font-bold text-white tracking-tight truncate">{buildNameValue}</h1>
+            )}
+          </div>
+          <button
+            onClick={() => navigate(`/BuildSheet?id=${buildId}&name=${encodeURIComponent(buildName)}`)}
+            className="flex-shrink-0 flex items-center gap-2 bg-white text-black font-semibold text-sm px-3 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-green-700" /> Build Sheet
+          </button>
         </div>
 
         {/* Folders */}

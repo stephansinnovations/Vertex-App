@@ -8,6 +8,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import AdminRoute from '@/components/AdminRoute';
 import { BackgroundProvider } from '@/lib/BackgroundContext';
+import BuildSheet from './pages/BuildSheet';
 import { ShortcutProvider } from '@/lib/ShortcutContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { ThemeProvider } from '@/lib/ThemeContext';
@@ -104,6 +105,7 @@ const AuthenticatedApp = () => {
       <Route path="/StockLocation" element={<StockLocation />} />
       <Route path="/GeminiScanner" element={<GeminiScanner />} />
       <Route path="/InventoryIdeas" element={<InventoryIdeas />} />
+      <Route path="/BuildSheet" element={<BuildSheet />} />
       <Route path="/Contacts" element={<Contacts />} />
       <Route path="/BuildWorkOrder" element={<BuildWorkOrder />} />
       <Route path="/Profile" element={<Profile />} />

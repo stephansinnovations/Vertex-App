@@ -20,6 +20,7 @@ export default function Builds() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState('');
   const [newVanModel, setNewVanModel] = useState('');
+  const [newSheetUrl, setNewSheetUrl] = useState('');
 
   const { data: user } = useQuery({
     queryKey: ['user'],
@@ -60,18 +61,19 @@ export default function Builds() {
   };
 
   const createMutation = useMutation({
-    mutationFn: ({ name, van_model }) => base44.entities.Build.create({ name, van_model, company_id: user.company_id }),
+    mutationFn: ({ name, van_model, build_sheet_url }) => base44.entities.Build.create({ name, van_model, build_sheet_url, company_id: user.company_id }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['builds'] });
       setDialogOpen(false);
       setNewName('');
       setNewVanModel('');
+      setNewSheetUrl('');
     },
   });
 
   const handleCreate = () => {
-    if (!newName.trim()) return;
-    createMutation.mutate({ name: newName.trim(), van_model: newVanModel });
+    if (!newName.trim() || !newSheetUrl.trim()) return;
+    createMutation.mutate({ name: newName.trim(), van_model: newVanModel, build_sheet_url: newSheetUrl.trim() });
   };
 
   return (
@@ -180,12 +182,20 @@ export default function Builds() {
               <option value="Promaster 159">Promaster 159</option>
               <option value="Other">Other</option>
             </select>
+            <input
+              type="text"
+              value={newSheetUrl}
+              onChange={(e) => setNewSheetUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+              placeholder="Build sheet — Google Sheet URL (required)"
+              className="w-full bg-black border border-zinc-700 rounded px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500"
+            />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setNewName('')} className="bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700">Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => { setNewName(''); setNewSheetUrl(''); }} className="bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCreate}
-              disabled={createMutation.isPending}
+              disabled={createMutation.isPending || !newName.trim() || !newSheetUrl.trim()}
               className="bg-white text-black hover:bg-gray-200"
             >
               {createMutation.isPending ? 'Creating...' : 'Create'}
