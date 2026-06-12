@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Search, ArrowLeft, Plus, Folder, ExternalLink } from 'lucide-react';
-import { getSheetTabs, getSheetCategories } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory } from '@/api/googleSheets';
+import { getSheetsAccessToken } from '@/api/googleAuth';
 
 function extractSpreadsheetId(url) {
   try {
@@ -74,6 +75,42 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
 
   const [query, setQuery] = useState('');
   const categoryCache = useRef({});
+
+  // "Add new part" (writes to the master sheet + adds to the phase via onAdd)
+  const [addingNew, setAddingNew] = useState(false);
+  const [newForm, setNewForm] = useState({ name: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+  const [savingNew, setSavingNew] = useState(false);
+  const [newErr, setNewErr] = useState(null);
+
+  const submitNew = async () => {
+    if (!newForm.name.trim() || savingNew || !selectedTab || !selectedCategory) return;
+    setSavingNew(true);
+    setNewErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      const p = {
+        partName: newForm.name.trim(), supplier: newForm.supplier.trim(),
+        supplierLink: newForm.supplierLink.trim(), partNum: newForm.partNum.trim(), price: newForm.price.trim(),
+      };
+      await addPartToCategory(spreadsheetId, selectedTab, selectedCategory.name, p, token);
+      onAdd({
+        name: p.partName, supplier: p.supplier, supplierLink: p.supplierLink, partNum: p.partNum, price: p.price,
+        from_library: true, category: selectedTab, subcategory: selectedCategory.name,
+      });
+      delete categoryCache.current[selectedTab];
+      const res = await getSheetCategories(spreadsheetId, selectedTab);
+      const cats = res.data.categories || [];
+      categoryCache.current[selectedTab] = cats;
+      setCategories(cats);
+      setSelectedCategory(cats.find(c => c.name === selectedCategory.name) || selectedCategory);
+      setNewForm({ name: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+      setAddingNew(false);
+    } catch (e) {
+      setNewErr(e.message || 'Could not add part');
+    } finally {
+      setSavingNew(false);
+    }
+  };
 
   useEffect(() => {
     const url = localStorage.getItem('masterSheetUrl');
@@ -237,15 +274,49 @@ export default function PartsBrowserSheet({ materials, onAdd, onDecrement, onClo
               </div>
             )
           ) : (
-            currentParts.length === 0 ? (
-              <div className="px-4 py-10 text-center">
-                <p className="text-gray-500 text-sm">No parts in this category</p>
-              </div>
-            ) : (
-              currentParts.map((part, i) => (
+            <>
+              {currentParts.length === 0 && (
+                <div className="px-4 py-8 text-center">
+                  <p className="text-gray-500 text-sm">No parts in this category yet</p>
+                </div>
+              )}
+              {currentParts.map((part, i) => (
                 <PartRow key={i} part={part} onAdd={onAdd} onDecrement={onDecrement} materials={materials} category={selectedTab} subcategory={selectedCategory?.name} />
-              ))
-            )
+              ))}
+              <div className="p-4 border-t border-zinc-800">
+                {addingNew ? (
+                  <div className="space-y-2">
+                    <input value={newForm.name} autoFocus
+                      onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))}
+                      onKeyDown={e => { if (e.key === 'Enter') submitNew(); }}
+                      placeholder="Part name *"
+                      className="w-full bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input value={newForm.supplier} onChange={e => setNewForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier"
+                        className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                      <input value={newForm.price} onChange={e => setNewForm(f => ({ ...f, price: e.target.value }))} placeholder="Price"
+                        className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                      <input value={newForm.partNum} onChange={e => setNewForm(f => ({ ...f, partNum: e.target.value }))} placeholder="Part #"
+                        className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                      <input value={newForm.supplierLink} onChange={e => setNewForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="Link https://…"
+                        className="bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder:text-gray-600 text-sm focus:outline-none focus:border-zinc-500" />
+                    </div>
+                    {newErr && <p className="text-red-400 text-xs">{newErr}</p>}
+                    <div className="flex items-center gap-2">
+                      <button onClick={submitNew} disabled={!newForm.name.trim() || savingNew}
+                        className="flex-1 bg-white text-black text-sm font-semibold py-2 rounded-lg disabled:opacity-40">
+                        {savingNew ? 'Adding…' : 'Add to library + phase'}
+                      </button>
+                      <button onClick={() => { setAddingNew(false); setNewErr(null); }} className="text-gray-400 hover:text-white px-2"><X className="w-4 h-4" /></button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingNew(true)} className="flex items-center gap-2 text-gray-400 hover:text-white text-sm transition-colors">
+                    <Plus className="w-4 h-4" /> Add new part to {selectedCategory?.name}
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
 

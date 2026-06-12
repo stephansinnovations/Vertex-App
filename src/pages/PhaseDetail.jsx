@@ -304,7 +304,7 @@ function AddTaskPanel({ allSOPs, onAdd, onCancel }) {
 }
 
 // ── Task Row ─────────────────────────────────────────────────────────────────
-function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate, initialExpanded = false }) {
+function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate, initialExpanded = false, buildSheetUrl = '' }) {
   const [expanded, setExpanded] = useState(initialExpanded);
   const [showBlockMenu, setShowBlockMenu] = useState(false);
   const [showSOPPicker, setShowSOPPicker] = useState(false);
@@ -429,17 +429,26 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate, initialExpa
   const addLibraryPart = (partData) => {
     const currentParts = task.parts || [];
     const existingIdx = currentParts.findIndex(p => p.name.toLowerCase() === partData.name.toLowerCase());
+    let newQty;
     if (existingIdx >= 0) {
+      newQty = (currentParts[existingIdx].qty || 1) + 1;
       const updated = [...currentParts];
-      updated[existingIdx] = { ...updated[existingIdx], qty: (updated[existingIdx].qty || 1) + 1 };
+      updated[existingIdx] = { ...updated[existingIdx], qty: newQty, category: partData.category, subcategory: partData.subcategory, supplierLink: partData.supplierLink, partNum: partData.partNum, price: partData.price };
       onUpdate({ ...task, parts: updated });
     } else {
+      newQty = 1;
       onUpdate({
         ...task,
         parts: [...currentParts, {
           id: `lib_${Date.now()}_${Math.random()}`,
           name: partData.name,
           note: partData.supplier || '',
+          supplier: partData.supplier || '',
+          supplierLink: partData.supplierLink || '',
+          partNum: partData.partNum || '',
+          price: partData.price || '',
+          category: partData.category || '',
+          subcategory: partData.subcategory || '',
           qty: 1,
           sop_qtys: {},
           from_sop: null,
@@ -449,6 +458,8 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate, initialExpa
         }],
       });
     }
+    // Every part under phases/tasks also goes to the build sheet.
+    pushPartToBuildSheet(buildSheetUrl, { ...partData, qty: newQty });
   };
 
   const incrementPart = (partId) => {
@@ -467,14 +478,19 @@ function TaskRow({ task, onUpdate, onDelete, allSOPs = [], navigate, initialExpa
     const currentParts = task.parts || [];
     const existingIdx = currentParts.findIndex(p => p.name.toLowerCase() === partName.toLowerCase());
     if (existingIdx < 0) return;
-    const current = currentParts[existingIdx].qty || 1;
-    if (current <= 1) {
+    const part = currentParts[existingIdx];
+    const newQty = (part.qty || 1) - 1;
+    if (newQty <= 0) {
       onUpdate({ ...task, parts: currentParts.filter((_, i) => i !== existingIdx) });
     } else {
       const updated = [...currentParts];
-      updated[existingIdx] = { ...updated[existingIdx], qty: current - 1 };
+      updated[existingIdx] = { ...updated[existingIdx], qty: newQty };
       onUpdate({ ...task, parts: updated });
     }
+    pushPartToBuildSheet(buildSheetUrl, {
+      name: part.name, category: part.category, subcategory: part.subcategory,
+      supplier: part.supplier, supplierLink: part.supplierLink, partNum: part.partNum, price: part.price, qty: newQty,
+    });
   };
 
   const parts = task.parts || [];
@@ -859,10 +875,14 @@ export default function PhaseDetail() {
     pushPartToBuildSheet(buildSheetUrl, { ...incoming, qty: newQty });
   };
   const decrementPhasePart = (name) => {
+    const target = (phase.parts || []).find(p => p.from_library && p.name === name);
+    if (!target) return;
+    const newQty = (target.qty || 1) - 1;
     const parts = (phase.parts || [])
-      .map(p => (p.from_library && p.name === name) ? { ...p, qty: (p.qty || 1) - 1 } : p)
+      .map(p => (p.from_library && p.name === name) ? { ...p, qty: newQty } : p)
       .filter(p => (p.qty || 0) > 0);
     updatePhases(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+    pushPartToBuildSheet(buildSheetUrl, { ...target, qty: newQty });
   };
 
   // All parts in this phase: direct phase parts + parts on its tasks (merged by name).
@@ -1012,7 +1032,7 @@ export default function PhaseDetail() {
         )}
 
         {tasks.map(task => (
-          <TaskRow key={task.id} task={task} onUpdate={updateTask} onDelete={deleteTask} allSOPs={allSOPs} navigate={navigate} initialExpanded={task.id === expandTask} />
+          <TaskRow key={task.id} task={task} onUpdate={updateTask} onDelete={deleteTask} allSOPs={allSOPs} navigate={navigate} initialExpanded={task.id === expandTask} buildSheetUrl={buildSheetUrl} />
         ))}
 
         {addingTask ? (

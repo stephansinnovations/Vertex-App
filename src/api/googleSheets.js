@@ -111,10 +111,18 @@ export async function addPartToBuildSheet(buildSheetUrl, part, accessToken) {
   }
 
   const requests = [];
-  const qtyCell = { userEnteredValue: { numberValue: Number(part.qty) || 1 } };
+  const qty = Number(part.qty) || 0;
+  const qtyCell = { userEnteredValue: { numberValue: qty || 1 } };
 
   if (existingPartRow !== -1) {
-    requests.push({ updateCells: { rows: [{ values: [qtyCell] }], fields: 'userEnteredValue', start: { sheetId: gid, rowIndex: existingPartRow, columnIndex: 4 } } });
+    if (qty <= 0) {
+      // qty fell to zero → remove the part row from the build sheet
+      requests.push({ deleteDimension: { range: { sheetId: gid, dimension: 'ROWS', startIndex: existingPartRow, endIndex: existingPartRow + 1 } } });
+    } else {
+      requests.push({ updateCells: { rows: [{ values: [qtyCell] }], fields: 'userEnteredValue', start: { sheetId: gid, rowIndex: existingPartRow, columnIndex: 4 } } });
+    }
+  } else if (qty <= 0) {
+    return true; // nothing to add
   } else {
     let insertAt;
     if (subHeaderRow === -1) {

@@ -83,10 +83,14 @@ export default function BuildPhases() {
   };
   const decrementPartOnPhase = (phaseId, name) => {
     const target = phases.find(p => p.id === phaseId);
+    const part = (target?.parts || []).find(p => p.from_library && p.name === name);
+    if (!part) return;
+    const newQty = (part.qty || 1) - 1;
     const parts = (target?.parts || [])
-      .map(p => (p.from_library && p.name === name) ? { ...p, qty: (p.qty || 1) - 1 } : p)
+      .map(p => (p.from_library && p.name === name) ? { ...p, qty: newQty } : p)
       .filter(p => (p.qty || 0) > 0);
     update(phases.map(p => p.id === phaseId ? { ...p, parts } : p));
+    pushPartToBuildSheet(buildSheetUrl, { ...part, qty: newQty });
   };
 
   const togglePhase = (id) => {
