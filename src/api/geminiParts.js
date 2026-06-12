@@ -92,6 +92,30 @@ export async function extractPartFromUrl(link, taxonomy = null) {
   };
 }
 
+// Find a product image URL for an existing part (used by the backfill). If the
+// part already has a supplier link, read that page; otherwise Google-search by
+// name/supplier/part#. Returns "" when no real image is found.
+export async function findPartImage({ partName, supplier, partNum, supplierLink } = {}) {
+  const desc = [partName, supplier, partNum].filter(Boolean).join(' ').trim();
+  if (!desc && !supplierLink) return '';
+  const rules = `Return ONLY a JSON object {"imageUrl":"..."} with a direct https URL to the product's `
+    + `main image (one that returns an actual image). NEVER a redirect/tracking URL `
+    + `(no vertexaisearch.cloud.google.com, no grounding-api-redirect, no google.com/url). `
+    + `Use "" if you can't find a real one. No markdown, no commentary.`;
+  const prompt = supplierLink
+    ? `Find the main product image for this item.\nProduct page: ${supplierLink}\nItem: ${desc || '(see page)'}\n${rules}`
+    : `Use Google Search to find the main product image for this van-conversion part: ${desc}\n${rules}`;
+  const tools = supplierLink ? [{ url_context: {} }, { google_search: {} }] : [{ google_search: {} }];
+  const text = await callGemini({
+    contents: [{ parts: [{ text: prompt }] }],
+    tools,
+    generationConfig: { temperature: 0 },
+  });
+  let o = {};
+  try { o = parseJson(text); } catch { return ''; }
+  return cleanLink(o.imageUrl || '', '');
+}
+
 // Identify a part from a photo, determine its function, and find a buy link.
 export async function identifyPartFromImage(base64, mimeType = 'image/jpeg') {
   const text = await callGemini({

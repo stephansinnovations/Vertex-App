@@ -2,9 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Folder, FolderOpen, Plus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
-import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow, getPartRowsForBackfill, writePartImageByRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
-import { extractPartFromUrl, identifyPartFromImage } from '@/api/geminiParts';
+import { extractPartFromUrl, identifyPartFromImage, findPartImage } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -677,6 +677,55 @@ export default function PartsLibrary() {
     } catch { /* ignore */ }
   };
 
+  // Backfill pictures: find a product image (via AI) for every part missing one,
+  // and write it into the sheet's picture column.
+  const [showBackfill, setShowBackfill] = useState(false);
+  const [bfRunning, setBfRunning] = useState(false);
+  const [bfDone, setBfDone] = useState(false);
+  const [bfErr, setBfErr] = useState(null);
+  const [bf, setBf] = useState({ total: 0, done: 0, found: 0, missing: 0, failed: 0, current: '' });
+  const bfCancel = useRef(false);
+
+  const openBackfill = () => { setBfErr(null); setBfDone(false); setBf({ total: 0, done: 0, found: 0, missing: 0, failed: 0, current: '' }); setShowBackfill(true); };
+
+  const runBackfill = async () => {
+    if (bfRunning) return;
+    setBfRunning(true); setBfDone(false); setBfErr(null); bfCancel.current = false;
+    setBf({ total: 0, done: 0, found: 0, missing: 0, failed: 0, current: 'Reading your sheet…' });
+    try {
+      const token = await getSheetsAccessToken();
+      // Phase 1 — gather every part that has no picture yet.
+      const jobs = [];
+      for (const tab of sheetTabs) {
+        if (bfCancel.current) break;
+        try {
+          const { sheetId, parts } = await getPartRowsForBackfill(spreadsheetId, tab, token);
+          parts.forEach(p => { if (!p.imageUrl && p.partName) jobs.push({ ...p, tab, sheetId }); });
+        } catch { /* skip unreadable tab */ }
+      }
+      setBf(s => ({ ...s, total: jobs.length, current: jobs.length ? '' : 'Every part already has a picture 🎉' }));
+
+      // Phase 2 — find an image for each and write it in.
+      let found = 0, missing = 0, failed = 0;
+      for (let i = 0; i < jobs.length; i++) {
+        if (bfCancel.current) break;
+        const job = jobs[i];
+        setBf(s => ({ ...s, done: i, current: job.partName }));
+        try {
+          const img = await findPartImage(job);
+          if (img) { await writePartImageByRow(spreadsheetId, job.sheetId, job.rowIndex, img, token); found++; }
+          else missing++;
+        } catch { failed++; }
+        setBf(s => ({ ...s, done: i + 1, found, missing, failed }));
+      }
+      setBfDone(true);
+    } catch (e) {
+      setBfErr(e.message || 'Backfill failed');
+    } finally {
+      setBfRunning(false);
+    }
+  };
+
   // Add Part flow
   const [showAdd, setShowAdd] = useState(false);
   const [addStarted, setAddStarted] = useState(false); // revealed after "Done" on the link step
@@ -937,12 +986,21 @@ export default function PartsLibrary() {
             <p className="text-gray-400 mt-1">Manage your parts and components</p>
           </div>
           {sheetTabs.length > 0 && (
-            <button
-              onClick={openAdd}
-              className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              <Plus className="w-4 h-4" /> Add Part
-            </button>
+            <>
+              <button
+                onClick={openBackfill}
+                title="Backfill pictures with AI"
+                className="flex items-center justify-center bg-zinc-800 border border-zinc-700 text-gray-300 p-2 rounded-lg hover:bg-zinc-700 hover:text-white transition-colors"
+              >
+                <ImageIcon className="w-4 h-4" />
+              </button>
+              <button
+                onClick={openAdd}
+                className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <Plus className="w-4 h-4" /> Add Part
+              </button>
+            </>
           )}
         </div>
 
@@ -1208,6 +1266,77 @@ export default function PartsLibrary() {
                     <p className="text-gray-600 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>
                   </>
                 )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Backfill pictures modal */}
+      {showBackfill && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => !bfRunning && setShowBackfill(false)} />
+          <div className="relative w-full sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-white flex items-center gap-2"><ImageIcon className="w-5 h-5" /> Backfill pictures</h2>
+              {!bfRunning && (
+                <button onClick={() => setShowBackfill(false)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
+              )}
+            </div>
+
+            {!isGoogleOAuthConfigured() && (
+              <div className="mb-4 flex items-start gap-2 bg-amber-900/20 border border-amber-900/40 rounded-xl px-3 py-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                <p className="text-amber-300 text-xs">Google sign-in isn't configured yet — backfill can't write to the sheet until it is.</p>
+              </div>
+            )}
+
+            {!bfRunning && !bfDone && (
+              <>
+                <p className="text-gray-300 text-sm mb-2">AI finds a product photo for every part that doesn't have one yet and writes it into your sheet's picture column.</p>
+                <p className="text-gray-500 text-xs mb-5">This makes one AI call per part, so a big library can take a few minutes. You can cancel anytime — anything found so far is already saved.</p>
+                {bfErr && <p className="text-red-400 text-xs mb-3">{bfErr}</p>}
+                <button onClick={runBackfill}
+                  className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4" /> Start backfill
+                </button>
+              </>
+            )}
+
+            {bfRunning && (
+              <>
+                <div className="mb-3">
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5">
+                    <span>{bf.total ? `${bf.done} / ${bf.total}` : 'Scanning…'}</span>
+                    <span>{bf.found} found · {bf.missing} none · {bf.failed} failed</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-zinc-800 overflow-hidden">
+                    <div className="h-full bg-violet-500 transition-all duration-300"
+                      style={{ width: bf.total ? `${Math.round((bf.done / bf.total) * 100)}%` : '0%' }} />
+                  </div>
+                </div>
+                <p className="text-gray-300 text-sm truncate mb-5"><Sparkles className="w-3.5 h-3.5 inline text-violet-300 animate-pulse mr-1" />{bf.current || 'Working…'}</p>
+                <button onClick={() => { bfCancel.current = true; }}
+                  className="w-full bg-zinc-800 text-white py-2.5 rounded-xl font-medium hover:bg-zinc-700 transition-colors">
+                  Cancel
+                </button>
+              </>
+            )}
+
+            {bfDone && (
+              <>
+                <div className="text-center py-2 mb-4">
+                  <Check className="w-10 h-10 text-green-400 mx-auto mb-2" />
+                  <p className="text-white font-semibold">
+                    {bf.found} picture{bf.found === 1 ? '' : 's'} added
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1">{bf.missing} with no image found · {bf.failed} failed</p>
+                </div>
+                {bfErr && <p className="text-red-400 text-xs mb-3">{bfErr}</p>}
+                <button onClick={() => window.location.reload()}
+                  className="w-full bg-white text-black font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors">
+                  Reload to see pictures
+                </button>
               </>
             )}
           </div>

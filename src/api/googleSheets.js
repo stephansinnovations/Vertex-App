@@ -535,6 +535,59 @@ export async function deletePartRow(spreadsheetId, sheetName, categoryName, part
   return true;
 }
 
+// Read a tab and return every part row WITH its row index, so a backfill can
+// write images straight to the right rows. Same color parsing as the reader.
+export async function getPartRowsForBackfill(spreadsheetId, sheetName, accessToken) {
+  const range = encodeURIComponent(sheetName);
+  const readRes = await fetch(`${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read sheet (${readRes.status})`);
+  const data = await readRes.json();
+  const sheet = data.sheets?.[0];
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId == null) throw new Error('Category not found');
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+
+  const parts = [];
+  let inCategory = false;
+  let category = '';
+  for (let i = 0; i < rows.length; i++) {
+    const cells = rows[i].values ?? [];
+    const first = cells[0];
+    const bg = first?.effectiveFormat?.backgroundColor;
+    const val = first?.formattedValue?.trim();
+    if (!val) continue;
+    if (isGrayBackground(bg)) continue;
+    if (isDarkBackground(bg)) { inCategory = true; category = val; continue; }
+    if (!inCategory) continue;
+    parts.push({
+      rowIndex: i,
+      category,
+      partName: val,
+      supplier: cells[1]?.formattedValue?.trim() ?? '',
+      supplierLink: cells[1]?.hyperlink ?? null,
+      partNum: cells[2]?.formattedValue?.trim() ?? '',
+      price: cells[3]?.formattedValue?.trim() ?? '',
+      imageUrl: extractImageUrl(cells[4]),
+    });
+  }
+  return { sheetId, parts };
+}
+
+// Write a single part's picture into column E of a known row (used by backfill).
+// Only touches column E, so other rows' indices never shift during the run.
+export async function writePartImageByRow(spreadsheetId, sheetId, rowIndex, imageUrl, accessToken) {
+  const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ updateCells: { rows: [{ values: [imageCellFor(imageUrl)] }], fields: 'userEnteredValue', start: { sheetId, rowIndex, columnIndex: 4 } } }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Image write failed (${res.status}): ${t.slice(0, 120)}`);
+  }
+  return true;
+}
+
 export async function getSheetCategories(spreadsheetId, sheetName) {
   const range = encodeURIComponent(sheetName);
   const url = `${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}&key=${API_KEY}`;
