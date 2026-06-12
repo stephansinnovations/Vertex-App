@@ -28,6 +28,30 @@ function isGrayBackground(color) {
   return maxDiff < 0.1 && luminance > 0.2 && luminance < 0.95;
 }
 
+// Pull a usable image URL out of a cell. Supports an =IMAGE("url") formula
+// (how we write pictures so they render in the sheet), a hyperlink, or a plain URL.
+function extractImageUrl(cell) {
+  if (!cell) return null;
+  const formula = cell.userEnteredValue?.formulaValue || cell.effectiveValue?.formulaValue;
+  if (formula) {
+    const m = String(formula).match(/=image\(\s*"([^"]+)"/i);
+    if (m) return m[1];
+  }
+  if (cell.hyperlink) return cell.hyperlink;
+  const v = cell.formattedValue?.trim();
+  if (v && /^https?:\/\//i.test(v)) return v;
+  return null;
+}
+
+// Build the picture cell for a part row: an =IMAGE() formula so the sheet shows
+// the thumbnail, or an empty cell when there's no image.
+function imageCellFor(imageUrl) {
+  const url = (imageUrl || '').trim().replace(/"/g, '');
+  return url
+    ? { userEnteredValue: { formulaValue: `=IMAGE("${url}")` } }
+    : { userEnteredValue: { stringValue: '' } };
+}
+
 export async function getSheetTabs(spreadsheetId) {
   const res = await fetch(`${BASE}/${spreadsheetId}?key=${API_KEY}`);
   if (!res.ok) throw new Error(`Sheets API error: ${res.status}`);
@@ -274,6 +298,7 @@ export async function updatePartRow(spreadsheetId, sheetName, categoryName, orig
     supplierCell,
     { userEnteredValue: { stringValue: updated.partNum || '' } },
     { userEnteredValue: { stringValue: updated.price || '' } },
+    imageCellFor(updated.imageUrl), // col E: picture
   ];
 
   const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
@@ -413,6 +438,7 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
     supplierCell,
     { userEnteredValue: { stringValue: part.partNum || '' } },
     { userEnteredValue: { stringValue: part.price || '' } },
+    imageCellFor(part.imageUrl), // col E: picture
   ];
 
   const requests = [
@@ -547,6 +573,7 @@ export async function getSheetCategories(spreadsheetId, sheetName) {
         supplierLink: hyperlink,
         partNum: get(2),
         price: get(3),
+        imageUrl: extractImageUrl(cells[4]),
       });
     }
   }

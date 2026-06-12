@@ -63,8 +63,8 @@ export async function extractPartFromUrl(link, taxonomy = null) {
       + `The subcategory MUST belong to the category you chose. If nothing fits, use "".`
     : '';
   const keys = hasTax
-    ? `partName, supplier, partNum, price, category, subcategory`
-    : `partName, supplier, partNum, price`;
+    ? `partName, supplier, partNum, price, imageUrl, category, subcategory`
+    : `partName, supplier, partNum, price, imageUrl`;
   const text = await callGemini({
     contents: [{
       parts: [{
@@ -72,6 +72,8 @@ export async function extractPartFromUrl(link, taxonomy = null) {
           + taxBlock
           + `\nReturn ONLY a JSON object with keys: ${keys} `
           + `(all strings; use "" if unknown). "supplier" is the store or brand selling it. `
+          + `"imageUrl" is a direct URL to the product's main image (https://… that returns an image); `
+          + `use "" if you can't find a real one. `
           + `No markdown, no commentary.`,
       }],
     }],
@@ -84,6 +86,7 @@ export async function extractPartFromUrl(link, taxonomy = null) {
     supplier: o.supplier || '',
     partNum: o.partNum || '',
     price: o.price || '',
+    imageUrl: cleanLink(o.imageUrl || '', ''),
     category: o.category || '',
     subcategory: o.subcategory || '',
   };
@@ -98,11 +101,12 @@ export async function identifyPartFromImage(base64, mimeType = 'image/jpeg') {
           text: `You are a parts identification assistant for a van conversion shop. `
             + `Identify the part in this image, determine its function, and use Google Search to `
             + `find a real product page where it can be purchased. `
-            + `Return ONLY a JSON object with keys: partName, supplier, partNum, price, supplierLink, "function" `
+            + `Return ONLY a JSON object with keys: partName, supplier, partNum, price, supplierLink, imageUrl, "function" `
             + `(all strings; use "" if unknown). "supplier" is the store or brand at supplierLink. `
             + `supplierLink MUST be a real, directly-clickable destination URL to a product or store page — `
             + `NEVER a redirect or tracking URL (no vertexaisearch.cloud.google.com, no grounding-api-redirect, `
             + `no google.com/url links). If you can't find a real product URL, leave supplierLink as "". `
+            + `"imageUrl" is a direct URL to a product image (https://… returning an image); use "" if none. `
             + `No markdown, no commentary.`,
         },
         { inline_data: { mime_type: mimeType, data: base64 } },
@@ -119,6 +123,7 @@ export async function identifyPartFromImage(base64, mimeType = 'image/jpeg') {
     partNum: o.partNum || '',
     price: o.price || '',
     supplierLink: cleanLink(o.supplierLink || '', [partName, o.supplier].filter(Boolean).join(' ')),
+    imageUrl: cleanLink(o.imageUrl || '', ''),
     function: o.function || '',
   };
 }

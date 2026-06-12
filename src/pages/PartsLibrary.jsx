@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Folder, FolderOpen, Plus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Folder, FolderOpen, Plus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -24,6 +24,21 @@ function loadStock() {
 
 function saveStock(s) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(s));
+}
+
+// A part's picture: medium thumbnail, with a graceful placeholder when there's
+// no image (or the URL fails to load).
+function PartImage({ url, className = 'w-14 h-14' }) {
+  const [err, setErr] = useState(false);
+  if (!url || err) {
+    return (
+      <div className={`${className} rounded-lg bg-zinc-800/70 border border-zinc-800 flex items-center justify-center flex-shrink-0`}>
+        <ImageIcon className="w-5 h-5 text-zinc-600" />
+      </div>
+    );
+  }
+  return <img src={url} alt="" loading="lazy" onError={() => setErr(true)}
+    className={`${className} rounded-lg object-cover bg-zinc-800 border border-zinc-800 flex-shrink-0`} />;
 }
 
 // Long-press (≈500ms) or double-click → fire onEdit. `suppressRef` lets the host
@@ -86,6 +101,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
     setEditForm({
       partName: part.partName || '', supplier: part.supplier || '',
       supplierLink: part.supplierLink || '', partNum: part.partNum || '', price: part.price || '',
+      imageUrl: part.imageUrl || '',
     });
     setEditErr(null);
     setConfirmDelInEdit(false);
@@ -103,6 +119,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
         supplierLink: editForm.supplierLink.trim(),
         partNum: editForm.partNum.trim(),
         price: editForm.price.trim(),
+        imageUrl: editForm.imageUrl.trim(),
       }, token);
       setEditPart(null);
       onChanged && onChanged();
@@ -261,7 +278,10 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
 
             return (
               <div key={i} className="group flex items-center justify-between px-10 py-3 border-b border-zinc-900 last:border-b-0 hover:bg-zinc-800/30 transition-colors gap-4">
-                {/* Left: counter (up / number / down) */}
+                {/* Picture */}
+                <PartImage url={part.imageUrl} />
+
+                {/* Counter (up / number / down) */}
                 <div className="flex flex-col items-center flex-shrink-0">
                   <button onClick={() => handleAddStock(part.partName)} className="text-gray-500 hover:text-white transition-colors -mb-0.5">
                     <ChevronUp className="w-4 h-4" />
@@ -402,7 +422,15 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
             <label className="text-xs text-gray-400 mb-1.5 block">Part link</label>
             <input value={editForm.supplierLink} onChange={e => setEditForm(f => ({ ...f, supplierLink: e.target.value }))}
               placeholder="https://…"
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-5 focus:outline-none focus:border-zinc-500" />
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Picture URL</label>
+            <div className="flex items-center gap-3 mb-5">
+              <PartImage url={editForm.imageUrl.trim()} className="w-14 h-14" />
+              <input value={editForm.imageUrl} onChange={e => setEditForm(f => ({ ...f, imageUrl: e.target.value }))}
+                placeholder="https://…/image.jpg"
+                className="flex-1 bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+            </div>
 
             {editErr && <p className="text-red-400 text-xs mb-3">{editErr}</p>}
 
@@ -657,7 +685,7 @@ export default function PartsLibrary() {
   const [loadingCats, setLoadingCats] = useState(false);
   const [addCategory, setAddCategory] = useState('');
   const pendingSubcatRef = useRef(null); // AI-guessed subcategory, applied once its tab's cats load
-  const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+  const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
   const [saving, setSaving] = useState(false);
   const [addErr, setAddErr] = useState(null);
   const [aiFilling, setAiFilling] = useState(false);
@@ -688,6 +716,7 @@ export default function PartsLibrary() {
         partNum: r.partNum || f.partNum,
         price: r.price || f.price,
         supplierLink: r.supplierLink || f.supplierLink,
+        imageUrl: r.imageUrl || f.imageUrl,
       }));
       setAddStarted(true); // reveal the full form with the identified fields
     } catch (err) {
@@ -723,6 +752,7 @@ export default function PartsLibrary() {
         supplier: r.supplier || f.supplier,
         partNum: r.partNum || f.partNum,
         price: r.price || f.price,
+        imageUrl: r.imageUrl || f.imageUrl,
       }));
       // Preselect the AI's best-matching category/subcategory.
       const matchTab = sheetTabs.find(t => t.toLowerCase() === (r.category || '').toLowerCase());
@@ -776,7 +806,7 @@ export default function PartsLibrary() {
     setAddCategory('');
     setAddCats([]);
     pendingSubcatRef.current = null;
-    setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+    setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
     setShowAdd(true);
   };
 
@@ -839,9 +869,10 @@ export default function PartsLibrary() {
         supplierLink: pForm.supplierLink.trim(),
         partNum: pForm.partNum.trim(),
         price: pForm.price.trim(),
+        imageUrl: pForm.imageUrl.trim(),
       }, token);
       setShowAdd(false);
-      setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+      setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
       // Force the relevant folder to re-fetch by reloading the page's sheet view.
       window.location.reload();
     } catch (e) {
@@ -944,7 +975,8 @@ export default function PartsLibrary() {
               <div className="px-6 py-5 text-center"><p className="text-gray-600 text-sm">No parts match “{search.trim()}”</p></div>
             )}
             {!loadingAll && searchResults.map((p, i) => (
-              <div key={p.tab + p.category + p.partName + i} className="flex items-start justify-between px-6 py-3 border-b border-zinc-900 last:border-b-0 gap-4">
+              <div key={p.tab + p.category + p.partName + i} className="flex items-start px-6 py-3 border-b border-zinc-900 last:border-b-0 gap-3">
+                <PartImage url={p.imageUrl} className="w-12 h-12" />
                 <div className="min-w-0">
                   <span className="text-white text-sm">{p.partName}</span>
                   <div className="mt-0.5 flex items-center gap-2 flex-wrap">
@@ -1157,7 +1189,15 @@ export default function PartsLibrary() {
                     <label className="text-xs text-gray-400 mb-1.5 block">Part link</label>
                     <input value={pForm.supplierLink} onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
                       placeholder="https://…"
-                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-5 focus:outline-none focus:border-zinc-500" />
+                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+                    <label className="text-xs text-gray-400 mb-1.5 block">Picture URL</label>
+                    <div className="flex items-center gap-3 mb-5">
+                      <PartImage url={pForm.imageUrl.trim()} className="w-14 h-14" />
+                      <input value={pForm.imageUrl} onChange={e => setPForm(f => ({ ...f, imageUrl: e.target.value }))}
+                        placeholder="https://…/image.jpg"
+                        className="flex-1 bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+                    </div>
 
                     {addErr && <p className="text-red-400 text-xs mb-3">{addErr}</p>}
 
