@@ -86,7 +86,7 @@ export default function Home() {
         <div className="ios-tab-bar flex items-center justify-around px-6 pt-3"
           style={{ paddingBottom: `calc(1.5rem + env(safe-area-inset-bottom))` }}>
           <NavIcon icon={FileText} label="SOPs" onClick={() => navigate(createPageUrl('SOPList'))} />
-          <NavIcon icon={Package} label="Inventory" onClick={() => navigate('/Inventory')} />
+          <NavIcon icon={Package} label="Inventory" onClick={() => navigate('/PartsLibrary')} />
           <NavIcon icon={Bus} label="Builds" onClick={() => navigate('/Builds')} />
           <NavIcon icon={Users} label="Contacts" onClick={() => navigate('/Contacts')} />
           <NavIcon icon={UserCircle} label="Profile" onClick={() => navigate('/Profile')} />

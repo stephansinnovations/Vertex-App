@@ -49,16 +49,28 @@ async function callGemini(body) {
   return parts.map(p => p.text).filter(Boolean).join('');
 }
 
-// Read a product URL and extract the part fields.
-export async function extractPartFromUrl(link) {
+// Read a product URL and extract the part fields. When `taxonomy` is provided
+// ({ "Category": ["Subcategory", …] }), Gemini also guesses the best-matching
+// category + subcategory in the Parts Library so the Add Part flow can preselect.
+export async function extractPartFromUrl(link, taxonomy = null) {
   if (!link || !/^https?:\/\//i.test(link)) {
     throw new Error('Enter a full product URL (https://…) first.');
   }
+  const hasTax = taxonomy && Object.keys(taxonomy).length > 0;
+  const taxBlock = hasTax
+    ? `\n\nThe Parts Library is organized as Category → Subcategory:\n${JSON.stringify(taxonomy)}\n`
+      + `Pick the single best-matching existing "category" and "subcategory" for this part. `
+      + `The subcategory MUST belong to the category you chose. If nothing fits, use "".`
+    : '';
+  const keys = hasTax
+    ? `partName, supplier, partNum, price, category, subcategory`
+    : `partName, supplier, partNum, price`;
   const text = await callGemini({
     contents: [{
       parts: [{
-        text: `Read this product page and extract the part details:\n${link}\n\n`
-          + `Return ONLY a JSON object with keys: partName, supplier, partNum, price `
+        text: `Read this product page and extract the part details:\n${link}\n`
+          + taxBlock
+          + `\nReturn ONLY a JSON object with keys: ${keys} `
           + `(all strings; use "" if unknown). "supplier" is the store or brand selling it. `
           + `No markdown, no commentary.`,
       }],
@@ -72,6 +84,8 @@ export async function extractPartFromUrl(link) {
     supplier: o.supplier || '',
     partNum: o.partNum || '',
     price: o.price || '',
+    category: o.category || '',
+    subcategory: o.subcategory || '',
   };
 }
 

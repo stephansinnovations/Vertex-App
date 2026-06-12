@@ -174,6 +174,120 @@ export async function addSheetTab(spreadsheetId, title, accessToken) {
   return true;
 }
 
+// Rename a tab (worksheet). Looks up the sheetId by its current title, then
+// updates the title. Used by the inline "edit Category name" in Parts Library.
+export async function renameSheetTab(spreadsheetId, oldTitle, newTitle, accessToken) {
+  const metaRes = await fetch(`${BASE}/${spreadsheetId}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!metaRes.ok) throw new Error(`Could not read spreadsheet (${metaRes.status})`);
+  const meta = await metaRes.json();
+  const sheet = (meta.sheets || []).find(s => s.properties.title === oldTitle);
+  if (!sheet) throw new Error(`Category "${oldTitle}" not found`);
+  const sheetId = sheet.properties.sheetId;
+  const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ updateSheetProperties: { properties: { sheetId, title: newTitle.trim() }, fields: 'title' } }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Rename category failed (${res.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
+// Rename a subcategory (a dark-background header row) in place — only changes the
+// header's text in column A, keeping its formatting so the parser still detects it.
+export async function renameCategory(spreadsheetId, sheetName, oldName, newName, accessToken) {
+  const range = encodeURIComponent(sheetName);
+  const readRes = await fetch(`${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read sheet (${readRes.status})`);
+  const data = await readRes.json();
+  const sheet = data.sheets?.[0];
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId == null) throw new Error('Category not found');
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+
+  const target = oldName.trim().toLowerCase();
+  let rowIndex = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const first = (rows[i].values ?? [])[0];
+    const bg = first?.effectiveFormat?.backgroundColor;
+    const val = first?.formattedValue?.trim();
+    if (!val) continue;
+    if (isGrayBackground(bg)) continue;
+    if (isDarkBackground(bg) && val.toLowerCase() === target) { rowIndex = i; break; }
+  }
+  if (rowIndex === -1) throw new Error(`Subcategory "${oldName}" not found in "${sheetName}"`);
+
+  const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ updateCells: { rows: [{ values: [{ userEnteredValue: { stringValue: newName.trim() } }] }], fields: 'userEnteredValue', start: { sheetId, rowIndex, columnIndex: 0 } } }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Rename subcategory failed (${res.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
+// Update an existing part row in place (cols A–D: name, supplier, part#, price).
+// Locates the row by the ORIGINAL name (+ part# when present) within its category,
+// then overwrites its values. Keeps the row where it is. Requires a write token.
+export async function updatePartRow(spreadsheetId, sheetName, categoryName, original, updated, accessToken) {
+  const range = encodeURIComponent(sheetName);
+  const readRes = await fetch(`${BASE}/${spreadsheetId}?includeGridData=true&ranges=${range}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!readRes.ok) throw new Error(`Could not read sheet (${readRes.status})`);
+  const data = await readRes.json();
+  const sheet = data.sheets?.[0];
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId == null) throw new Error('Category not found');
+  const rows = sheet?.data?.[0]?.rowData ?? [];
+
+  const targetCat = categoryName.trim().toLowerCase();
+  const targetName = (original.partName || '').trim().toLowerCase();
+  const targetNum = (original.partNum || '').trim().toLowerCase();
+  let inCategory = false;
+  let rowIndex = -1;
+  for (let i = 0; i < rows.length; i++) {
+    const first = (rows[i].values ?? [])[0];
+    const bg = first?.effectiveFormat?.backgroundColor;
+    const val = first?.formattedValue?.trim();
+    if (!val) continue;
+    if (isGrayBackground(bg)) continue;
+    if (isDarkBackground(bg)) {
+      if (inCategory) break;
+      if (val.toLowerCase() === targetCat) inCategory = true;
+    } else if (inCategory) {
+      const name = val.toLowerCase();
+      const num = ((rows[i].values ?? [])[2]?.formattedValue?.trim() || '').toLowerCase();
+      if (name === targetName && (!targetNum || num === targetNum)) { rowIndex = i; break; }
+    }
+  }
+  if (rowIndex === -1) throw new Error(`Part "${original.partName}" not found in "${categoryName}"`);
+
+  const supplierCell = updated.supplierLink
+    ? { userEnteredValue: { formulaValue: `=HYPERLINK("${updated.supplierLink}","${(updated.supplier || '').replace(/"/g, '""')}")` } }
+    : { userEnteredValue: { stringValue: updated.supplier || '' } };
+  const rowValues = [
+    { userEnteredValue: { stringValue: updated.partName || '' } },
+    supplierCell,
+    { userEnteredValue: { stringValue: updated.partNum || '' } },
+    { userEnteredValue: { stringValue: updated.price || '' } },
+  ];
+
+  const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ updateCells: { rows: [{ values: rowValues }], fields: 'userEnteredValue', start: { sheetId, rowIndex, columnIndex: 0 } } }] }),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Update part failed (${res.status}): ${t.slice(0, 160)}`);
+  }
+  return true;
+}
+
 // Add a new category (a dark-background header row) at the end of a tab. Copies
 // the format of an existing category header so it matches your layout; if the tab
 // has none yet, applies a default black header style so the parser detects it.

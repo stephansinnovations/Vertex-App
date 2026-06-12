@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Folder, FolderOpen, Plus, Minus, AlertCircle, Check, Disc, X, Sparkles, Camera, Trash2, Search } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Folder, FolderOpen, Plus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
-import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow } from '@/api/googleSheets';
+import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { extractPartFromUrl, identifyPartFromImage } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
@@ -26,6 +26,22 @@ function saveStock(s) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(s));
 }
 
+// Long-press (≈500ms) or double-click → fire onEdit. `suppressRef` lets the host
+// element ignore the click that follows the gesture (e.g. a folder-toggle button).
+// Plain factory (NOT a hook) so it can be called per-row inside a .map().
+let pressTimer = null;
+function editGestureProps(onEdit, suppressRef, ms = 500) {
+  const fire = () => { clearTimeout(pressTimer); if (suppressRef) suppressRef.current = true; onEdit(); };
+  return {
+    onPointerDown: () => { clearTimeout(pressTimer); pressTimer = setTimeout(fire, ms); },
+    onPointerUp: () => clearTimeout(pressTimer),
+    onPointerLeave: () => clearTimeout(pressTimer),
+    onContextMenu: (e) => e.preventDefault(),
+    onDoubleClick: (e) => { e.preventDefault(); fire(); },
+    style: { userSelect: 'none', WebkitTouchCallout: 'none' },
+  };
+}
+
 // Shared builds cache so every CategoryRow doesn't re-fetch
 let buildsCache = null;
 let buildsFetchPromise = null;
@@ -44,13 +60,92 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
   const [builds, setBuilds] = useState(buildsCache || []);
-  const [confirmDel, setConfirmDel] = useState(null); // the part pending deletion
-  const [deleting, setDeleting] = useState(false);
-  const [delErr, setDelErr] = useState(null);
   const [addingPart, setAddingPart] = useState(false);
   const [partForm, setPartForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
   const [savingPart, setSavingPart] = useState(false);
   const [partErr, setPartErr] = useState(null);
+
+  // Inline subcategory-title rename
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(category.name);
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [titleErr, setTitleErr] = useState(null);
+  const suppressToggle = useRef(false);
+  const titleGesture = editGestureProps(() => { setTitleDraft(category.name); setTitleErr(null); setEditingTitle(true); }, suppressToggle);
+
+  // Edit-part popup (also hosts Delete)
+  const [editPart, setEditPart] = useState(null); // the original part being edited
+  const [editForm, setEditForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editErr, setEditErr] = useState(null);
+  const [confirmDelInEdit, setConfirmDelInEdit] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const openEditPart = (part) => {
+    setEditPart(part);
+    setEditForm({
+      partName: part.partName || '', supplier: part.supplier || '',
+      supplierLink: part.supplierLink || '', partNum: part.partNum || '', price: part.price || '',
+    });
+    setEditErr(null);
+    setConfirmDelInEdit(false);
+  };
+
+  const saveEditPart = async () => {
+    if (!editForm.partName.trim() || savingEdit) return;
+    setSavingEdit(true);
+    setEditErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await updatePartRow(spreadsheetId, tab, category.name, editPart, {
+        partName: editForm.partName.trim(),
+        supplier: editForm.supplier.trim(),
+        supplierLink: editForm.supplierLink.trim(),
+        partNum: editForm.partNum.trim(),
+        price: editForm.price.trim(),
+      }, token);
+      setEditPart(null);
+      onChanged && onChanged();
+    } catch (e) {
+      setEditErr(e.message || 'Failed to save part');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteEditPart = async () => {
+    if (!editPart || deleting) return;
+    setDeleting(true);
+    setEditErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await deletePartRow(spreadsheetId, tab, category.name, editPart, token);
+      setEditPart(null);
+      onChanged && onChanged();
+    } catch (e) {
+      setEditErr(e.message || 'Delete failed');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const saveTitle = async () => {
+    const name = titleDraft.trim();
+    if (!name || savingTitle) return;
+    if (name === category.name) { setEditingTitle(false); return; }
+    setSavingTitle(true);
+    setTitleErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await renameCategory(spreadsheetId, tab, category.name, name, token);
+      setEditingTitle(false);
+      onChanged && onChanged();
+    } catch (e) {
+      setTitleErr(e.message || 'Rename failed');
+    } finally {
+      setSavingTitle(false);
+    }
+  };
 
   const submitPart = async () => {
     if (!partForm.partName.trim() || savingPart) return;
@@ -72,22 +167,6 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
       setPartErr(e.message || 'Failed to add part');
     } finally {
       setSavingPart(false);
-    }
-  };
-
-  const confirmDelete = async () => {
-    if (!confirmDel || deleting) return;
-    setDeleting(true);
-    setDelErr(null);
-    try {
-      const token = await getSheetsAccessToken();
-      await deletePartRow(spreadsheetId, tab, category.name, confirmDel, token);
-      setConfirmDel(null);
-      onChanged && onChanged();
-    } catch (e) {
-      setDelErr(e.message || 'Delete failed');
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -135,16 +214,32 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
 
   return (
     <div className="border-b border-zinc-900 last:border-b-0">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="w-full flex items-center justify-between px-10 py-4 text-left hover:bg-zinc-800/50 active:bg-zinc-700 transition-all duration-150 cursor-pointer"
-      >
-        <div className="flex items-center gap-3">
+      {editingTitle ? (
+        <div className="flex items-center gap-2 px-10 py-3">
           {open ? <FolderOpen className="w-4 h-4 text-gray-500" /> : <Folder className="w-4 h-4 text-gray-500" />}
-          <span className="text-gray-200 text-base font-medium">{category.name}</span>
+          <input value={titleDraft} autoFocus
+            onChange={e => setTitleDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+            className="flex-1 bg-black border border-zinc-700 rounded-lg px-3 py-1.5 text-white text-base focus:outline-none focus:border-zinc-500" />
+          <button onClick={saveTitle} disabled={!titleDraft.trim() || savingTitle}
+            className="bg-white text-black text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40">
+            {savingTitle ? '…' : 'Save'}
+          </button>
+          <button onClick={() => { setEditingTitle(false); setTitleErr(null); }} className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
+          {titleErr && <p className="text-red-400 text-xs">{titleErr}</p>}
         </div>
-        {open ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
-      </button>
+      ) : (
+        <button
+          onClick={() => { if (suppressToggle.current) { suppressToggle.current = false; return; } setOpen(v => !v); }}
+          className="w-full flex items-center justify-between px-10 py-4 text-left hover:bg-zinc-800/50 active:bg-zinc-700 transition-all duration-150 cursor-pointer"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {open ? <FolderOpen className="w-4 h-4 text-gray-500 flex-shrink-0" /> : <Folder className="w-4 h-4 text-gray-500 flex-shrink-0" />}
+            <span {...titleGesture} className="text-gray-200 text-base font-medium truncate" title="Hold or double-tap to rename">{category.name}</span>
+          </div>
+          {open ? <ChevronDown className="w-4 h-4 text-gray-500" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
+        </button>
+      )}
 
       {open && category.parts.length > 0 && (
         <div className="pb-2">
@@ -166,9 +261,27 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
 
             return (
               <div key={i} className="group flex items-center justify-between px-10 py-3 border-b border-zinc-900 last:border-b-0 hover:bg-zinc-800/30 transition-colors gap-4">
-                {/* Left: name + supplier + part# + price */}
+                {/* Left: counter (up / number / down) */}
+                <div className="flex flex-col items-center flex-shrink-0">
+                  <button onClick={() => handleAddStock(part.partName)} className="text-gray-500 hover:text-white transition-colors -mb-0.5">
+                    <ChevronUp className="w-4 h-4" />
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    value={stock[part.partName] ?? ''}
+                    onChange={(e) => handleStockChange(part.partName, e.target.value)}
+                    className="w-10 bg-zinc-800 text-white text-center px-0.5 py-0.5 rounded text-xs border border-zinc-700 focus:outline-none focus:border-zinc-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    placeholder="—"
+                  />
+                  <button onClick={() => handleSubtractStock(part.partName)} className="text-gray-500 hover:text-white transition-colors -mt-0.5">
+                    <ChevronDown className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Middle: name + supplier + part# + price */}
                 <div className="flex-1 min-w-0">
-                  <span className="text-white text-sm leading-snug">{part.partName}</span>
+                  <span {...editGestureProps(() => openEditPart(part), null)} className="text-white text-sm leading-snug cursor-pointer" title="Hold or double-tap to edit">{part.partName}</span>
                   <div className="mt-0.5 flex items-center gap-2 flex-wrap">
                     {part.supplierLink ? (
                       <a href={part.supplierLink} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-xs underline underline-offset-2">{part.supplier || 'Link'}</a>
@@ -194,41 +307,10 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
                   </div>
                 </div>
 
-                {/* Right: stock, allocated */}
-                <div className="flex items-center gap-4 flex-shrink-0">
-
-                  {/* Stock +/- */}
-                  <div className="flex items-center gap-1.5">
-                    <button onClick={() => handleSubtractStock(part.partName)} className="text-gray-500 hover:text-white transition-colors">
-                      <Minus className="w-3.5 h-3.5" />
-                    </button>
-                    <input
-                      type="number"
-                      min="0"
-                      value={stock[part.partName] ?? ''}
-                      onChange={(e) => handleStockChange(part.partName, e.target.value)}
-                      className="w-12 bg-zinc-800 text-white text-center px-1 py-0.5 rounded text-xs border border-zinc-700 focus:outline-none focus:border-zinc-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                      placeholder="—"
-                    />
-                    <button onClick={() => handleAddStock(part.partName)} className="text-gray-500 hover:text-white transition-colors">
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  {/* Allocated + status */}
-                  <div className="flex items-center gap-1 text-xs text-gray-400 min-w-[2rem] justify-end">
-                    <span>{allocated}</span>
-                    {statusIcon}
-                  </div>
-
-                  {/* Low-key delete */}
-                  <button
-                    onClick={() => { setDelErr(null); setConfirmDel(part); }}
-                    title="Delete part"
-                    className="text-gray-700 hover:text-red-400 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                {/* Right: allocated + status */}
+                <div className="flex items-center gap-1 text-xs text-gray-400 min-w-[2rem] justify-end flex-shrink-0">
+                  <span>{allocated}</span>
+                  {statusIcon}
                 </div>
               </div>
             );
@@ -284,27 +366,62 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
         </div>
       )}
 
-      {/* Delete confirmation */}
-      {confirmDel && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-8">
-          <div className="absolute inset-0 bg-black/60" onClick={() => !deleting && setConfirmDel(null)} />
-          <div className="relative bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm">
-            <h3 className="text-white font-bold text-lg mb-2">Delete part?</h3>
-            <p className="text-gray-300 text-sm mb-1">
-              <span className="text-white font-medium">{confirmDel.partName}</span> will be removed from the Master Sheet.
-            </p>
-            <p className="text-gray-600 text-xs mb-5">This can't be undone.</p>
-            {delErr && <p className="text-red-400 text-xs mb-3">{delErr}</p>}
-            <div className="flex gap-3">
-              <button onClick={() => setConfirmDel(null)} disabled={deleting}
-                className="flex-1 bg-zinc-800 text-white py-2.5 rounded-xl font-medium hover:bg-zinc-700 transition-colors disabled:opacity-50">
-                Cancel
-              </button>
-              <button onClick={confirmDelete} disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white py-2.5 rounded-xl font-semibold hover:bg-red-500 transition-colors disabled:opacity-50">
-                <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting…' : 'Delete'}
-              </button>
+      {/* Edit part popup (name / supplier / part link / part# / price + delete) */}
+      {editPart && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => !savingEdit && !deleting && setEditPart(null)} />
+          <div className="relative w-full sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-white">Edit Part</h2>
+              <button onClick={() => !savingEdit && !deleting && setEditPart(null)} className="text-gray-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Part name *</label>
+            <input value={editForm.partName} autoFocus
+              onChange={e => setEditForm(f => ({ ...f, partName: e.target.value }))}
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Supplier</label>
+                <input value={editForm.supplier} onChange={e => setEditForm(f => ({ ...f, supplier: e.target.value }))}
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Price</label>
+                <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
+                  placeholder="$0.00"
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+              </div>
+            </div>
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Part #</label>
+            <input value={editForm.partNum} onChange={e => setEditForm(f => ({ ...f, partNum: e.target.value }))}
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+            <label className="text-xs text-gray-400 mb-1.5 block">Part link</label>
+            <input value={editForm.supplierLink} onChange={e => setEditForm(f => ({ ...f, supplierLink: e.target.value }))}
+              placeholder="https://…"
+              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-5 focus:outline-none focus:border-zinc-500" />
+
+            {editErr && <p className="text-red-400 text-xs mb-3">{editErr}</p>}
+
+            <button onClick={saveEditPart} disabled={!editForm.partName.trim() || savingEdit || deleting}
+              className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40 flex items-center justify-center gap-2 mb-3">
+              {savingEdit ? 'Saving…' : <><Check className="w-4 h-4" /> Save changes</>}
+            </button>
+
+            {confirmDelInEdit ? (
+              <button onClick={deleteEditPart} disabled={deleting}
+                className="w-full flex items-center justify-center gap-2 bg-red-600 text-white py-3 rounded-xl font-semibold hover:bg-red-500 transition-colors disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting…' : 'Tap again to confirm delete'}
+              </button>
+            ) : (
+              <button onClick={() => setConfirmDelInEdit(true)} disabled={savingEdit}
+                className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 py-2.5 rounded-xl font-medium transition-colors disabled:opacity-50">
+                <Trash2 className="w-4 h-4" /> Delete part
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -312,7 +429,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
   );
 }
 
-function SheetFolder({ tab, spreadsheetId }) {
+function SheetFolder({ tab, spreadsheetId, onRenamed }) {
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -321,6 +438,32 @@ function SheetFolder({ tab, spreadsheetId }) {
   const [newCatName, setNewCatName] = useState('');
   const [savingCat, setSavingCat] = useState(false);
   const [catErr, setCatErr] = useState(null);
+
+  // Inline Category-title rename
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(tab);
+  const [savingTitle, setSavingTitle] = useState(false);
+  const [titleErr, setTitleErr] = useState(null);
+  const suppressToggle = useRef(false);
+  const titleGesture = editGestureProps(() => { setTitleDraft(tab); setTitleErr(null); setEditingTitle(true); }, suppressToggle);
+
+  const saveTitle = async () => {
+    const name = titleDraft.trim();
+    if (!name || savingTitle) return;
+    if (name === tab) { setEditingTitle(false); return; }
+    setSavingTitle(true);
+    setTitleErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await renameSheetTab(spreadsheetId, tab, name, token);
+      setEditingTitle(false);
+      onRenamed && onRenamed();
+    } catch (e) {
+      setTitleErr(e.message || 'Rename failed');
+    } finally {
+      setSavingTitle(false);
+    }
+  };
 
   const loadCategories = () => {
     setLoading(true);
@@ -355,16 +498,32 @@ function SheetFolder({ tab, spreadsheetId }) {
 
   return (
     <div className="border-b border-zinc-800 last:border-b-0">
-      <button
-        onClick={handleToggle}
-        className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-zinc-800 active:bg-zinc-700 transition-all duration-150 cursor-pointer"
-      >
-        <div className="flex items-center gap-3">
+      {editingTitle ? (
+        <div className="flex items-center gap-2 px-6 py-4">
           {open ? <FolderOpen className="w-5 h-5 text-gray-400" /> : <Folder className="w-5 h-5 text-gray-400" />}
-          <span className="text-white text-lg font-medium tracking-wide">{tab}</span>
+          <input value={titleDraft} autoFocus
+            onChange={e => setTitleDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+            className="flex-1 bg-black border border-zinc-700 rounded-lg px-3 py-2 text-white text-lg focus:outline-none focus:border-zinc-500" />
+          <button onClick={saveTitle} disabled={!titleDraft.trim() || savingTitle}
+            className="bg-white text-black text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-40">
+            {savingTitle ? '…' : 'Save'}
+          </button>
+          <button onClick={() => { setEditingTitle(false); setTitleErr(null); }} className="text-gray-400 hover:text-white"><X className="w-4 h-4" /></button>
+          {titleErr && <p className="text-red-400 text-xs">{titleErr}</p>}
         </div>
-        {open ? <ChevronDown className="w-5 h-5 text-gray-500" /> : <ChevronRight className="w-5 h-5 text-gray-500" />}
-      </button>
+      ) : (
+        <button
+          onClick={() => { if (suppressToggle.current) { suppressToggle.current = false; return; } handleToggle(); }}
+          className="w-full flex items-center justify-between px-6 py-5 text-left hover:bg-zinc-800 active:bg-zinc-700 transition-all duration-150 cursor-pointer"
+        >
+          <div className="flex items-center gap-3 min-w-0">
+            {open ? <FolderOpen className="w-5 h-5 text-gray-400 flex-shrink-0" /> : <Folder className="w-5 h-5 text-gray-400 flex-shrink-0" />}
+            <span {...titleGesture} className="text-white text-lg font-medium tracking-wide truncate" title="Hold or double-tap to rename">{tab}</span>
+          </div>
+          {open ? <ChevronDown className="w-5 h-5 text-gray-500" /> : <ChevronRight className="w-5 h-5 text-gray-500" />}
+        </button>
+      )}
 
       {open && (
         <div className="bg-black border-t border-zinc-800">
@@ -482,12 +641,22 @@ export default function PartsLibrary() {
         || (p.category || '').toLowerCase().includes(q))
     : [];
 
+  const reloadTabs = async () => {
+    if (!spreadsheetId) return;
+    try {
+      const res = await getSheetTabs(spreadsheetId);
+      setSheetTabs(res.data.tabs || []);
+    } catch { /* ignore */ }
+  };
+
   // Add Part flow
   const [showAdd, setShowAdd] = useState(false);
+  const [addStarted, setAddStarted] = useState(false); // revealed after "Done" on the link step
   const [addTab, setAddTab] = useState('');
   const [addCats, setAddCats] = useState([]);
   const [loadingCats, setLoadingCats] = useState(false);
   const [addCategory, setAddCategory] = useState('');
+  const pendingSubcatRef = useRef(null); // AI-guessed subcategory, applied once its tab's cats load
   const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
   const [saving, setSaving] = useState(false);
   const [addErr, setAddErr] = useState(null);
@@ -520,6 +689,7 @@ export default function PartsLibrary() {
         price: r.price || f.price,
         supplierLink: r.supplierLink || f.supplierLink,
       }));
+      setAddStarted(true); // reveal the full form with the identified fields
     } catch (err) {
       setPhotoErr(err.message || 'Could not identify the part');
     } finally {
@@ -527,13 +697,26 @@ export default function PartsLibrary() {
     }
   };
 
-  // Read the supplier link with Gemini and auto-fill the part fields.
-  const handleAiFill = async () => {
-    if (aiFilling) return;
+  // "Done" on the link step: reveal the rest of the form and, if a link was given,
+  // read it with Gemini to auto-fill the fields AND guess the best category /
+  // subcategory from the library taxonomy. The category/subcategory pickers show
+  // immediately so the user can choose while the AI is still loading.
+  const handleDone = async () => {
+    setAddStarted(true);
+    const link = pForm.supplierLink.trim();
+    if (!link || aiFilling) return;
     setAiFilling(true);
     setAiErr(null);
     try {
-      const r = await extractPartFromUrl(pForm.supplierLink.trim());
+      const taxonomy = {};
+      const results = await Promise.all(sheetTabs.map(t =>
+        getSheetCategories(spreadsheetId, t)
+          .then(r => ({ t, cats: r.data.categories || [] }))
+          .catch(() => ({ t, cats: [] }))
+      ));
+      results.forEach(({ t, cats }) => { taxonomy[t] = cats.map(c => c.name); });
+
+      const r = await extractPartFromUrl(link, taxonomy);
       setPForm(f => ({
         ...f,
         partName: r.partName || f.partName,
@@ -541,6 +724,12 @@ export default function PartsLibrary() {
         partNum: r.partNum || f.partNum,
         price: r.price || f.price,
       }));
+      // Preselect the AI's best-matching category/subcategory.
+      const matchTab = sheetTabs.find(t => t.toLowerCase() === (r.category || '').toLowerCase());
+      if (matchTab) {
+        pendingSubcatRef.current = r.subcategory || null;
+        setAddTab(matchTab);
+      }
     } catch (e) {
       setAiErr(e.message || 'AI fill failed');
     } finally {
@@ -580,10 +769,14 @@ export default function PartsLibrary() {
 
   const openAdd = () => {
     setAddErr(null);
+    setAiErr(null);
     setQuickAdd(null);
+    setAddStarted(false);
     setAddTab(''); // default to the "Select a category" placeholder
     setAddCategory('');
     setAddCats([]);
+    pendingSubcatRef.current = null;
+    setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
     setShowAdd(true);
   };
 
@@ -620,7 +813,16 @@ export default function PartsLibrary() {
     setLoadingCats(true);
     setAddCategory('');
     getSheetCategories(spreadsheetId, addTab)
-      .then(res => setAddCats(res.data.categories || []))
+      .then(res => {
+        const cats = res.data.categories || [];
+        setAddCats(cats);
+        // Apply the AI-guessed subcategory once its tab's list is loaded.
+        if (pendingSubcatRef.current) {
+          const m = cats.find(c => c.name.toLowerCase() === pendingSubcatRef.current.toLowerCase());
+          if (m) setAddCategory(m.name);
+          pendingSubcatRef.current = null;
+        }
+      })
       .catch(() => setAddCats([]))
       .finally(() => setLoadingCats(false));
   }, [showAdd, addTab, spreadsheetId]);
@@ -696,7 +898,7 @@ export default function PartsLibrary() {
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
-          <button onClick={() => navigate('/Inventory')} className="text-gray-400 hover:text-white transition-colors">
+          <button onClick={() => navigate('/')} className="text-gray-400 hover:text-white transition-colors">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div className="flex-1">
@@ -706,21 +908,11 @@ export default function PartsLibrary() {
           {sheetTabs.length > 0 && (
             <button
               onClick={openAdd}
-              className="flex items-center gap-2 bg-zinc-800 border border-zinc-700 text-white font-semibold text-sm px-4 py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+              className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
             >
               <Plus className="w-4 h-4" /> Add Part
             </button>
           )}
-          <button
-            onClick={() => navigate('/MasterSheet')}
-            className="flex items-center gap-2 bg-white text-black font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-200 transition-colors"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M19 3H5C3.9 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V5C21 3.9 20.1 3 19 3Z" fill="#0F9D58"/>
-              <path d="M8 17H6V16H8V17ZM8 15H6V14H8V15ZM8 13H6V12H8V13ZM11 17H9V16H11V17ZM11 15H9V14H11V15ZM11 13H9V12H11V13ZM14 17H12V16H14V17ZM14 15H12V14H14V15ZM14 13H12V12H14V13ZM18 17H15V16H18V17ZM18 15H15V14H18V15ZM18 13H15V12H18V13ZM18 10H6V8H18V10Z" fill="white"/>
-            </svg>
-            Master Sheet
-          </button>
         </div>
 
         {/* Search */}
@@ -783,7 +975,7 @@ export default function PartsLibrary() {
             </div>
           )}
           {sheetTabs.map((tab) => (
-            <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} />
+            <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} onRenamed={reloadTabs} />
           ))}
           {!loading && !error && sheetTabs.length === 0 && (
             <div className="px-6 py-5 text-center">
@@ -832,7 +1024,7 @@ export default function PartsLibrary() {
           <div className="absolute inset-0 bg-black/70" onClick={() => !saving && setShowAdd(false)} />
           <div className="relative w-full sm:max-w-md bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-white">Add Part to Master Sheet</h2>
+              <h2 className="text-lg font-bold text-white">Add Part</h2>
               <button onClick={() => !saving && setShowAdd(false)} className="text-gray-400 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
@@ -845,106 +1037,139 @@ export default function PartsLibrary() {
               </div>
             )}
 
-            {/* Identify from a photo (Gemini vision + Google Search) */}
+            {/* Hidden photo input (used by the "identify from photo" fallback) */}
             <input ref={photoInputRef} type="file" accept="image/*" capture="environment"
               onChange={handlePhoto} className="hidden" />
-            <button
-              onClick={() => photoInputRef.current?.click()}
-              disabled={photoLoading}
-              className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-xl mb-2 transition-all disabled:opacity-60"
-              style={{ background: 'rgba(59,130,246,0.18)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.35)' }}
-            >
-              <Camera className="w-4 h-4" />
-              {photoLoading ? 'Identifying part…' : 'Identify from photo'}
-            </button>
-            {photoErr && <p className="text-red-400 text-xs mb-3">{photoErr}</p>}
-            <p className="text-gray-600 text-[11px] text-center mb-4">Take a photo of the part — AI identifies it and finds a buy link.</p>
 
-            <label className="text-xs text-gray-400 mb-1.5 block">Category</label>
-            <select value={addTab} onChange={e => {
-                if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
-                setQuickAdd(null); setAddTab(e.target.value);
-              }}
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500">
-              <option value="__add_tab__">＋ Add new category</option>
-              <option value="">Select a category</option>
-              {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-            {quickAdd === 'tab'
-              ? <QuickCreateRow placeholder="New category name…" value={quickName} onChange={setQuickName}
-                  onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
-                  saving={quickSaving} err={quickErr} />
-              : <div className="mb-2" />}
+            {!addStarted ? (
+              /* STEP 1 — just the part link. Done → AI reads it and fills the rest. */
+              <>
+                <label className="text-xs text-gray-400 mb-1.5 block">Part link</label>
+                <input value={pForm.supplierLink} autoFocus
+                  onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleDone(); }}
+                  placeholder="Paste the supplier / product link…"
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm mb-4 focus:outline-none focus:border-zinc-500" />
 
-            <label className="text-xs text-gray-400 mb-1.5 block">Subcategory</label>
-            <select value={addCategory} onChange={e => {
-                if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
-                setQuickAdd(null); setAddCategory(e.target.value);
-              }}
-              disabled={loadingCats || !addTab}
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
-              <option value="__add_cat__">＋ Add subcategory</option>
-              <option value="">{loadingCats ? 'Loading subcategories…' : 'Select a subcategory'}</option>
-              {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-            </select>
-            {quickAdd === 'cat'
-              ? <QuickCreateRow placeholder="New subcategory name…" value={quickName} onChange={setQuickName}
-                  onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
-                  saving={quickSaving} err={quickErr} />
-              : <div className="mb-2" />}
+                <button onClick={handleDone}
+                  className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4" /> Done
+                </button>
+                <p className="text-gray-600 text-[11px] text-center mt-2 mb-4">AI reads the link and fills in the part for you.</p>
 
-            <label className="text-xs text-gray-400 mb-1.5 block">Part name *</label>
-            <input value={pForm.partName} onChange={e => setPForm(f => ({ ...f, partName: e.target.value }))}
-              placeholder="e.g. 12V LED strip"
-              className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 h-px bg-zinc-800" />
+                  <span className="text-gray-600 text-xs">or</span>
+                  <div className="flex-1 h-px bg-zinc-800" />
+                </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Supplier</label>
-                <input value={pForm.supplier} onChange={e => setPForm(f => ({ ...f, supplier: e.target.value }))}
-                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Price</label>
-                <input value={pForm.price} onChange={e => setPForm(f => ({ ...f, price: e.target.value }))}
-                  placeholder="$0.00"
-                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
-              </div>
-            </div>
+                <button
+                  onClick={() => photoInputRef.current?.click()}
+                  disabled={photoLoading}
+                  className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-xl mb-2 transition-all disabled:opacity-60"
+                  style={{ background: 'rgba(59,130,246,0.18)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.35)' }}
+                >
+                  <Camera className="w-4 h-4" />
+                  {photoLoading ? 'Identifying part…' : 'Identify from photo'}
+                </button>
+                {photoErr && <p className="text-red-400 text-xs mb-1">{photoErr}</p>}
 
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Part #</label>
-                <input value={pForm.partNum} onChange={e => setPForm(f => ({ ...f, partNum: e.target.value }))}
-                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Supplier link</label>
-                <input value={pForm.supplierLink} onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
-                  placeholder="https://…"
-                  className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
-              </div>
-            </div>
+                <button onClick={() => setAddStarted(true)}
+                  className="w-full text-gray-500 hover:text-gray-300 text-xs py-2 transition-colors">
+                  Skip — enter manually
+                </button>
+              </>
+            ) : (
+              /* STEP 2 — category/subcategory pickers, revealed while AI fills the fields. */
+              <>
+                {aiFilling && (
+                  <div className="mb-4 flex items-center gap-2 bg-violet-900/20 border border-violet-900/40 rounded-xl px-3 py-2.5">
+                    <Sparkles className="w-4 h-4 text-violet-300 flex-shrink-0 animate-pulse" />
+                    <p className="text-violet-200 text-xs">Reading the link and filling in the details… pick a category meanwhile.</p>
+                  </div>
+                )}
 
-            {/* AI fill from link */}
-            <button
-              onClick={handleAiFill}
-              disabled={!pForm.supplierLink.trim() || aiFilling}
-              className="w-full flex items-center justify-center gap-2 text-sm font-medium py-2.5 rounded-xl mb-3 transition-all disabled:opacity-40"
-              style={{ background: 'rgba(139,92,246,0.18)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.3)' }}
-            >
-              <Sparkles className="w-4 h-4" />
-              {aiFilling ? 'Reading the link…' : 'AI fill from link'}
-            </button>
-            {aiErr && <p className="text-red-400 text-xs mb-3">{aiErr}</p>}
+                <label className="text-xs text-gray-400 mb-1.5 block">Category</label>
+                <select value={addTab} onChange={e => {
+                    if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
+                    setQuickAdd(null); setAddTab(e.target.value);
+                  }}
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500">
+                  <option value="__add_tab__">＋ Add new category</option>
+                  <option value="">Select a category</option>
+                  {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                {quickAdd === 'tab'
+                  ? <QuickCreateRow placeholder="New category name…" value={quickName} onChange={setQuickName}
+                      onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
+                      saving={quickSaving} err={quickErr} />
+                  : <div className="mb-2" />}
 
-            {addErr && <p className="text-red-400 text-xs mb-3">{addErr}</p>}
+                <label className="text-xs text-gray-400 mb-1.5 block">Subcategory</label>
+                <select value={addCategory} onChange={e => {
+                    if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
+                    setQuickAdd(null); setAddCategory(e.target.value);
+                  }}
+                  disabled={loadingCats || !addTab}
+                  className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-2 focus:outline-none focus:border-zinc-500 disabled:opacity-50">
+                  <option value="__add_cat__">＋ Add subcategory</option>
+                  <option value="">{loadingCats ? 'Loading subcategories…' : 'Select a subcategory'}</option>
+                  {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+                {quickAdd === 'cat'
+                  ? <QuickCreateRow placeholder="New subcategory name…" value={quickName} onChange={setQuickName}
+                      onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
+                      saving={quickSaving} err={quickErr} />
+                  : <div className="mb-3" />}
 
-            <button onClick={submitPart} disabled={!addTab || !pForm.partName.trim() || !addCategory || saving}
-              className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
-              {saving ? 'Adding…' : <><Check className="w-4 h-4" /> Add to sheet</>}
-            </button>
-            <p className="text-gray-600 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>
+                {aiErr && <p className="text-red-400 text-xs mb-3">{aiErr}</p>}
+
+                {/* Fields pop in once AI finishes (or immediately when entered manually). */}
+                {aiFilling ? (
+                  <div className="py-6 text-center">
+                    <p className="text-gray-500 text-sm">Filling in part name, supplier, price, part # and link…</p>
+                  </div>
+                ) : (
+                  <>
+                    <label className="text-xs text-gray-400 mb-1.5 block">Part name *</label>
+                    <input value={pForm.partName} onChange={e => setPForm(f => ({ ...f, partName: e.target.value }))}
+                      placeholder="e.g. 12V LED strip"
+                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white placeholder:text-gray-600 text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+                    <div className="grid grid-cols-2 gap-3 mb-4">
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1.5 block">Supplier</label>
+                        <input value={pForm.supplier} onChange={e => setPForm(f => ({ ...f, supplier: e.target.value }))}
+                          className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1.5 block">Price</label>
+                        <input value={pForm.price} onChange={e => setPForm(f => ({ ...f, price: e.target.value }))}
+                          placeholder="$0.00"
+                          className="w-full bg-black border border-zinc-700 rounded-xl px-3 py-3 text-white text-sm focus:outline-none focus:border-zinc-500" />
+                      </div>
+                    </div>
+
+                    <label className="text-xs text-gray-400 mb-1.5 block">Part #</label>
+                    <input value={pForm.partNum} onChange={e => setPForm(f => ({ ...f, partNum: e.target.value }))}
+                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-4 focus:outline-none focus:border-zinc-500" />
+
+                    <label className="text-xs text-gray-400 mb-1.5 block">Part link</label>
+                    <input value={pForm.supplierLink} onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
+                      placeholder="https://…"
+                      className="w-full bg-black border border-zinc-700 rounded-xl px-4 py-3 text-white text-sm mb-5 focus:outline-none focus:border-zinc-500" />
+
+                    {addErr && <p className="text-red-400 text-xs mb-3">{addErr}</p>}
+
+                    <button onClick={submitPart} disabled={!addTab || !pForm.partName.trim() || !addCategory || saving}
+                      className="w-full bg-white text-black font-bold py-3.5 rounded-xl hover:bg-gray-200 transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
+                      {saving ? 'Adding…' : <><Check className="w-4 h-4" /> Add to sheet</>}
+                    </button>
+                    <p className="text-gray-600 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>
+                  </>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
