@@ -323,7 +323,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, theme = 'classic
             {category.parts.length === 0 ? (
               <p className="text-gray-400 text-sm py-2">No parts found in this subcategory</p>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                 {category.parts.map((part, i) => {
                   const allocated = getAllocatedQuantity(part.partName);
                   const hasStock = stock[part.partName] !== undefined && stock[part.partName] !== '';
@@ -1294,7 +1294,7 @@ export default function PartsLibrary() {
                     <p className="text-gray-500 text-sm">No parts match “{search.trim()}”</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                     {searchResults.map((p, i) => (
                       <div key={p.tab + p.category + p.partName + i} className="flex flex-col bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all">
                         <div className="w-full aspect-square mb-3 flex items-center justify-center">
