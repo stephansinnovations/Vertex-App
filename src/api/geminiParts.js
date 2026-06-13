@@ -28,6 +28,30 @@ function cleanLink(link, query) {
   return link;
 }
 
+// ── Amazon helpers ──────────────────────────────────────────────────────────
+// Amazon product pages block bots, so Gemini usually can't read the page or pull
+// the main image. But every product has an ASIN in its URL, and Amazon exposes a
+// public image endpoint keyed by ASIN — so we can build a reliable image URL
+// (and label the supplier "Amazon") without scraping.
+function isAmazonUrl(u) {
+  try { return /(^|\.)amazon\.[a-z.]+$/i.test(new URL(u).hostname); } catch { return false; }
+}
+
+function amazonAsin(u) {
+  if (!u) return null;
+  const m = u.match(/\/(?:dp|gp\/product|gp\/aw\/d|product|gp\/offer-listing)\/([A-Z0-9]{10})(?:[/?]|$)/i)
+    || u.match(/[/?&](?:asin|ASIN)=([A-Z0-9]{10})/)
+    || u.match(/\/([A-Z0-9]{10})(?:[/?]|$)/); // last-ditch: any 10-char token segment
+  return m ? m[1].toUpperCase() : null;
+}
+
+// Public, hot-linkable Amazon image for an ASIN (largest available).
+function amazonImageFromUrl(u) {
+  if (!isAmazonUrl(u)) return '';
+  const asin = amazonAsin(u);
+  return asin ? `https://images-na.ssl-images-amazon.com/images/P/${asin}.01._SCLZZZZZZZ_.jpg` : '';
+}
+
 function parseJson(text) {
   let raw = (text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   const s = raw.indexOf('{');
@@ -81,12 +105,15 @@ export async function extractPartFromUrl(link, taxonomy = null) {
     generationConfig: { temperature: 0 },
   });
   const o = parseJson(text);
+  const amazon = isAmazonUrl(link);
   return {
     partName: o.partName || '',
-    supplier: o.supplier || '',
+    supplier: o.supplier || (amazon ? 'Amazon' : ''),
     partNum: o.partNum || '',
     price: o.price || '',
-    imageUrl: cleanLink(o.imageUrl || '', ''),
+    // Prefer the AI's image, but fall back to the ASIN-derived Amazon image when
+    // the page couldn't be scraped (Amazon links almost always land here).
+    imageUrl: cleanLink(o.imageUrl || '', '') || amazonImageFromUrl(link),
     category: o.category || '',
     subcategory: o.subcategory || '',
   };
@@ -112,8 +139,8 @@ export async function findPartImage({ partName, supplier, partNum, supplierLink 
     generationConfig: { temperature: 0 },
   });
   let o = {};
-  try { o = parseJson(text); } catch { return ''; }
-  return cleanLink(o.imageUrl || '', '');
+  try { o = parseJson(text); } catch { o = {}; }
+  return cleanLink(o.imageUrl || '', '') || amazonImageFromUrl(supplierLink);
 }
 
 // Identify a part from a photo, determine its function, and find a buy link.
