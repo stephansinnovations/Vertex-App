@@ -52,6 +52,32 @@ function amazonImageFromUrl(u) {
   return asin ? `https://images-na.ssl-images-amazon.com/images/P/${asin}.01._SCLZZZZZZZ_.jpg` : '';
 }
 
+// Ask our serverless endpoint to fetch the product page (with a real browser UA)
+// and pull the main image (og:image / images/I/). Returns '' on any failure so
+// callers fall back. No-op locally (vite has no /api functions) → returns ''.
+async function fetchOgImage(link) {
+  if (!link || !/^https?:\/\//i.test(link)) return '';
+  try {
+    const r = await fetch(`/api/productImage?url=${encodeURIComponent(link)}`);
+    if (!r.ok) return '';
+    const { imageUrl } = await r.json();
+    return imageUrl || '';
+  } catch { return ''; }
+}
+
+// Resolve the best image for a product link. For Amazon (which blocks the AI's
+// page reads) prefer deterministic sources over the model's guess: the real page
+// image (server og:image) → the ASIN image → finally the AI's suggestion. For
+// other sites trust the AI first, then the server og:image.
+async function resolveImage(link, aiImage) {
+  const ai = cleanLink(aiImage || '', '');
+  if (isAmazonUrl(link)) {
+    const og = await fetchOgImage(link);
+    return og || amazonImageFromUrl(link) || ai;
+  }
+  return ai || (await fetchOgImage(link));
+}
+
 function parseJson(text) {
   let raw = (text || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
   const s = raw.indexOf('{');
@@ -111,9 +137,7 @@ export async function extractPartFromUrl(link, taxonomy = null) {
     supplier: o.supplier || (amazon ? 'Amazon' : ''),
     partNum: o.partNum || '',
     price: o.price || '',
-    // Prefer the AI's image, but fall back to the ASIN-derived Amazon image when
-    // the page couldn't be scraped (Amazon links almost always land here).
-    imageUrl: cleanLink(o.imageUrl || '', '') || amazonImageFromUrl(link),
+    imageUrl: await resolveImage(link, o.imageUrl),
     category: o.category || '',
     subcategory: o.subcategory || '',
   };
@@ -140,7 +164,8 @@ export async function findPartImage({ partName, supplier, partNum, supplierLink 
   });
   let o = {};
   try { o = parseJson(text); } catch { o = {}; }
-  return cleanLink(o.imageUrl || '', '') || amazonImageFromUrl(supplierLink);
+  if (supplierLink) return resolveImage(supplierLink, o.imageUrl);
+  return cleanLink(o.imageUrl || '', '');
 }
 
 // Identify a part from a photo, determine its function, and find a buy link.
