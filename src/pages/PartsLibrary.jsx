@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Folder, FolderOpen, Plus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, ChevronUp, Folder, FolderOpen, Plus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, LayoutGrid, List } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow, getPartRowsForBackfill, writePartImageByRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -17,6 +17,11 @@ function extractSpreadsheetId(url) {
 }
 
 const STOCK_KEY = 'partsLibraryStock';
+const THEME_KEY = 'partsLibraryTheme'; // 'classic' (dark list) | 'store' (Amazon-style)
+
+function loadTheme() {
+  try { return localStorage.getItem(THEME_KEY) === 'store' ? 'store' : 'classic'; } catch { return 'classic'; }
+}
 
 function loadStock() {
   try { return JSON.parse(localStorage.getItem(STOCK_KEY)) || {}; } catch { return {}; }
@@ -71,7 +76,7 @@ function getBuilds() {
   return buildsFetchPromise;
 }
 
-function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
+function CategoryRow({ category, spreadsheetId, tab, onChanged, theme = 'classic' }) {
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
   const [builds, setBuilds] = useState(buildsCache || []);
@@ -229,6 +234,182 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
     return allocated;
   };
 
+  // ── Amazon-style "Store" theme ──────────────────────────────────────────
+  if (theme === 'store') {
+    const editModalStore = editPart && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="absolute inset-0 bg-black/40" onClick={() => !savingEdit && !deleting && setEditPart(null)} />
+        <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-lg font-bold text-gray-900">Edit Part</h2>
+            <button onClick={() => !savingEdit && !deleting && setEditPart(null)} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
+          </div>
+          <label className="text-xs text-gray-500 mb-1.5 block">Part name *</label>
+          <input value={editForm.partName} autoFocus
+            onChange={e => setEditForm(f => ({ ...f, partName: e.target.value }))}
+            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" />
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label className="text-xs text-gray-500 mb-1.5 block">Supplier</label>
+              <input value={editForm.supplier} onChange={e => setEditForm(f => ({ ...f, supplier: e.target.value }))}
+                className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1.5 block">Price</label>
+              <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))} placeholder="$0.00"
+                className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" />
+            </div>
+          </div>
+          <label className="text-xs text-gray-500 mb-1.5 block">Part #</label>
+          <input value={editForm.partNum} onChange={e => setEditForm(f => ({ ...f, partNum: e.target.value }))}
+            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" />
+          <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
+          <input value={editForm.supplierLink} onChange={e => setEditForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="https://…"
+            className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" />
+          <label className="text-xs text-gray-500 mb-1.5 block">Picture URL</label>
+          <div className="flex items-center gap-3 mb-5">
+            <PartImage url={editForm.imageUrl.trim()} className="w-14 h-14" />
+            <input value={editForm.imageUrl} onChange={e => setEditForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="https://…/image.jpg"
+              className="flex-1 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-200" />
+          </div>
+          {editErr && <p className="text-red-600 text-xs mb-3">{editErr}</p>}
+          <button onClick={saveEditPart} disabled={!editForm.partName.trim() || savingEdit || deleting}
+            className="w-full bg-amber-400 hover:bg-amber-500 text-gray-900 font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 flex items-center justify-center gap-2 mb-3">
+            {savingEdit ? 'Saving…' : <><Check className="w-4 h-4" /> Save changes</>}
+          </button>
+          {confirmDelInEdit ? (
+            <button onClick={deleteEditPart} disabled={deleting}
+              className="w-full flex items-center justify-center gap-2 bg-red-600 text-white py-3 rounded-full font-semibold hover:bg-red-500 transition-colors disabled:opacity-50">
+              <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting…' : 'Tap again to confirm delete'}
+            </button>
+          ) : (
+            <button onClick={() => setConfirmDelInEdit(true)} disabled={savingEdit}
+              className="w-full flex items-center justify-center gap-2 text-red-600 hover:text-red-700 py-2.5 rounded-full font-medium transition-colors disabled:opacity-50">
+              <Trash2 className="w-4 h-4" /> Delete part
+            </button>
+          )}
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="border-b border-gray-200 last:border-b-0">
+        {editingTitle ? (
+          <div className="flex items-center gap-2 px-4 py-3">
+            <input value={titleDraft} autoFocus
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+              className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-1.5 text-gray-900 text-base focus:outline-none focus:border-amber-500" />
+            <button onClick={saveTitle} disabled={!titleDraft.trim() || savingTitle}
+              className="bg-amber-400 text-gray-900 text-sm font-semibold px-3 py-1.5 rounded-lg disabled:opacity-40">{savingTitle ? '…' : 'Save'}</button>
+            <button onClick={() => { setEditingTitle(false); setTitleErr(null); }} className="text-gray-400 hover:text-gray-900"><X className="w-4 h-4" /></button>
+            {titleErr && <p className="text-red-600 text-xs">{titleErr}</p>}
+          </div>
+        ) : (
+          <button
+            onClick={() => { if (suppressToggle.current) { suppressToggle.current = false; return; } setOpen(v => !v); }}
+            className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-amber-50/60 transition-colors cursor-pointer"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              {open ? <ChevronDown className="w-4 h-4 text-amber-700 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-amber-700 flex-shrink-0" />}
+              <span {...titleGesture} className="text-[#0F1111] text-[15px] font-bold truncate" title="Hold or double-tap to rename">{category.name}</span>
+              <span className="text-gray-400 text-xs font-normal flex-shrink-0">({category.parts.length})</span>
+            </div>
+          </button>
+        )}
+
+        {open && (
+          <div className="px-4 pb-4">
+            {category.parts.length === 0 ? (
+              <p className="text-gray-400 text-sm py-2">No parts found in this subcategory</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {category.parts.map((part, i) => {
+                  const allocated = getAllocatedQuantity(part.partName);
+                  const hasStock = stock[part.partName] !== undefined && stock[part.partName] !== '';
+                  const stockVal = hasStock ? parseInt(stock[part.partName]) : null;
+                  let dot = null;
+                  if (!hasStock && allocated >= 1) dot = '🟠';
+                  else if (hasStock && allocated > stockVal) dot = '🔴';
+                  else if (hasStock && allocated === stockVal) dot = '🔵';
+                  else if (hasStock && stockVal > allocated) dot = '🟢';
+
+                  return (
+                    <div key={i} className="group flex flex-col bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md hover:border-gray-300 transition-all">
+                      <div className="w-full aspect-square mb-3 flex items-center justify-center bg-white">
+                        <PartImage url={part.imageUrl} className="w-full h-full" />
+                      </div>
+                      <span {...editGestureProps(() => openEditPart(part), null)}
+                        className="text-[#0F1111] text-sm leading-snug cursor-pointer line-clamp-2 hover:text-[#C7511F]" title="Hold or double-tap to edit">{part.partName}</span>
+                      {part.price && <div className="mt-1 text-[#B12704] text-base font-medium">{part.price}</div>}
+                      <div className="mt-1 flex items-center gap-2 flex-wrap">
+                        {part.supplierLink ? (
+                          <a href={part.supplierLink} target="_blank" rel="noopener noreferrer" className="text-[#007185] hover:text-[#C7511F] text-xs hover:underline">{part.supplier || 'Link'}</a>
+                        ) : part.supplier ? (
+                          <button onClick={() => navigator.clipboard.writeText(part.supplier)} className="text-gray-500 text-xs hover:text-gray-900 cursor-copy" title="Copy supplier name">{part.supplier}</button>
+                        ) : null}
+                        {part.partNum && (
+                          <button onClick={() => navigator.clipboard.writeText(part.partNum)} className="text-gray-500 font-mono text-xs hover:text-gray-900 cursor-copy" title="Copy part number">{part.partNum}</button>
+                        )}
+                      </div>
+                      <div className="mt-auto pt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-1">
+                          <button onClick={() => handleSubtractStock(part.partName)} className="text-gray-500 hover:text-gray-900 w-6 h-6 flex items-center justify-center"><ChevronDown className="w-3.5 h-3.5" /></button>
+                          <input type="number" min="0" value={stock[part.partName] ?? ''}
+                            onChange={(e) => handleStockChange(part.partName, e.target.value)}
+                            className="w-7 bg-transparent text-gray-900 text-center text-xs focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            placeholder="—" />
+                          <button onClick={() => handleAddStock(part.partName)} className="text-gray-500 hover:text-gray-900 w-6 h-6 flex items-center justify-center"><ChevronUp className="w-3.5 h-3.5" /></button>
+                        </div>
+                        <span className="text-xs text-gray-500 flex items-center gap-1">{allocated}{dot && <span>{dot}</span>}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Add part to this subcategory */}
+            <div className="mt-3">
+              {addingPart ? (
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
+                  <input value={partForm.partName} autoFocus
+                    onChange={e => setPartForm(f => ({ ...f, partName: e.target.value }))}
+                    onKeyDown={e => { if (e.key === 'Enter') submitPart(); }}
+                    placeholder="Part name *"
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={partForm.supplier} onChange={e => setPartForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier"
+                      className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                    <input value={partForm.price} onChange={e => setPartForm(f => ({ ...f, price: e.target.value }))} placeholder="Price"
+                      className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                    <input value={partForm.partNum} onChange={e => setPartForm(f => ({ ...f, partNum: e.target.value }))} placeholder="Part #"
+                      className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                    <input value={partForm.supplierLink} onChange={e => setPartForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="Link https://…"
+                      className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                  {partErr && <p className="text-red-600 text-xs">{partErr}</p>}
+                  <div className="flex items-center gap-2">
+                    <button onClick={submitPart} disabled={!partForm.partName.trim() || savingPart}
+                      className="flex-1 bg-amber-400 hover:bg-amber-500 text-gray-900 text-sm font-semibold py-2 rounded-full disabled:opacity-40">{savingPart ? 'Adding…' : 'Add part'}</button>
+                    <button onClick={() => { setAddingPart(false); setPartErr(null); setPartForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' }); }}
+                      className="text-gray-400 hover:text-gray-900 px-2"><X className="w-4 h-4" /></button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setAddingPart(true)} className="flex items-center gap-2 text-[#007185] hover:text-[#C7511F] text-sm transition-colors">
+                  <Plus className="w-4 h-4" /> Add part
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        {editModalStore}
+      </div>
+    );
+  }
+
+  // ── Classic (dark) theme ────────────────────────────────────────────────
   return (
     <div className="border-b border-zinc-900 last:border-b-0">
       {editingTitle ? (
@@ -457,7 +638,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
   );
 }
 
-function SheetFolder({ tab, spreadsheetId, onRenamed }) {
+function SheetFolder({ tab, spreadsheetId, onRenamed, theme = 'classic' }) {
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -524,6 +705,72 @@ function SheetFolder({ tab, spreadsheetId, onRenamed }) {
     }
   };
 
+  // ── Amazon-style "Store" theme ──────────────────────────────────────────
+  if (theme === 'store') {
+    return (
+      <section className="mb-4 bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+        {editingTitle ? (
+          <div className="flex items-center gap-2 px-5 py-4 bg-[#f3e9dd]">
+            <input value={titleDraft} autoFocus
+              onChange={e => setTitleDraft(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditingTitle(false); }}
+              className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 text-lg focus:outline-none focus:border-amber-500" />
+            <button onClick={saveTitle} disabled={!titleDraft.trim() || savingTitle}
+              className="bg-amber-400 text-gray-900 text-sm font-semibold px-3 py-2 rounded-lg disabled:opacity-40">{savingTitle ? '…' : 'Save'}</button>
+            <button onClick={() => { setEditingTitle(false); setTitleErr(null); }} className="text-gray-500 hover:text-gray-900"><X className="w-4 h-4" /></button>
+            {titleErr && <p className="text-red-600 text-xs">{titleErr}</p>}
+          </div>
+        ) : (
+          <button
+            onClick={() => { if (suppressToggle.current) { suppressToggle.current = false; return; } handleToggle(); }}
+            className="w-full flex items-center justify-between px-5 py-4 text-left bg-gradient-to-b from-[#f7efe4] to-[#efe2d2] hover:from-[#f3e9dd] hover:to-[#e9d9c5] transition-colors cursor-pointer border-b border-[#e3d4c0]"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              {open ? <ChevronDown className="w-5 h-5 text-[#7a4a25] flex-shrink-0" /> : <ChevronRight className="w-5 h-5 text-[#7a4a25] flex-shrink-0" />}
+              <span {...titleGesture} className="text-[#3d2614] text-lg font-bold tracking-wide truncate" title="Hold or double-tap to rename">{tab}</span>
+            </div>
+          </button>
+        )}
+
+        {open && (
+          <div>
+            {loading && <div className="px-5 py-4"><p className="text-gray-400 text-sm">Loading subcategories…</p></div>}
+            {!loading && categories.length === 0 && loaded && (
+              <div className="px-5 py-4"><p className="text-gray-400 text-sm">No subcategories found</p></div>
+            )}
+            {categories.map((cat, i) => (
+              <CategoryRow key={cat.name + i} category={cat} spreadsheetId={spreadsheetId} tab={tab} onChanged={loadCategories} theme="store" />
+            ))}
+
+            {!loading && (
+              <div className="px-4 py-3 border-t border-gray-100">
+                {addingCat ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center gap-2">
+                      <input value={newCatName} onChange={e => setNewCatName(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') submitCategory(); }}
+                        placeholder="New subcategory name…" autoFocus
+                        className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                      <button onClick={submitCategory} disabled={!newCatName.trim() || savingCat}
+                        className="bg-amber-400 text-gray-900 text-sm font-semibold px-3 py-2 rounded-full disabled:opacity-40">{savingCat ? '…' : 'Add'}</button>
+                      <button onClick={() => { setAddingCat(false); setNewCatName(''); setCatErr(null); }} className="text-gray-400 hover:text-gray-900"><X className="w-4 h-4" /></button>
+                    </div>
+                    {catErr && <p className="text-red-600 text-xs">{catErr}</p>}
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingCat(true)} className="flex items-center gap-2 text-[#007185] hover:text-[#C7511F] text-sm transition-colors">
+                    <Plus className="w-4 h-4" /> Add subcategory
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  // ── Classic (dark) theme ────────────────────────────────────────────────
   return (
     <div className="border-b border-zinc-800 last:border-b-0">
       {editingTitle ? (
@@ -631,6 +878,13 @@ function QuickCreateRow({ placeholder, value, onChange, onSubmit, onCancel, savi
 
 export default function PartsLibrary() {
   const navigate = useNavigate();
+  const [theme, setTheme] = useState(loadTheme);
+  const isStore = theme === 'store';
+  const toggleTheme = () => setTheme(t => {
+    const next = t === 'store' ? 'classic' : 'store';
+    try { localStorage.setItem(THEME_KEY, next); } catch { /* ignore */ }
+    return next;
+  });
   const [sheetTabs, setSheetTabs] = useState([]);
   const [spreadsheetId, setSpreadsheetId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -974,7 +1228,137 @@ export default function PartsLibrary() {
   }, [loading, sheetTabs]);
 
   return (
-    <div className="min-h-screen flex justify-center p-6">
+    <div className={isStore ? 'min-h-screen bg-[#EAEDED]' : 'min-h-screen flex justify-center p-6'}>
+
+      {/* ───────────── Amazon-style "Store" theme ───────────── */}
+      {isStore && (
+        <>
+          <header className="sticky top-0 z-30 shadow-md">
+            <div className="px-4 py-2.5 flex items-center gap-3 flex-wrap" style={{ background: 'linear-gradient(180deg,#4d3019 0%,#3d2614 100%)' }}>
+              <button onClick={() => navigate('/')} className="text-[#f3e9dd] hover:text-white transition-colors" title="Back">
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <h1 className="text-[#f9d9b5] text-xl font-extrabold tracking-tight whitespace-nowrap">Parts Library</h1>
+
+              {sheetTabs.length > 0 && (
+                <div className="relative flex-1 min-w-[180px] max-w-2xl order-last w-full sm:order-none sm:w-auto">
+                  <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    ref={searchRef}
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Search parts…"
+                    className="w-full bg-white rounded-md pl-9 pr-9 py-2 text-gray-900 placeholder:text-gray-500 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                  {search && (
+                    <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700">
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 ml-auto">
+                {sheetTabs.length > 0 && (
+                  <>
+                    <button onClick={openBackfill} title="Backfill pictures with AI"
+                      className="flex items-center justify-center text-[#f3e9dd] border border-[#6b4a2e] bg-[#5a3a22] hover:bg-[#6b4a2e] p-2 rounded-md transition-colors">
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={openAdd}
+                      className="flex items-center gap-1.5 bg-[#febd69] hover:bg-[#f3a847] text-[#0F1111] font-semibold text-sm px-3 py-2 rounded-full transition-colors">
+                      <Plus className="w-4 h-4" /> Add Part
+                    </button>
+                  </>
+                )}
+                <button onClick={toggleTheme} title="Switch to Classic view"
+                  className="flex items-center gap-1.5 text-[#f3e9dd] border border-[#6b4a2e] hover:bg-[#5a3a22] text-xs font-medium px-2.5 py-2 rounded-md transition-colors">
+                  <List className="w-4 h-4" /> Classic
+                </button>
+              </div>
+            </div>
+          </header>
+
+          <div className="max-w-6xl mx-auto px-4 py-6">
+            {q ? (
+              /* Store search results */
+              <div>
+                {loadingAll && <p className="text-gray-600 text-sm mb-3">Searching all parts…</p>}
+                {!loadingAll && (
+                  <p className="text-gray-700 text-sm mb-3">
+                    {searchResults.length} result{searchResults.length === 1 ? '' : 's'} for “<span className="font-semibold">{search.trim()}</span>”
+                  </p>
+                )}
+                {!loadingAll && searchResults.length === 0 ? (
+                  <div className="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center">
+                    <p className="text-gray-500 text-sm">No parts match “{search.trim()}”</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                    {searchResults.map((p, i) => (
+                      <div key={p.tab + p.category + p.partName + i} className="flex flex-col bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all">
+                        <div className="w-full aspect-square mb-3 flex items-center justify-center">
+                          <PartImage url={p.imageUrl} className="w-full h-full" />
+                        </div>
+                        <span className="text-[#0F1111] text-sm leading-snug line-clamp-2">{p.partName}</span>
+                        {p.price && <div className="mt-1 text-[#B12704] text-base font-medium">{p.price}</div>}
+                        <div className="mt-1 flex items-center gap-2 flex-wrap">
+                          {p.supplierLink ? (
+                            <a href={p.supplierLink} target="_blank" rel="noopener noreferrer" className="text-[#007185] hover:text-[#C7511F] text-xs hover:underline">{p.supplier || 'Link'}</a>
+                          ) : p.supplier ? (
+                            <span className="text-gray-500 text-xs">{p.supplier}</span>
+                          ) : null}
+                          {p.partNum && <span className="text-gray-500 font-mono text-xs">{p.partNum}</span>}
+                        </div>
+                        <div className="text-gray-400 text-[11px] mt-2">{p.tab} · {p.category}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {loading && <p className="text-gray-600 text-sm">Loading categories…</p>}
+                {error && <p className="text-red-600 text-sm">{error}</p>}
+                {sheetTabs.map((tab) => (
+                  <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} onRenamed={reloadTabs} theme="store" />
+                ))}
+                {!loading && !error && sheetTabs.length === 0 && (
+                  <div className="bg-white border border-gray-200 rounded-lg px-6 py-8 text-center">
+                    <p className="text-gray-500 text-sm">Link a Master Sheet to see categories</p>
+                  </div>
+                )}
+                {!loading && spreadsheetId && (
+                  <div className="mt-2">
+                    {addingTab ? (
+                      <div className="flex flex-col gap-2 bg-white border border-gray-200 rounded-lg p-3">
+                        <div className="flex items-center gap-2">
+                          <input value={newTabName} onChange={e => setNewTabName(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') submitTab(); }}
+                            placeholder="New category name…" autoFocus
+                            className="flex-1 bg-white border border-gray-300 rounded-lg px-3 py-2.5 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-amber-500" />
+                          <button onClick={submitTab} disabled={!newTabName.trim() || savingTab}
+                            className="bg-amber-400 text-gray-900 text-sm font-semibold px-4 py-2.5 rounded-full disabled:opacity-40">{savingTab ? '…' : 'Add'}</button>
+                          <button onClick={() => { setAddingTab(false); setNewTabName(''); setTabErr(null); }} className="text-gray-400 hover:text-gray-900"><X className="w-4 h-4" /></button>
+                        </div>
+                        {tabErr && <p className="text-red-600 text-xs">{tabErr}</p>}
+                      </div>
+                    ) : (
+                      <button onClick={() => setAddingTab(true)}
+                        className="flex items-center gap-2 text-[#007185] hover:text-[#C7511F] text-sm font-medium transition-colors">
+                        <Plus className="w-4 h-4" /> Add category
+                      </button>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ───────────── Classic (dark) theme ───────────── */}
+      {!isStore && (
       <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="mb-6 flex items-center gap-4">
@@ -985,6 +1369,10 @@ export default function PartsLibrary() {
             <h1 className="text-4xl font-bold text-white tracking-tight">Parts Library</h1>
             <p className="text-gray-400 mt-1">Manage your parts and components</p>
           </div>
+          <button onClick={toggleTheme} title="Switch to Store view"
+            className="flex items-center gap-1.5 bg-zinc-800 border border-zinc-700 text-gray-300 text-xs font-medium px-2.5 py-2 rounded-lg hover:bg-zinc-700 hover:text-white transition-colors">
+            <LayoutGrid className="w-4 h-4" /> Store
+          </button>
           {sheetTabs.length > 0 && (
             <>
               <button
@@ -1107,6 +1495,7 @@ export default function PartsLibrary() {
         </div>
         )}
       </div>
+      )}
 
       {/* Add Part modal */}
       {showAdd && (
