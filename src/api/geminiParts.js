@@ -53,29 +53,27 @@ function amazonImageFromUrl(u) {
 }
 
 // Ask our serverless endpoint to fetch the product page (with a real browser UA)
-// and pull the main image (og:image / images/I/). Returns '' on any failure so
-// callers fall back. No-op locally (vite has no /api functions) → returns ''.
-async function fetchOgImage(link) {
-  if (!link || !/^https?:\/\//i.test(link)) return '';
+// and pull the main image + price. Returns {} on any failure so callers fall
+// back. No-op locally (vite has no /api functions) → returns {}.
+async function fetchPageMeta(link) {
+  if (!link || !/^https?:\/\//i.test(link)) return {};
   try {
     const r = await fetch(`/api/productImage?url=${encodeURIComponent(link)}`);
-    if (!r.ok) return '';
-    const { imageUrl } = await r.json();
-    return imageUrl || '';
-  } catch { return ''; }
+    if (!r.ok) return {};
+    return await r.json(); // { imageUrl, price }
+  } catch { return {}; }
 }
 
 // Resolve the best image for a product link. For Amazon (which blocks the AI's
 // page reads) prefer deterministic sources over the model's guess: the real page
 // image (server og:image) → the ASIN image → finally the AI's suggestion. For
-// other sites trust the AI first, then the server og:image.
-async function resolveImage(link, aiImage) {
+// other sites trust the AI first, then the server og:image. `serverImage` lets a
+// caller pass an already-fetched value to avoid a second round-trip.
+async function resolveImage(link, aiImage, serverImage) {
   const ai = cleanLink(aiImage || '', '');
-  if (isAmazonUrl(link)) {
-    const og = await fetchOgImage(link);
-    return og || amazonImageFromUrl(link) || ai;
-  }
-  return ai || (await fetchOgImage(link));
+  const og = serverImage !== undefined ? serverImage : ((await fetchPageMeta(link)).imageUrl || '');
+  if (isAmazonUrl(link)) return og || amazonImageFromUrl(link) || ai;
+  return ai || og;
 }
 
 function parseJson(text) {
@@ -132,12 +130,15 @@ export async function extractPartFromUrl(link, taxonomy = null) {
   });
   const o = parseJson(text);
   const amazon = isAmazonUrl(link);
+  // One server fetch gives both the real page image and price — Amazon blocks the
+  // AI's read, so for Amazon prefer the server values over the model's guess.
+  const meta = await fetchPageMeta(link);
   return {
     partName: o.partName || '',
     supplier: o.supplier || (amazon ? 'Amazon' : ''),
     partNum: o.partNum || '',
-    price: o.price || '',
-    imageUrl: await resolveImage(link, o.imageUrl),
+    price: amazon ? (meta.price || o.price || '') : (o.price || meta.price || ''),
+    imageUrl: await resolveImage(link, o.imageUrl, meta.imageUrl || ''),
     category: o.category || '',
     subcategory: o.subcategory || '',
   };
