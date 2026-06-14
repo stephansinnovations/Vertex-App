@@ -18,7 +18,7 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   Supabase-backed** (`api/buildsDb.js`, same entity interface) so builds sync across
   devices. Local builds auto-migrate to Supabase once per device on sign-in.
 - **Supabase tables:** `profiles`, `builds`, `app_settings`, `chat_history`, `ai_rooms`,
-  `ai_agents`. Builds carry `owner` + RLS (delete-own / admin-any).
+  `ai_agents`, `bug_reports`. Builds carry `owner` + RLS (delete-own / admin-any).
 - **Build phases** live as `jsonb` on the Supabase build row (synced). Phase parts are
   embedded in `phase.parts`; tasks carry `task.parts`. The standard phase template is
   `DEFAULT_PHASES` in `buildsDb.js` (re-seeded onto any build lacking a "Customer meeting"
@@ -52,6 +52,21 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   `partsLibraryCart` synced across components via a `cartchange` window event (`useCart`).
 - **Part images on add/edit:** edit modal uploads to Supabase Storage bucket
   `part-images` (public, like `sop-videos`), plus AI find-image + AI autofill-from-link.
+- **Edit a part:** small pencil at the card's bottom-right opens the edit modal (the
+  old title hold/double-tap gesture was removed). **Add Part** requires a category +
+  subcategory (empty ones flag red on submit); the AI link-fill only auto-picks a
+  category if the user hasn't (tracked via `addTabRef` so its async closure isn't stale).
+- **Scan a part:** on `/PartsLibrary` the floating purple orb (`FloatingVertexButton`)
+  is the scan button — it shows a camera and dispatches a `vertex:scan-part` window
+  event (the page listens + opens the camera within the gesture). The flow runs
+  `scanPartFromImage` (Amazon-biased) and a library search in parallel: a match →
+  confirm + add qty to cart; no match → Amazon link (ready) + Add-to-Library shortcut.
+- **App-wide error reporting:** `ErrorBoundary` (React render crashes) +
+  `GlobalErrorReporter` (window errors / unhandled rejections) surface a **Report Bug**
+  button. `api/bugReports.js` writes to Supabase `bug_reports` with a localStorage
+  fallback (`vertex_bug_reports`) so nothing's lost offline / before the table exists
+  (run `supabase/bug_reports.sql` once). Read all bugs via `node scripts/read-bugs.mjs`
+  or the admin `/Bugs` page (Settings → Diagnostics).
 
 ## Gotchas
 - **`VITE_*` env vars bake in at build time** → after changing one in Vercel, **redeploy
