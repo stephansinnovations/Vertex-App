@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus, Bug } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSetting, setSetting } from '@/api/appSettings';
@@ -41,6 +41,9 @@ const ALL_FIELDS = [...API_KEYS, ...SHEET_LINKS];
 
 export default function Settings() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // When opened from the floating settings gear, back returns to that page.
+  const backTo = location.state?.fromFloating || '/Profile';
   const [values, setValues] = useState({});
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState('');
@@ -193,7 +196,7 @@ export default function Settings() {
     >
       <div className="w-full max-w-lg px-6 mb-6 flex items-center gap-4">
         <button
-          onClick={() => navigate('/Profile')}
+          onClick={() => navigate(backTo)}
           className="text-gray-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
