@@ -820,6 +820,10 @@ export default function PartsLibrary() {
   const [loadingCats, setLoadingCats] = useState(false);
   const [addCategory, setAddCategory] = useState('');
   const pendingSubcatRef = useRef(null); // AI-guessed subcategory, applied once its tab's cats load
+  // Latest user selection, readable inside the async AI fill (whose closure is stale)
+  // so the AI never overwrites a category the user picked while it was working.
+  const addTabRef = useRef('');
+  useEffect(() => { addTabRef.current = addTab; }, [addTab]);
   const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
   const [saving, setSaving] = useState(false);
   const [addErr, setAddErr] = useState(null);
@@ -960,8 +964,11 @@ export default function PartsLibrary() {
         price: r.price || f.price,
         imageUrl: r.imageUrl || f.imageUrl,
       }));
+      // Only auto-pick a category/subcategory if the user hasn't chosen one while
+      // the AI was working (subcategory can't be set without a category, so the
+      // category check covers both).
       const matchTab = sheetTabs.find(t => t.toLowerCase() === (r.category || '').toLowerCase());
-      if (matchTab) {
+      if (matchTab && !addTabRef.current) {
         pendingSubcatRef.current = r.subcategory || null;
         setAddTab(matchTab);
       }
