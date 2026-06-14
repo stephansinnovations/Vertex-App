@@ -41,6 +41,17 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   from Settings (no proxy). Keys live in Settings (`app_settings`), readable by all members.
 - **Backgrounds:** `BackgroundContext` applies a CSS/image background to `document.body`,
   library + active choice persisted in localStorage.
+- **Parts Library UI** (`pages/PartsLibrary.jsx`) is a single Amazon-style "store" theme:
+  light page, navy header (search + Add Part + Cart), Category → Subcategory →
+  product-card grid (`grid-cols-2` mobile → `lg:grid-cols-5`). The old dark "classic"
+  theme + theme toggle + bulk picture-backfill button were removed.
+- **Per-part cards** overlay two circle buttons on the image: yellow add-to-cart
+  (bottom-right) and a stock-quantity circle (bottom-left) colored by on-hand vs.
+  build-allocated — gray=no count/null, green=surplus, blue=exact, red=short
+  (`stockColor()`). Stock = localStorage `partsLibraryStock`; cart = localStorage
+  `partsLibraryCart` synced across components via a `cartchange` window event (`useCart`).
+- **Part images on add/edit:** edit modal uploads to Supabase Storage bucket
+  `part-images` (public, like `sop-videos`), plus AI find-image + AI autofill-from-link.
 
 ## Gotchas
 - **`VITE_*` env vars bake in at build time** → after changing one in Vercel, **redeploy
@@ -55,6 +66,17 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   use `alter ... add column if not exists` + relax/supply those.
 - **Google Search grounding returns `vertexaisearch...redirect` URLs that expire** —
   `geminiParts.cleanLink` swaps them for a durable Google-search URL.
+- **Amazon (and other shops) block the AI's in-browser page read**, so Gemini returns
+  empty/garbage image + price. Real values come from the serverless **`api/productImage.js`**
+  (fetches the page with a browser UA → `og:image`/`images/I/` + `a-offscreen`/`priceAmount`).
+  `geminiParts.resolveImage`/`fetchPageMeta` order for Amazon: server → ASIN image
+  (`images-na.ssl-images-amazon.com/images/P/<ASIN>...`) → AI guess; price prefers server.
+  Amazon CAPTCHA-blocks server fetches **intermittently** (per-request, not per-product) →
+  occasional empty result; the ASIN P-endpoint sometimes returns a 1×1 placeholder, so
+  `PartImage` treats `naturalWidth<=1` as "no image".
+- **`/api/*` serverless functions only run on Vercel** (vite dev has none → `fetchPageMeta`
+  no-ops to `{}` locally). Verify handler logic by importing it in `node` (has network);
+  the AI/serverless add-part flow can't be exercised in the local preview.
 - **Build-sheet part qty is per-source (last write wins), not summed** across phases/tasks;
   the in-app per-phase Parts section shows the correct merged total.
 
