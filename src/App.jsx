@@ -16,6 +16,8 @@ import { VertexChatProvider, useVertexChat } from '@/lib/VertexChatContext';
 import VertexChat from '@/components/VertexChat';
 import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import GlobalErrorReporter from '@/components/GlobalErrorReporter';
 import WorkOrderPage from './pages/WorkOrderPage';
 import Builds from './pages/Builds';
 import BuildDetail from './pages/BuildDetail';
@@ -132,25 +134,28 @@ function GlobalVertexChat() {
 
 function App() {
   return (
-    <ThemeProvider>
-      <BackgroundProvider>
-      <VertexChatProvider>
-        <AuthProvider>
-          <ShortcutProvider>
-            <QueryClientProvider client={queryClientInstance}>
-              <Router>
-                <NavigationTracker />
-                <AuthenticatedApp />
-                <FloatingVertexButton />
-                <GlobalVertexChat />
-              </Router>
-              <Toaster />
-            </QueryClientProvider>
-          </ShortcutProvider>
-        </AuthProvider>
-      </VertexChatProvider>
-      </BackgroundProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <BackgroundProvider>
+        <VertexChatProvider>
+          <AuthProvider>
+            <ShortcutProvider>
+              <QueryClientProvider client={queryClientInstance}>
+                <Router>
+                  <NavigationTracker />
+                  <AuthenticatedApp />
+                  <FloatingVertexButton />
+                  <GlobalVertexChat />
+                </Router>
+                <Toaster />
+                <GlobalErrorReporter />
+              </QueryClientProvider>
+            </ShortcutProvider>
+          </AuthProvider>
+        </VertexChatProvider>
+        </BackgroundProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
 
