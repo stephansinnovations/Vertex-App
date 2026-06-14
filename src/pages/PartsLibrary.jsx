@@ -1000,10 +1000,14 @@ export default function PartsLibrary() {
   const aiFillOne = async (field) => {
     if (aiField) return;
     setAiField(field);
+    setAiErr(null);
     try {
       const val = await fillPartField(field, pForm);
       if (val) setPForm(f => ({ ...f, [field]: val }));
-    } catch { /* leave the field as-is */ } finally {
+      else setAiErr('AI couldn’t fill that — paste a part link (or add more details) first.');
+    } catch (e) {
+      setAiErr(e?.message || 'AI fill failed.');
+    } finally {
       setAiField(null);
     }
   };
@@ -1013,6 +1017,7 @@ export default function PartsLibrary() {
   const aiGuessCategory = async () => {
     if (aiField || !spreadsheetId || sheetTabs.length === 0) return;
     setAiField('category');
+    setAiErr(null);
     try {
       const taxonomy = {};
       const results = await Promise.all(sheetTabs.map(t =>
@@ -1026,11 +1031,15 @@ export default function PartsLibrary() {
       if (!addTab) {
         const matchTab = sheetTabs.find(t => t.toLowerCase() === (g.category || '').toLowerCase());
         if (matchTab) { pendingSubcatRef.current = g.subcategory || null; setAddTab(matchTab); }
+        else setAiErr('AI couldn’t pick a category — paste a part link or a part name first.');
       } else {
         const m = addCats.find(c => c.name.toLowerCase() === (g.subcategory || '').toLowerCase());
         if (m) setAddCategory(m.name);
+        else setAiErr('AI couldn’t pick a subcategory here — paste a part link or a part name first.');
       }
-    } catch { /* ignore */ } finally {
+    } catch (e) {
+      setAiErr(e?.message || 'AI fill failed.');
+    } finally {
       setAiField(null);
     }
   };
@@ -1396,8 +1405,8 @@ export default function PartsLibrary() {
                   className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
                 <button onClick={handleDone}
-                  className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2">
-                  <Sparkles className="w-4 h-4" /> Done
+                  className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold py-3.5 rounded-full transition-colors flex items-center justify-center gap-2">
+                  <Sparkles className="w-4 h-4" /> Fill with AI
                 </button>
                 <p className="text-gray-400 text-[11px] text-center mt-2 mb-4">AI reads the link and fills in the part for you.</p>
 
@@ -1414,6 +1423,20 @@ export default function PartsLibrary() {
                     <p className="text-violet-700 text-xs">Reading the link and filling in the details… pick a category meanwhile.</p>
                   </div>
                 )}
+
+                {/* Part link + AI: paste a link, then "Fill with AI" fills every
+                    field at once — or use the ✨ next to any single field. */}
+                <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
+                <input value={pForm.supplierLink}
+                  onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') handleDone(); }}
+                  placeholder="Paste the supplier / product link…"
+                  className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-2 focus:outline-none focus:border-[#146EB4]" />
+                <button onClick={handleDone} disabled={aiFilling || !pForm.supplierLink.trim()}
+                  className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-full transition-colors flex items-center justify-center gap-2 mb-1">
+                  <Sparkles className="w-4 h-4" /> {aiFilling ? 'Filling…' : 'Fill with AI'}
+                </button>
+                <p className="text-gray-400 text-[11px] text-center mb-4">Fills every field from the link — or tap ✨ next to any field to fill just that one.</p>
 
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs text-gray-500">Category</label>
@@ -1495,14 +1518,6 @@ export default function PartsLibrary() {
                       <AiFillButton onClick={() => aiFillOne('partNum')} busy={aiField === 'partNum'} />
                     </div>
                     <input value={pForm.partNum} onChange={e => setPForm(f => ({ ...f, partNum: e.target.value }))}
-                      className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs text-gray-500">Part link</label>
-                      <AiFillButton onClick={() => aiFillOne('supplierLink')} busy={aiField === 'supplierLink'} />
-                    </div>
-                    <input value={pForm.supplierLink} onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
-                      placeholder="https://…"
                       className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
                     <div className="flex items-center justify-between mb-1.5">
