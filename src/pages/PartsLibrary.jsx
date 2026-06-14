@@ -826,6 +826,7 @@ export default function PartsLibrary() {
   useEffect(() => { addTabRef.current = addTab; }, [addTab]);
   const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
   const [saving, setSaving] = useState(false);
+  const [submitTried, setSubmitTried] = useState(false); // flags missing category/subcategory red
   const [addErr, setAddErr] = useState(null);
   const [aiFilling, setAiFilling] = useState(false);
   const [aiErr, setAiErr] = useState(null);
@@ -1014,6 +1015,7 @@ export default function PartsLibrary() {
     setAiErr(null);
     setQuickAdd(null);
     setAddStarted(false);
+    setSubmitTried(false);
     setAddTab('');
     setAddCategory('');
     setAddCats([]);
@@ -1069,7 +1071,9 @@ export default function PartsLibrary() {
   }, [showAdd, addTab, spreadsheetId]);
 
   const submitPart = async () => {
-    if (!pForm.partName.trim() || !addCategory || saving) return;
+    if (saving) return;
+    if (!addTab || !addCategory) { setSubmitTried(true); return; } // turn the empty select(s) red
+    if (!pForm.partName.trim()) return;
     setSaving(true);
     setAddErr(null);
     try {
@@ -1364,7 +1368,7 @@ export default function PartsLibrary() {
                     if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
                     setQuickAdd(null); setAddTab(e.target.value);
                   }}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-2 focus:outline-none focus:border-[#146EB4]">
+                  className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 text-sm mb-2 focus:outline-none ${submitTried && !addTab ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#146EB4]'}`}>
                   <option value="__add_tab__">＋ Add new category</option>
                   <option value="">Select a category</option>
                   {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
@@ -1381,7 +1385,7 @@ export default function PartsLibrary() {
                     setQuickAdd(null); setAddCategory(e.target.value);
                   }}
                   disabled={loadingCats || !addTab}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-2 focus:outline-none focus:border-[#146EB4] disabled:opacity-50">
+                  className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 text-sm mb-2 focus:outline-none disabled:opacity-50 ${submitTried && !addCategory ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#146EB4]'}`}>
                   <option value="__add_cat__">＋ Add subcategory</option>
                   <option value="">{loadingCats ? 'Loading subcategories…' : 'Select a subcategory'}</option>
                   {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
@@ -1437,8 +1441,11 @@ export default function PartsLibrary() {
                     </div>
 
                     {addErr && <p className="text-red-600 text-xs mb-3">{addErr}</p>}
+                    {submitTried && (!addTab || !addCategory) && (
+                      <p className="text-red-600 text-xs mb-3">Pick a category and subcategory before adding to the sheet.</p>
+                    )}
 
-                    <button onClick={submitPart} disabled={!addTab || !pForm.partName.trim() || !addCategory || saving}
+                    <button onClick={submitPart} disabled={!pForm.partName.trim() || saving}
                       className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
                       {saving ? 'Adding…' : <><Check className="w-4 h-4" /> Add to sheet</>}
                     </button>
