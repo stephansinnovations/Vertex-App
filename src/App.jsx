@@ -43,6 +43,7 @@ import PhaseDetail from './pages/PhaseDetail.jsx';
 import AIRoom from './pages/AIRoom.jsx';
 import RoomsView from './pages/RoomsView.jsx';
 import Settings from './pages/Settings.jsx';
+import Bugs from './pages/Bugs.jsx';
 import Login from './pages/Login.jsx';
 
 import { useEffect } from 'react';
@@ -119,6 +120,7 @@ const AuthenticatedApp = () => {
       <Route path="/AIRoom" element={<AdminRoute><AIRoom /></AdminRoute>} />
       <Route path="/Rooms" element={<AdminRoute><RoomsView /></AdminRoute>} />
       <Route path="/Settings" element={<AdminRoute><Settings /></AdminRoute>} />
+      <Route path="/Bugs" element={<AdminRoute><Bugs /></AdminRoute>} />
       <Route path="/Login" element={<Login />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>

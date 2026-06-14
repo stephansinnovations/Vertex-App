@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus } from 'lucide-react';
+import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus, Bug } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSetting, setSetting } from '@/api/appSettings';
 import { useBackground, backgroundStyle } from '@/lib/BackgroundContext';
@@ -311,6 +311,22 @@ export default function Settings() {
               style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
             >
               <span className="text-white font-medium">Inventory Ideas</span>
+              <ChevronRight className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
+
+          {/* Diagnostics */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Bug className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Diagnostics</h2>
+            </div>
+            <button
+              onClick={() => navigate('/Bugs')}
+              className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 transition-colors"
+              style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+            >
+              <span className="text-white font-medium">Bug Reports</span>
               <ChevronRight className="w-5 h-5 text-gray-500" />
             </button>
           </div>

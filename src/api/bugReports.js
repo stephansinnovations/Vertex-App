@@ -79,3 +79,24 @@ export async function getBugReports() {
     return readLocal();
   }
 }
+
+// Local-only rows (offline / no table yet) carry a `local_…` id; everything else
+// is a Supabase uuid. Mutations route to the right store by that prefix.
+function isLocalId(id) { return typeof id === 'string' && id.startsWith('local_'); }
+
+function updateLocal(id, patch) {
+  const list = readLocal().map(b => (b.id === id ? { ...b, ...patch } : b));
+  writeLocal(list);
+}
+
+export async function setBugResolved(id, resolved) {
+  if (isLocalId(id)) { updateLocal(id, { resolved }); return { ok: true }; }
+  const { error } = await supabase.from('bug_reports').update({ resolved }).eq('id', id);
+  return { ok: !error, error: error?.message };
+}
+
+export async function deleteBug(id) {
+  if (isLocalId(id)) { writeLocal(readLocal().filter(b => b.id !== id)); return { ok: true }; }
+  const { error } = await supabase.from('bug_reports').delete().eq('id', id);
+  return { ok: !error, error: error?.message };
+}
