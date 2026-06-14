@@ -33,11 +33,11 @@ function cleanLink(link, query) {
 // the main image. But every product has an ASIN in its URL, and Amazon exposes a
 // public image endpoint keyed by ASIN — so we can build a reliable image URL
 // (and label the supplier "Amazon") without scraping.
-function isAmazonUrl(u) {
+export function isAmazonUrl(u) {
   try { return /(^|\.)amazon\.[a-z.]+$/i.test(new URL(u).hostname); } catch { return false; }
 }
 
-function amazonAsin(u) {
+export function amazonAsin(u) {
   if (!u) return null;
   const m = u.match(/\/(?:dp|gp\/product|gp\/aw\/d|product|gp\/offer-listing)\/([A-Z0-9]{10})(?:[/?]|$)/i)
     || u.match(/[/?&](?:asin|ASIN)=([A-Z0-9]{10})/)

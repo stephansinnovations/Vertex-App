@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, 
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
-import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, findPartImage } from '@/api/geminiParts';
+import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, findPartImage, isAmazonUrl, amazonAsin } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -1139,6 +1139,36 @@ export default function PartsLibrary() {
 
   const cartTotal = Object.values(cart.cart).reduce((s, i) => s + parsePrice(i.part?.price) * (i.qty || 0), 0);
 
+  // How many cart items have a link we can actually open / add to a store cart.
+  const buyableCount = Object.values(cart.cart).filter(i => (i.part?.supplierLink || '').trim()).length;
+
+  // Buy: send each part to its store. Amazon items (the primary supplier) are
+  // batched into one auto-add-to-cart deep link (ASIN.n / Quantity.n pairs) so they
+  // land in the Amazon cart with the right quantities; other suppliers just open
+  // their product page (no universal add-to-cart exists).
+  const handleBuy = () => {
+    const amazon = []; // { asin, qty }
+    const others = []; // product URLs
+    Object.values(cart.cart).forEach(({ part, qty }) => {
+      const link = (part?.supplierLink || '').trim();
+      if (!link) return;
+      const asin = isAmazonUrl(link) ? amazonAsin(link) : null;
+      if (asin) amazon.push({ asin, qty: Math.max(1, qty || 1) });
+      else others.push(link);
+    });
+    const urls = [];
+    if (amazon.length) {
+      const params = amazon
+        .flatMap((a, i) => [`ASIN.${i + 1}=${a.asin}`, `Quantity.${i + 1}=${a.qty}`])
+        .join('&');
+      urls.push(`https://www.amazon.com/gp/aws/cart/add.html?${params}`);
+    }
+    urls.push(...others);
+    // First open() rides the click gesture; the rest may be popup-blocked, but the
+    // Amazon batch (the common case) is opened first.
+    urls.forEach(u => window.open(u, '_blank', 'noopener'));
+  };
+
   return (
     <div className="min-h-screen bg-[#EAEDED]">
       {/* ───────────── Top bar (Amazon blue) ───────────── */}
@@ -1302,6 +1332,11 @@ export default function PartsLibrary() {
                     <span className="text-lg font-bold">${cartTotal.toFixed(2)}</span>
                   </div>
                 )}
+                <button onClick={handleBuy} disabled={buyableCount === 0}
+                  className="w-full flex items-center justify-center gap-2 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 mb-2">
+                  <ShoppingCart className="w-4 h-4" /> Buy{buyableCount > 0 ? ` (${buyableCount})` : ''}
+                </button>
+                <p className="text-gray-400 text-[11px] text-center mb-2">Opens each part's store — Amazon items are added to your Amazon cart automatically.</p>
                 <button onClick={() => cart.clear()}
                   className="w-full flex items-center justify-center gap-2 text-gray-600 hover:text-red-600 py-2.5 rounded-full font-medium transition-colors">
                   <Trash2 className="w-4 h-4" /> Clear cart
