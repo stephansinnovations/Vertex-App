@@ -1139,22 +1139,34 @@ export default function PartsLibrary() {
 
   const cartTotal = Object.values(cart.cart).reduce((s, i) => s + parsePrice(i.part?.price) * (i.qty || 0), 0);
 
-  // How many cart items have a link we can actually open / add to a store cart.
-  const buyableCount = Object.values(cart.cart).filter(i => (i.part?.supplierLink || '').trim()).length;
+  // Everything in the cart is routable (a real link, or a name we can search).
+  const buyableCount = Object.keys(cart.cart).length;
 
-  // Buy: send each part to its store. Amazon items (the primary supplier) are
-  // batched into one auto-add-to-cart deep link (ASIN.n / Quantity.n pairs) so they
-  // land in the Amazon cart with the right quantities; other suppliers just open
-  // their product page (no universal add-to-cart exists).
+  // Buy: send each part to Amazon (the primary supplier) or its store.
+  // - Amazon links with an ASIN → one batched add-to-cart deep link (ASIN.n/
+  //   Quantity.n). Amazon now routes this through its signed-in "Add to Cart"
+  //   (SiteStripe/associates) flow, so it only actually adds when the shopper is
+  //   logged into Amazon in that browser — otherwise they hit a sign-in page.
+  // - Amazon items without a clean ASIN, or parts with no link → Amazon search by
+  //   name (better than a dead link; the user picks + adds).
+  // - Non-Amazon links → their product page (no universal add-to-cart exists).
   const handleBuy = () => {
     const amazon = []; // { asin, qty }
-    const others = []; // product URLs
+    const searches = []; // part names → Amazon search
+    const others = []; // non-Amazon product URLs
     Object.values(cart.cart).forEach(({ part, qty }) => {
       const link = (part?.supplierLink || '').trim();
-      if (!link) return;
-      const asin = isAmazonUrl(link) ? amazonAsin(link) : null;
-      if (asin) amazon.push({ asin, qty: Math.max(1, qty || 1) });
-      else others.push(link);
+      const name = (part?.partName || '').trim();
+      if (link && isAmazonUrl(link)) {
+        const asin = amazonAsin(link);
+        if (asin) amazon.push({ asin, qty: Math.max(1, qty || 1) });
+        else if (name) searches.push(name);
+        else others.push(link);
+      } else if (link) {
+        others.push(link);
+      } else if (name) {
+        searches.push(name); // no link at all → search Amazon
+      }
     });
     const urls = [];
     if (amazon.length) {
@@ -1163,9 +1175,10 @@ export default function PartsLibrary() {
         .join('&');
       urls.push(`https://www.amazon.com/gp/aws/cart/add.html?${params}`);
     }
+    searches.forEach(n => urls.push(`https://www.amazon.com/s?k=${encodeURIComponent(n)}`));
     urls.push(...others);
     // First open() rides the click gesture; the rest may be popup-blocked, but the
-    // Amazon batch (the common case) is opened first.
+    // Amazon add-to-cart batch (the common case) is opened first.
     urls.forEach(u => window.open(u, '_blank', 'noopener'));
   };
 
@@ -1336,7 +1349,7 @@ export default function PartsLibrary() {
                   className="w-full flex items-center justify-center gap-2 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 mb-2">
                   <ShoppingCart className="w-4 h-4" /> Buy{buyableCount > 0 ? ` (${buyableCount})` : ''}
                 </button>
-                <p className="text-gray-400 text-[11px] text-center mb-2">Opens each part's store — Amazon items are added to your Amazon cart automatically.</p>
+                <p className="text-gray-400 text-[11px] text-center mb-2">Sign in to Amazon first — Amazon parts are added to your Amazon cart; others open their store page.</p>
                 <button onClick={() => cart.clear()}
                   className="w-full flex items-center justify-center gap-2 text-gray-600 hover:text-red-600 py-2.5 rounded-full font-medium transition-colors">
                   <Trash2 className="w-4 h-4" /> Clear cart
