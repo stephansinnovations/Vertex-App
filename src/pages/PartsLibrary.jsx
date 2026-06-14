@@ -1143,15 +1143,15 @@ export default function PartsLibrary() {
   const buyableCount = Object.keys(cart.cart).length;
 
   // Buy: send each part to Amazon (the primary supplier) or its store.
-  // - Amazon links with an ASIN → one batched add-to-cart deep link (ASIN.n/
-  //   Quantity.n). Amazon now routes this through its signed-in "Add to Cart"
-  //   (SiteStripe/associates) flow, so it only actually adds when the shopper is
-  //   logged into Amazon in that browser — otherwise they hit a sign-in page.
+  // - Amazon links with an ASIN → one add-to-cart deep link PER item (Amazon's
+  //   signed-in Add-to-Cart flow adds most reliably one ASIN at a time). It only
+  //   actually adds when the shopper is logged into Amazon in that browser —
+  //   otherwise they hit a sign-in page.
   // - Amazon items without a clean ASIN, or parts with no link → Amazon search by
   //   name (better than a dead link; the user picks + adds).
   // - Non-Amazon links → their product page (no universal add-to-cart exists).
   const handleBuy = () => {
-    const amazon = []; // { asin, qty }
+    const cartAdds = []; // one Amazon add-to-cart URL per item
     const searches = []; // part names → Amazon search
     const others = []; // non-Amazon product URLs
     Object.values(cart.cart).forEach(({ part, qty }) => {
@@ -1159,7 +1159,7 @@ export default function PartsLibrary() {
       const name = (part?.partName || '').trim();
       if (link && isAmazonUrl(link)) {
         const asin = amazonAsin(link);
-        if (asin) amazon.push({ asin, qty: Math.max(1, qty || 1) });
+        if (asin) cartAdds.push(`https://www.amazon.com/gp/aws/cart/add.html?ASIN.1=${asin}&Quantity.1=${Math.max(1, qty || 1)}`);
         else if (name) searches.push(name);
         else others.push(link);
       } else if (link) {
@@ -1168,17 +1168,10 @@ export default function PartsLibrary() {
         searches.push(name); // no link at all → search Amazon
       }
     });
-    const urls = [];
-    if (amazon.length) {
-      const params = amazon
-        .flatMap((a, i) => [`ASIN.${i + 1}=${a.asin}`, `Quantity.${i + 1}=${a.qty}`])
-        .join('&');
-      urls.push(`https://www.amazon.com/gp/aws/cart/add.html?${params}`);
-    }
-    searches.forEach(n => urls.push(`https://www.amazon.com/s?k=${encodeURIComponent(n)}`));
-    urls.push(...others);
-    // First open() rides the click gesture; the rest may be popup-blocked, but the
-    // Amazon add-to-cart batch (the common case) is opened first.
+    const urls = [...cartAdds, ...searches.map(n => `https://www.amazon.com/s?k=${encodeURIComponent(n)}`), ...others];
+    // First open() rides the click gesture; later tabs may be popup-blocked, so a
+    // single-item cart may add silently while a multi-item cart can need the user
+    // to allow pop-ups for this site.
     urls.forEach(u => window.open(u, '_blank', 'noopener'));
   };
 
