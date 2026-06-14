@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import { motion } from 'framer-motion';
+import { Camera } from 'lucide-react';
 
 const LONG_PRESS_MS = 500;
 
@@ -80,41 +81,12 @@ export default function FloatingVertexButton() {
             border: '0.5px solid rgba(210,160,255,0.5)',
           }}
         />
-        {/* On the Parts Library, a glass camera marks the orb as the scan button */}
+        {/* On the Parts Library, a faint camera marks the orb as the scan button */}
         {isPartsLibrary && (
-          <svg
-            viewBox="0 0 24 24"
-            className="absolute inset-0 m-auto w-8 h-8 pointer-events-none"
-            style={{ filter: 'drop-shadow(0 1px 2px rgba(50,0,120,0.55))' }}
-          >
-            <defs>
-              <linearGradient id="camGlassBody" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stopColor="#ffffff" stopOpacity="0.98" />
-                <stop offset="1" stopColor="#ffffff" stopOpacity="0.62" />
-              </linearGradient>
-              <radialGradient id="camGlassLens" cx="0.38" cy="0.32" r="0.8">
-                <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
-                <stop offset="0.5" stopColor="#d7c0ff" stopOpacity="0.92" />
-                <stop offset="1" stopColor="#6d28d9" stopOpacity="0.95" />
-              </radialGradient>
-            </defs>
-            {/* viewfinder bump */}
-            <path d="M8.7 7.2 L9.9 5.1 Q10.1 4.7 10.5 4.7 L13.5 4.7 Q13.9 4.7 14.1 5.1 L15.3 7.2 Z"
-              fill="url(#camGlassBody)" stroke="#ffffff" strokeWidth="0.6" strokeOpacity="0.9" strokeLinejoin="round" />
-            {/* glass body */}
-            <rect x="2.6" y="6.8" width="18.8" height="12.6" rx="3.2"
-              fill="url(#camGlassBody)" stroke="#ffffff" strokeWidth="1" strokeOpacity="0.95" />
-            {/* top edge highlight */}
-            <path d="M5.5 9 H18.5" stroke="#ffffff" strokeWidth="0.9" strokeOpacity="0.55" strokeLinecap="round" />
-            {/* flash */}
-            <rect x="16.4" y="5.2" width="3" height="1.7" rx="0.85" fill="#ffffff" fillOpacity="0.92" />
-            {/* lens */}
-            <circle cx="12" cy="13.3" r="4.1" fill="url(#camGlassLens)" stroke="#ffffff" strokeWidth="1" strokeOpacity="0.95" />
-            <circle cx="12" cy="13.3" r="2" fill="#ffffff" fillOpacity="0.18" stroke="#ffffff" strokeWidth="0.5" strokeOpacity="0.6" />
-            {/* specular highlight */}
-            <ellipse cx="10.5" cy="11.7" rx="1.15" ry="0.75" fill="#ffffff" fillOpacity="0.95"
-              transform="rotate(-35 10.5 11.7)" />
-          </svg>
+          <Camera
+            className="absolute inset-0 m-auto w-6 h-6 pointer-events-none"
+            style={{ color: 'rgba(255,255,255,0.65)', filter: 'drop-shadow(0 1px 2px rgba(60,0,140,0.45))' }}
+          />
         )}
       </div>
     </button>
