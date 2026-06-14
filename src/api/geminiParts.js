@@ -169,6 +169,48 @@ export async function findPartImage({ partName, supplier, partNum, supplierLink 
   return cleanLink(o.imageUrl || '', '');
 }
 
+// Identify a part from a photo and find it for sale ON AMAZON (the shop's primary
+// supplier). Used by the Parts Library "scan to cart" flow: the caller matches the
+// returned name against the library and, when it's not there, offers this Amazon
+// link + an Add-to-Library shortcut. Mirrors identifyPartFromImage but biases the
+// search to a real Amazon product page and resolves the Amazon image reliably.
+export async function scanPartFromImage(base64, mimeType = 'image/jpeg') {
+  const text = await callGemini({
+    contents: [{
+      parts: [
+        {
+          text: `You are a parts identification assistant for a van conversion shop. `
+            + `Identify the part in this image and use Google Search to find it for sale ON AMAZON. `
+            + `Return ONLY a JSON object with keys: partName, supplier, partNum, price, supplierLink, imageUrl `
+            + `(all strings; use "" if unknown). "partName" is a short, searchable product name. `
+            + `"supplierLink" MUST be a real Amazon product page URL (https://www.amazon.com/dp/… or /gp/product/…) — `
+            + `NEVER a redirect or tracking URL (no vertexaisearch.cloud.google.com, no grounding-api-redirect, `
+            + `no google.com/url). If you genuinely cannot find it on Amazon, use the best real product URL you can, `
+            + `otherwise "". "imageUrl" is a direct product image URL (https://… returning an image); use "" if none. `
+            + `No markdown, no commentary.`,
+        },
+        { inline_data: { mime_type: mimeType, data: base64 } },
+      ],
+    }],
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.2 },
+  });
+  const o = parseJson(text);
+  const partName = o.partName || '';
+  const link = cleanLink(o.supplierLink || '', [partName, o.supplier].filter(Boolean).join(' '));
+  const amazon = isAmazonUrl(link);
+  // Amazon blocks the AI's page read; one server fetch gives the real image + price.
+  const meta = amazon ? await fetchPageMeta(link) : {};
+  return {
+    partName,
+    supplier: o.supplier || (amazon ? 'Amazon' : ''),
+    partNum: o.partNum || '',
+    price: amazon ? (meta.price || o.price || '') : (o.price || ''),
+    supplierLink: link,
+    imageUrl: await resolveImage(link, o.imageUrl, amazon ? (meta.imageUrl || '') : undefined),
+  };
+}
+
 // Identify a part from a photo, determine its function, and find a buy link.
 export async function identifyPartFromImage(base64, mimeType = 'image/jpeg') {
   const text = await callGemini({

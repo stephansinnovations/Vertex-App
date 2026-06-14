@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, 
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
-import { extractPartFromUrl, identifyPartFromImage, findPartImage } from '@/api/geminiParts';
+import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, findPartImage } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -727,6 +727,29 @@ function parsePrice(p) {
   return isNaN(n) ? 0 : n;
 }
 
+// ── Fuzzy library matching (scan → find the part you already stock) ──────────
+// Identified names are wordy ("Victron 100/30 MPPT Solar Charge Controller"); the
+// library entries are terser. Score by how many significant tokens overlap, in
+// either direction, and surface the few best candidates for the user to confirm.
+function tokenize(s) {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').split(/\s+/).filter(t => t.length > 2);
+}
+function overlapScore(a, b) {
+  const ta = tokenize(a);
+  if (!ta.length) return 0;
+  const tb = new Set(tokenize(b));
+  return ta.filter(t => tb.has(t)).length / ta.length;
+}
+function findLibraryMatches(name, parts) {
+  if (!name || !parts?.length) return [];
+  return parts
+    .map(p => ({ p, score: Math.max(overlapScore(name, p.partName), overlapScore(p.partName, name)) }))
+    .filter(x => x.score >= 0.34)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map(x => x.p);
+}
+
 export default function PartsLibrary() {
   const navigate = useNavigate();
   const cart = useCart();
@@ -743,11 +766,15 @@ export default function PartsLibrary() {
   const [loadingAll, setLoadingAll] = useState(false);
   const searchRef = useRef(null);
   const intentDone = useRef(false);
+  const allPartsPromise = useRef(null);
 
-  useEffect(() => {
-    if (!search.trim() || allParts || loadingAll || !spreadsheetId || sheetTabs.length === 0) return;
-    setLoadingAll(true);
-    Promise.all(sheetTabs.map(t =>
+  // Fetch every tab's parts once and cache the flat list. Shared by search and the
+  // scan flow; dedupes concurrent callers via a promise ref so we fetch at most once.
+  const loadAllParts = () => {
+    if (allParts) return Promise.resolve(allParts);
+    if (allPartsPromise.current) return allPartsPromise.current;
+    if (!spreadsheetId || sheetTabs.length === 0) return Promise.resolve([]);
+    allPartsPromise.current = Promise.all(sheetTabs.map(t =>
       getSheetCategories(spreadsheetId, t)
         .then(r => ({ tab: t, cats: r.data.categories || [] }))
         .catch(() => ({ tab: t, cats: [] }))
@@ -757,7 +784,15 @@ export default function PartsLibrary() {
         cats.forEach(c => (c.parts || []).forEach(p => flat.push({ ...p, tab, category: c.name })))
       );
       setAllParts(flat);
-    }).finally(() => setLoadingAll(false));
+      return flat;
+    });
+    return allPartsPromise.current;
+  };
+
+  useEffect(() => {
+    if (!search.trim() || allParts || loadingAll || !spreadsheetId || sheetTabs.length === 0) return;
+    setLoadingAll(true);
+    loadAllParts().finally(() => setLoadingAll(false));
   }, [search, allParts, loadingAll, spreadsheetId, sheetTabs]);
 
   const q = search.trim().toLowerCase();
@@ -824,6 +859,83 @@ export default function PartsLibrary() {
     } finally {
       setPhotoLoading(false);
     }
+  };
+
+  // ── Scan a part (the purple orb on this page) ──────────────────────────────
+  // Take a photo → identify it + find it on Amazon AND search the library, in
+  // parallel. If it's in the library you confirm the match and add a qty to the
+  // cart; if not, the Amazon link is already there + an Add-to-Library shortcut.
+  const scanInputRef = useRef(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanErr, setScanErr] = useState(null);
+  const [scanResult, setScanResult] = useState(null); // { partName, supplier, supplierLink, price, imageUrl }
+  const [scanMatches, setScanMatches] = useState([]);
+  const [scanChosen, setScanChosen] = useState(null); // the library part the user confirmed
+  const [scanQty, setScanQty] = useState(1);
+  const [scanAdded, setScanAdded] = useState(false);
+
+  // The orb on the Parts Library dispatches this; open the camera within the gesture.
+  useEffect(() => {
+    const h = () => scanInputRef.current?.click();
+    window.addEventListener('vertex:scan-part', h);
+    return () => window.removeEventListener('vertex:scan-part', h);
+  }, []);
+
+  const handleScan = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setScanOpen(true);
+    setScanLoading(true);
+    setScanErr(null);
+    setScanResult(null);
+    setScanMatches([]);
+    setScanChosen(null);
+    setScanQty(1);
+    setScanAdded(false);
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result).split(',')[1]);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      });
+      // Amazon lookup and library load run together — so if the part isn't in the
+      // library, the Amazon link is already waiting (no extra round-trip to wait on).
+      const [info, parts] = await Promise.all([
+        scanPartFromImage(base64, file.type || 'image/jpeg'),
+        loadAllParts(),
+      ]);
+      setScanResult(info);
+      setScanMatches(findLibraryMatches(info.partName, parts));
+    } catch (err) {
+      setScanErr(err.message || 'Could not identify the part');
+    } finally {
+      setScanLoading(false);
+    }
+  };
+
+  const addScannedToCart = () => {
+    if (!scanChosen) return;
+    for (let i = 0; i < scanQty; i++) cart.add(scanChosen);
+    setScanAdded(true);
+  };
+
+  // "Add to Parts Library" from a no-match scan: prefill + open the Add Part modal.
+  const addScannedToLibrary = () => {
+    const r = scanResult || {};
+    openAdd();
+    setPForm({
+      partName: r.partName || '',
+      supplier: r.supplier || '',
+      supplierLink: r.supplierLink || '',
+      partNum: r.partNum || '',
+      price: r.price || '',
+      imageUrl: r.imageUrl || '',
+    });
+    setAddStarted(true);
+    setScanOpen(false);
   };
 
   // "Done" on the link step: reveal the rest of the form and, if a link was given,
@@ -1348,6 +1460,131 @@ export default function PartsLibrary() {
                     <p className="text-gray-400 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>
                   </>
                 )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Hidden camera input — opened by the purple orb's scan event */}
+      <input ref={scanInputRef} type="file" accept="image/*" capture="environment"
+        onChange={handleScan} className="hidden" />
+
+      {/* ───────────── Scan-to-cart sheet ───────────── */}
+      {scanOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setScanOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Camera className="w-5 h-5 text-violet-600" /> Scan a part
+              </h2>
+              <button onClick={() => setScanOpen(false)} className="text-gray-400 hover:text-gray-900">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {scanLoading ? (
+              <div className="py-10 text-center">
+                <div className="w-10 h-10 mx-auto mb-3 rounded-full border-2 border-violet-200 border-t-violet-600 animate-spin" />
+                <p className="text-gray-600 text-sm">Identifying the part & searching your library…</p>
+                <p className="text-gray-400 text-xs mt-1">Also finding it on Amazon, just in case.</p>
+              </div>
+            ) : scanErr ? (
+              <div className="py-8 text-center">
+                <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+                <p className="text-red-600 text-sm mb-4">{scanErr}</p>
+                <button onClick={() => scanInputRef.current?.click()}
+                  className="bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-5 py-2.5 rounded-full">
+                  Try again
+                </button>
+              </div>
+            ) : scanAdded ? (
+              <div className="py-8 text-center">
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-green-100 flex items-center justify-center">
+                  <Check className="w-6 h-6 text-green-600" />
+                </div>
+                <p className="text-gray-900 font-semibold">Added to cart</p>
+                <p className="text-gray-500 text-sm mt-1">{scanQty} × {scanChosen?.partName}</p>
+                <div className="flex gap-2 mt-5">
+                  <button onClick={() => { setScanOpen(false); setShowCart(true); }}
+                    className="flex-1 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3 rounded-full">View cart</button>
+                  <button onClick={() => setScanOpen(false)}
+                    className="flex-1 border border-gray-300 text-gray-700 font-semibold py-3 rounded-full hover:bg-gray-50">Done</button>
+                </div>
+              </div>
+            ) : scanChosen ? (
+              <>
+                <button onClick={() => setScanChosen(null)}
+                  className="text-gray-400 hover:text-gray-700 text-xs mb-3 flex items-center gap-1">
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back
+                </button>
+                <div className="flex items-center gap-3 mb-5">
+                  <PartImage url={scanChosen.imageUrl} className="w-16 h-16" />
+                  <div className="min-w-0">
+                    <p className="text-gray-900 font-semibold text-sm leading-snug">{scanChosen.partName}</p>
+                    {scanChosen.price && <p className="text-gray-900 font-bold mt-0.5">{scanChosen.price}</p>}
+                    <p className="text-gray-400 text-xs mt-0.5">{scanChosen.tab} · {scanChosen.category}</p>
+                  </div>
+                </div>
+                <label className="text-xs text-gray-500 mb-1.5 block">Quantity</label>
+                <div className="flex items-center gap-3 mb-5">
+                  <button onClick={() => setScanQty(q => Math.max(1, q - 1))}
+                    className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50"><Minus className="w-4 h-4" /></button>
+                  <span className="text-2xl font-bold text-gray-900 w-12 text-center">{scanQty}</span>
+                  <button onClick={() => setScanQty(q => q + 1)}
+                    className="w-10 h-10 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-50"><Plus className="w-4 h-4" /></button>
+                </div>
+                <button onClick={addScannedToCart}
+                  className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full flex items-center justify-center gap-2">
+                  <ShoppingCart className="w-4 h-4" /> Add {scanQty} to cart
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <PartImage url={scanResult?.imageUrl} className="w-16 h-16" />
+                  <div className="min-w-0">
+                    <p className="text-gray-400 text-xs">Identified</p>
+                    <p className="text-gray-900 font-semibold text-sm leading-snug">{scanResult?.partName || 'Unknown part'}</p>
+                    {scanResult?.price && <p className="text-gray-900 font-bold mt-0.5">{scanResult.price}</p>}
+                  </div>
+                </div>
+
+                {scanMatches.length > 0 ? (
+                  <>
+                    <p className="text-sm font-semibold text-gray-900 mb-2">Found in your library — confirm the match:</p>
+                    <div className="space-y-2 mb-4">
+                      {scanMatches.map((p, i) => (
+                        <button key={i} onClick={() => { setScanChosen(p); setScanQty(1); }}
+                          className="w-full flex items-center gap-3 border border-gray-200 rounded-xl p-2.5 hover:border-violet-400 hover:bg-violet-50/40 text-left transition-colors">
+                          <PartImage url={p.imageUrl} className="w-12 h-12" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-gray-900 text-sm font-medium leading-snug line-clamp-2">{p.partName}</p>
+                            <p className="text-gray-400 text-xs mt-0.5">{p.tab} · {p.category}{p.price ? ` · ${p.price}` : ''}</p>
+                          </div>
+                          <ChevronRight className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-gray-400 text-xs text-center mb-2">Not one of these?</p>
+                  </>
+                ) : (
+                  <div className="mb-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5">
+                    <p className="text-amber-800 text-sm font-medium">Not in your parts library yet.</p>
+                    <p className="text-amber-700 text-xs mt-0.5">Grab it on Amazon, then add it to the library.</p>
+                  </div>
+                )}
+
+                <a href={scanResult?.supplierLink || `https://www.amazon.com/s?k=${encodeURIComponent(scanResult?.partName || '')}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 bg-[#FF9900] hover:bg-[#e88b00] text-[#0F1111] font-bold py-3 rounded-full mb-2 transition-colors">
+                  <ShoppingCart className="w-4 h-4" /> View on Amazon
+                </a>
+                <button onClick={addScannedToLibrary}
+                  className="w-full flex items-center justify-center gap-2 border border-gray-300 text-gray-700 font-semibold py-3 rounded-full hover:bg-gray-50">
+                  <Plus className="w-4 h-4" /> Add to Parts Library
+                </button>
               </>
             )}
           </div>
