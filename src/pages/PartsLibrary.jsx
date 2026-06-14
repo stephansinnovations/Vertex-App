@@ -826,16 +826,13 @@ export default function PartsLibrary() {
   const [aiFilling, setAiFilling] = useState(false);
   const [aiErr, setAiErr] = useState(null);
   const photoInputRef = useRef(null);
-  const [photoLoading, setPhotoLoading] = useState(false);
-  const [photoErr, setPhotoErr] = useState(null);
 
   // Take/upload a photo → Gemini identifies the part and finds a buy link.
+  // Reached via the Inventory deep-link (?photo=1); the in-modal button was removed.
   const handlePhoto = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setPhotoLoading(true);
-    setPhotoErr(null);
     try {
       const base64 = await new Promise((resolve, reject) => {
         const fr = new FileReader();
@@ -854,10 +851,8 @@ export default function PartsLibrary() {
         imageUrl: r.imageUrl || f.imageUrl,
       }));
       setAddStarted(true); // reveal the full form with the identified fields
-    } catch (err) {
-      setPhotoErr(err.message || 'Could not identify the part');
-    } finally {
-      setPhotoLoading(false);
+    } catch {
+      // Identify failed — user can still fill the form in manually.
     }
   };
 
@@ -1342,23 +1337,6 @@ export default function PartsLibrary() {
                   <Sparkles className="w-4 h-4" /> Done
                 </button>
                 <p className="text-gray-400 text-[11px] text-center mt-2 mb-4">AI reads the link and fills in the part for you.</p>
-
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="flex-1 h-px bg-gray-200" />
-                  <span className="text-gray-400 text-xs">or</span>
-                  <div className="flex-1 h-px bg-gray-200" />
-                </div>
-
-                <button
-                  onClick={() => photoInputRef.current?.click()}
-                  disabled={photoLoading}
-                  className="w-full flex items-center justify-center gap-2 text-sm font-semibold py-3 rounded-full mb-2 transition-all disabled:opacity-60"
-                  style={{ background: 'rgba(20,110,180,0.10)', color: '#146EB4', border: '1px solid rgba(20,110,180,0.30)' }}
-                >
-                  <Camera className="w-4 h-4" />
-                  {photoLoading ? 'Identifying part…' : 'Identify from photo'}
-                </button>
-                {photoErr && <p className="text-red-600 text-xs mb-1">{photoErr}</p>}
 
                 <button onClick={() => setAddStarted(true)}
                   className="w-full text-gray-500 hover:text-gray-700 text-xs py-2 transition-colors">
