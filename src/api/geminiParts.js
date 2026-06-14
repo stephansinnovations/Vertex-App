@@ -179,6 +179,7 @@ const FIELD_DESC = {
     + 'tracking URL (no vertexaisearch.cloud.google.com, no grounding-api-redirect, no google.com/url)',
   partNum: 'the manufacturer part number or model number',
   price: 'the current price, formatted like $12.99',
+  contactEmail: 'a customer-service / sales contact email address for the supplier or brand (just the email)',
 };
 
 export async function fillPartField(field, ctx = {}) {

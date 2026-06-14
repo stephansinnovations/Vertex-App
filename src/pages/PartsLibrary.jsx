@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -161,7 +161,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
 
   // Edit-part popup (also hosts Delete + picture tools)
   const [editPart, setEditPart] = useState(null); // the original part being edited
-  const [editForm, setEditForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
+  const [editForm, setEditForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
   const [savingEdit, setSavingEdit] = useState(false);
   const [editErr, setEditErr] = useState(null);
   const [confirmDelInEdit, setConfirmDelInEdit] = useState(false);
@@ -176,7 +176,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
     setEditForm({
       partName: part.partName || '', supplier: part.supplier || '',
       supplierLink: part.supplierLink || '', partNum: part.partNum || '', price: part.price || '',
-      imageUrl: part.imageUrl || '',
+      imageUrl: part.imageUrl || '', contactEmail: part.contactEmail || '',
     });
     setEditErr(null);
     setConfirmDelInEdit(false);
@@ -195,6 +195,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
         partNum: editForm.partNum.trim(),
         price: editForm.price.trim(),
         imageUrl: editForm.imageUrl.trim(),
+        contactEmail: editForm.contactEmail.trim(),
       }, token);
       setEditPart(null);
       onChanged && onChanged();
@@ -411,6 +412,11 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
                       {part.partNum && (
                         <button onClick={() => navigator.clipboard.writeText(part.partNum)} className="text-gray-500 font-mono text-xs hover:text-gray-900 cursor-copy" title="Copy part number">{part.partNum}</button>
                       )}
+                      {part.contactEmail && (
+                        <a href={`mailto:${part.contactEmail}`} className="inline-flex items-center gap-1 text-[#007185] hover:text-[#C7511F] text-xs hover:underline" title={`Email ${part.contactEmail}`}>
+                          <Mail className="w-3 h-3" /> Contact
+                        </a>
+                      )}
                     </div>
                     <div className="mt-auto pt-2 flex items-center justify-between">
                       <span className="text-[11px] text-gray-400">Allocated: {allocated}</span>
@@ -490,6 +496,11 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
             <label className="text-xs text-gray-500 mb-1.5 block">Part #</label>
             <input value={editForm.partNum} onChange={e => setEditForm(f => ({ ...f, partNum: e.target.value }))}
               className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
+
+            <label className="text-xs text-gray-500 mb-1.5 block">Supplier contact email</label>
+            <input type="email" value={editForm.contactEmail} onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))}
+              placeholder="contact@supplier.com"
+              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
             <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
             <div className="flex items-center gap-2 mb-2">
@@ -786,7 +797,7 @@ export default function PartsLibrary() {
   // so the AI never overwrites a category the user picked while it was working.
   const addTabRef = useRef('');
   useEffect(() => { addTabRef.current = addTab; }, [addTab]);
-  const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
+  const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
   const [saving, setSaving] = useState(false);
   const [submitTried, setSubmitTried] = useState(false); // flags missing category/subcategory red
   const [addErr, setAddErr] = useState(null);
@@ -895,6 +906,7 @@ export default function PartsLibrary() {
       partNum: r.partNum || '',
       price: r.price || '',
       imageUrl: r.imageUrl || '',
+      contactEmail: r.contactEmail || '',
     });
     setAddStarted(true);
     setScanOpen(false);
@@ -982,7 +994,7 @@ export default function PartsLibrary() {
     setAddCategory('');
     setAddCats([]);
     pendingSubcatRef.current = null;
-    setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
+    setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
     setShowAdd(true);
   };
 
@@ -1106,9 +1118,10 @@ export default function PartsLibrary() {
         partNum: pForm.partNum.trim(),
         price: pForm.price.trim(),
         imageUrl: pForm.imageUrl.trim(),
+        contactEmail: pForm.contactEmail.trim(),
       }, token);
       setShowAdd(false);
-      setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '' });
+      setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
       window.location.reload();
     } catch (e) {
       setAddErr(e.message || 'Failed to add part');
@@ -1514,6 +1527,14 @@ export default function PartsLibrary() {
                     </div>
                     <input value={pForm.partNum} onChange={e => setPForm(f => ({ ...f, partNum: e.target.value }))}
                       className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
+
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-500">Supplier contact email</label>
+                      <AiFillButton onClick={() => aiFillOne('contactEmail')} busy={aiField === 'contactEmail'} title="AI find a contact email" />
+                    </div>
+                    <input type="email" value={pForm.contactEmail} onChange={e => setPForm(f => ({ ...f, contactEmail: e.target.value }))}
+                      placeholder="contact@supplier.com"
+                      className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="text-xs text-gray-500">Picture URL</label>

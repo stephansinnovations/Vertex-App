@@ -299,6 +299,7 @@ export async function updatePartRow(spreadsheetId, sheetName, categoryName, orig
     { userEnteredValue: { stringValue: updated.partNum || '' } },
     { userEnteredValue: { stringValue: updated.price || '' } },
     imageCellFor(updated.imageUrl), // col E: picture
+    { userEnteredValue: { stringValue: updated.contactEmail || '' } }, // col F: supplier contact email
   ];
 
   const res = await fetch(`${BASE}/${spreadsheetId}:batchUpdate`, {
@@ -439,6 +440,7 @@ export async function addPartToCategory(spreadsheetId, sheetName, categoryName, 
     { userEnteredValue: { stringValue: part.partNum || '' } },
     { userEnteredValue: { stringValue: part.price || '' } },
     imageCellFor(part.imageUrl), // col E: picture
+    { userEnteredValue: { stringValue: part.contactEmail || '' } }, // col F: supplier contact email
   ];
 
   const requests = [
@@ -568,6 +570,7 @@ export async function getPartRowsForBackfill(spreadsheetId, sheetName, accessTok
       partNum: cells[2]?.formattedValue?.trim() ?? '',
       price: cells[3]?.formattedValue?.trim() ?? '',
       imageUrl: extractImageUrl(cells[4]),
+      contactEmail: cells[5]?.formattedValue?.trim() ?? '',
     });
   }
   return { sheetId, parts };
@@ -627,6 +630,7 @@ export async function getSheetCategories(spreadsheetId, sheetName) {
         partNum: get(2),
         price: get(3),
         imageUrl: extractImageUrl(cells[4]),
+        contactEmail: get(5),
       });
     }
   }
