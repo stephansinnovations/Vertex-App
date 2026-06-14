@@ -169,6 +169,72 @@ export async function findPartImage({ partName, supplier, partNum, supplierLink 
   return cleanLink(o.imageUrl || '', '');
 }
 
+// Per-field AI auto-fill for the Add Part form: given whatever the user has typed
+// so far (`ctx`), fill ONE field. Uses the part link (url_context) when present,
+// otherwise Google Search by name/supplier/part#.
+const FIELD_DESC = {
+  partName: 'a short, searchable product name',
+  supplier: 'the store or brand selling it',
+  supplierLink: 'a real, directly-clickable product page URL (https://…). NEVER a redirect or '
+    + 'tracking URL (no vertexaisearch.cloud.google.com, no grounding-api-redirect, no google.com/url)',
+  partNum: 'the manufacturer part number or model number',
+  price: 'the current price, formatted like $12.99',
+};
+
+export async function fillPartField(field, ctx = {}) {
+  if (field === 'imageUrl') return findPartImage(ctx);
+  const desc = FIELD_DESC[field];
+  if (!desc) return '';
+  const { partName, supplier, supplierLink, partNum, price } = ctx;
+  const known = Object.entries({ partName, supplier, supplierLink, partNum, price })
+    .filter(([k, v]) => k !== field && v).map(([k, v]) => `${k}: ${v}`).join('\n');
+  const hasLink = supplierLink && /^https?:\/\//i.test(supplierLink);
+  if (!known && !hasLink) return ''; // nothing to go on yet
+  const text = await callGemini({
+    contents: [{
+      parts: [{
+        text: `For this van-conversion shop part, provide ${desc}.\n`
+          + (known ? `Known details:\n${known}\n` : '')
+          + (hasLink ? `Product page: ${supplierLink}\n` : 'Use Google Search to find it.\n')
+          + `Return ONLY a JSON object {"value":"..."} (a string; "" if unknown). No markdown, no commentary.`,
+      }],
+    }],
+    tools: hasLink ? [{ url_context: {} }, { google_search: {} }] : [{ google_search: {} }],
+    generationConfig: { temperature: 0 },
+  });
+  let o = {};
+  try { o = parseJson(text); } catch { o = {}; }
+  let val = o.value || '';
+  if (field === 'supplierLink') val = cleanLink(val, [partName, supplier].filter(Boolean).join(' '));
+  return String(val).trim();
+}
+
+// Guess the best Category → Subcategory for the part from the library taxonomy
+// ({ "Category": ["Subcategory", …] }). Returns { category, subcategory }.
+export async function guessPartCategory(ctx = {}, taxonomy = {}) {
+  const { partName, supplier, supplierLink, partNum } = ctx;
+  const desc = [partName, supplier, partNum].filter(Boolean).join(' ').trim();
+  if (!desc && !supplierLink) return { category: '', subcategory: '' };
+  const hasLink = supplierLink && /^https?:\/\//i.test(supplierLink);
+  const body = {
+    contents: [{
+      parts: [{
+        text: `The Parts Library is organized as Category → Subcategory:\n${JSON.stringify(taxonomy)}\n`
+          + `Pick the single best-matching existing category and subcategory for this van-conversion part`
+          + (desc ? `: ${desc}` : '') + (hasLink ? `\nProduct page: ${supplierLink}` : '') + `.\n`
+          + `The subcategory MUST belong to the category you choose. If nothing fits, use "".\n`
+          + `Return ONLY a JSON object {"category":"...","subcategory":"..."}. No markdown, no commentary.`,
+      }],
+    }],
+    generationConfig: { temperature: 0 },
+  };
+  if (hasLink) body.tools = [{ url_context: {} }, { google_search: {} }];
+  const text = await callGemini(body);
+  let o = {};
+  try { o = parseJson(text); } catch { o = {}; }
+  return { category: o.category || '', subcategory: o.subcategory || '' };
+}
+
 // Identify a part from a photo and find it for sale ON AMAZON (the shop's primary
 // supplier). Used by the Parts Library "scan to cart" flow: the caller matches the
 // returned name against the library and, when it's not there, offers this Amazon

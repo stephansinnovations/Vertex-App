@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, 
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
-import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, findPartImage, isAmazonUrl, amazonAsin } from '@/api/geminiParts';
+import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, findPartImage, isAmazonUrl, amazonAsin, fillPartField, guessPartCategory } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -91,6 +91,19 @@ function PartImage({ url, className = 'w-14 h-14' }) {
     className={`${className} rounded-lg object-cover bg-white border border-gray-200 flex-shrink-0`} />;
 }
 
+// Low-key AI auto-fill icon, shown to the right of an Add-Part field's label.
+// Click → ask AI to fill just that field. Spins while working.
+function AiFillButton({ onClick, busy, disabled, title = 'AI auto-fill this' }) {
+  return (
+    <button type="button" onClick={onClick} disabled={busy || disabled} title={title}
+      className="text-gray-300 hover:text-violet-600 disabled:opacity-50 disabled:hover:text-gray-300 transition-colors">
+      {busy
+        ? <span className="block w-3.5 h-3.5 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+        : <Sparkles className="w-3.5 h-3.5" />}
+    </button>
+  );
+}
+
 // Long-press (≈500ms) or double-click → fire onEdit. `suppressRef` lets the host
 // element ignore the click that follows the gesture (e.g. a folder-toggle button).
 // Plain factory (NOT a hook) so it can be called per-row inside a .map().
@@ -130,15 +143,11 @@ async function uploadPartImage(file) {
   return urlData.publicUrl;
 }
 
-function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
+function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
   const { add: addToCart } = useCart();
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
   const [builds, setBuilds] = useState(buildsCache || []);
-  const [addingPart, setAddingPart] = useState(false);
-  const [partForm, setPartForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
-  const [savingPart, setSavingPart] = useState(false);
-  const [partErr, setPartErr] = useState(null);
   const [editStockKey, setEditStockKey] = useState(null); // part whose qty circle is being edited
   const [addedKey, setAddedKey] = useState(null); // part just added to cart (for the ✓ flash)
 
@@ -287,29 +296,6 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
     }
   };
 
-  const submitPart = async () => {
-    if (!partForm.partName.trim() || savingPart) return;
-    setSavingPart(true);
-    setPartErr(null);
-    try {
-      const token = await getSheetsAccessToken();
-      await addPartToCategory(spreadsheetId, tab, category.name, {
-        partName: partForm.partName.trim(),
-        supplier: partForm.supplier.trim(),
-        supplierLink: partForm.supplierLink.trim(),
-        partNum: partForm.partNum.trim(),
-        price: partForm.price.trim(),
-      }, token);
-      setPartForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' });
-      setAddingPart(false);
-      onChanged && onChanged();
-    } catch (e) {
-      setPartErr(e.message || 'Failed to add part');
-    } finally {
-      setSavingPart(false);
-    }
-  };
-
   useEffect(() => {
     getBuilds().then(data => setBuilds(data));
   }, []);
@@ -442,38 +428,13 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
             </div>
           )}
 
-          {/* Add part to this subcategory */}
+          {/* Add part to this subcategory — opens the full Add Part flow with this
+              category + subcategory already filled in. */}
           <div className="mt-3">
-            {addingPart ? (
-              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 space-y-2">
-                <input value={partForm.partName} autoFocus
-                  onChange={e => setPartForm(f => ({ ...f, partName: e.target.value }))}
-                  onKeyDown={e => { if (e.key === 'Enter') submitPart(); }}
-                  placeholder="Part name *"
-                  className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-[#146EB4]" />
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={partForm.supplier} onChange={e => setPartForm(f => ({ ...f, supplier: e.target.value }))} placeholder="Supplier"
-                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-[#146EB4]" />
-                  <input value={partForm.price} onChange={e => setPartForm(f => ({ ...f, price: e.target.value }))} placeholder="Price"
-                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-[#146EB4]" />
-                  <input value={partForm.partNum} onChange={e => setPartForm(f => ({ ...f, partNum: e.target.value }))} placeholder="Part #"
-                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-[#146EB4]" />
-                  <input value={partForm.supplierLink} onChange={e => setPartForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="Link https://…"
-                    className="bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-[#146EB4]" />
-                </div>
-                {partErr && <p className="text-red-600 text-xs">{partErr}</p>}
-                <div className="flex items-center gap-2">
-                  <button onClick={submitPart} disabled={!partForm.partName.trim() || savingPart}
-                    className="flex-1 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] text-sm font-semibold py-2 rounded-full disabled:opacity-40">{savingPart ? 'Adding…' : 'Add part'}</button>
-                  <button onClick={() => { setAddingPart(false); setPartErr(null); setPartForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '' }); }}
-                    className="text-gray-400 hover:text-gray-900 px-2"><X className="w-4 h-4" /></button>
-                </div>
-              </div>
-            ) : (
-              <button onClick={() => setAddingPart(true)} className="flex items-center gap-2 text-[#007185] hover:text-[#C7511F] text-sm transition-colors">
-                <Plus className="w-4 h-4" /> Add part
-              </button>
-            )}
+            <button onClick={() => onAddPart && onAddPart(tab, category.name)}
+              className="flex items-center gap-2 text-[#007185] hover:text-[#C7511F] text-sm transition-colors">
+              <Plus className="w-4 h-4" /> Add part
+            </button>
           </div>
         </div>
       )}
@@ -568,7 +529,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
   );
 }
 
-function SheetFolder({ tab, spreadsheetId, onRenamed }) {
+function SheetFolder({ tab, spreadsheetId, onRenamed, onAddPart }) {
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -667,7 +628,7 @@ function SheetFolder({ tab, spreadsheetId, onRenamed }) {
             <div className="px-5 py-4"><p className="text-gray-400 text-sm">No subcategories found</p></div>
           )}
           {categories.map((cat, i) => (
-            <CategoryRow key={cat.name + i} category={cat} spreadsheetId={spreadsheetId} tab={tab} onChanged={loadCategories} />
+            <CategoryRow key={cat.name + i} category={cat} spreadsheetId={spreadsheetId} tab={tab} onChanged={loadCategories} onAddPart={onAddPart} />
           ))}
 
           {!loading && (
@@ -1024,6 +985,56 @@ export default function PartsLibrary() {
     setShowAdd(true);
   };
 
+  // Shortcut from a subcategory's "Add part": open the full Add Part flow with the
+  // category + subcategory prefilled, jumping straight to the form (skip the link step).
+  const openAddFor = (presetTab, presetSubcat) => {
+    openAdd();
+    setAddStarted(true);
+    setAddTab(presetTab);
+    pendingSubcatRef.current = presetSubcat || null; // applied when the tab's cats load
+  };
+
+  // Per-field AI auto-fill (the little sparkle next to each Add-Part field).
+  const [aiField, setAiField] = useState(null); // which field is currently AI-filling
+
+  const aiFillOne = async (field) => {
+    if (aiField) return;
+    setAiField(field);
+    try {
+      const val = await fillPartField(field, pForm);
+      if (val) setPForm(f => ({ ...f, [field]: val }));
+    } catch { /* leave the field as-is */ } finally {
+      setAiField(null);
+    }
+  };
+
+  // AI-pick the category/subcategory. If the user already chose a category, only
+  // fill the subcategory within it; otherwise guess both.
+  const aiGuessCategory = async () => {
+    if (aiField || !spreadsheetId || sheetTabs.length === 0) return;
+    setAiField('category');
+    try {
+      const taxonomy = {};
+      const results = await Promise.all(sheetTabs.map(t =>
+        getSheetCategories(spreadsheetId, t)
+          .then(r => ({ t, cats: r.data.categories || [] }))
+          .catch(() => ({ t, cats: [] }))
+      ));
+      results.forEach(({ t, cats }) => { taxonomy[t] = cats.map(c => c.name); });
+      const scope = addTab ? { [addTab]: taxonomy[addTab] || [] } : taxonomy;
+      const g = await guessPartCategory(pForm, scope);
+      if (!addTab) {
+        const matchTab = sheetTabs.find(t => t.toLowerCase() === (g.category || '').toLowerCase());
+        if (matchTab) { pendingSubcatRef.current = g.subcategory || null; setAddTab(matchTab); }
+      } else {
+        const m = addCats.find(c => c.name.toLowerCase() === (g.subcategory || '').toLowerCase());
+        if (m) setAddCategory(m.name);
+      }
+    } catch { /* ignore */ } finally {
+      setAiField(null);
+    }
+  };
+
   const submitQuick = async () => {
     const name = quickName.trim();
     if (!name || quickSaving) return;
@@ -1267,7 +1278,7 @@ export default function PartsLibrary() {
             {loading && <p className="text-gray-600 text-sm">Loading categories…</p>}
             {error && <p className="text-red-600 text-sm">{error}</p>}
             {sheetTabs.map((tab) => (
-              <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} onRenamed={reloadTabs} />
+              <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} onRenamed={reloadTabs} onAddPart={openAddFor} />
             ))}
             {!loading && !error && sheetTabs.length === 0 && (
               <div className="bg-white border border-gray-200 rounded-xl px-6 py-8 text-center">
@@ -1404,7 +1415,10 @@ export default function PartsLibrary() {
                   </div>
                 )}
 
-                <label className="text-xs text-gray-500 mb-1.5 block">Category</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-gray-500">Category</label>
+                  <AiFillButton onClick={aiGuessCategory} busy={aiField === 'category'} title="AI pick category" />
+                </div>
                 <select value={addTab} onChange={e => {
                     if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
                     setQuickAdd(null); setAddTab(e.target.value);
@@ -1420,7 +1434,10 @@ export default function PartsLibrary() {
                       saving={quickSaving} err={quickErr} />
                   : <div className="mb-2" />}
 
-                <label className="text-xs text-gray-500 mb-1.5 block">Subcategory</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-gray-500">Subcategory</label>
+                  <AiFillButton onClick={aiGuessCategory} busy={aiField === 'category'} disabled={!addTab} title="AI pick subcategory" />
+                </div>
                 <select value={addCategory} onChange={e => {
                     if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
                     setQuickAdd(null); setAddCategory(e.target.value);
@@ -1445,35 +1462,53 @@ export default function PartsLibrary() {
                   </div>
                 ) : (
                   <>
-                    <label className="text-xs text-gray-500 mb-1.5 block">Part name *</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-500">Part name *</label>
+                      <AiFillButton onClick={() => aiFillOne('partName')} busy={aiField === 'partName'} />
+                    </div>
                     <input value={pForm.partName} onChange={e => setPForm(f => ({ ...f, partName: e.target.value }))}
                       placeholder="e.g. 12V LED strip"
                       className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
                     <div className="grid grid-cols-2 gap-3 mb-4">
                       <div>
-                        <label className="text-xs text-gray-500 mb-1.5 block">Supplier</label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs text-gray-500">Supplier</label>
+                          <AiFillButton onClick={() => aiFillOne('supplier')} busy={aiField === 'supplier'} />
+                        </div>
                         <input value={pForm.supplier} onChange={e => setPForm(f => ({ ...f, supplier: e.target.value }))}
                           className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
                       </div>
                       <div>
-                        <label className="text-xs text-gray-500 mb-1.5 block">Price</label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs text-gray-500">Price</label>
+                          <AiFillButton onClick={() => aiFillOne('price')} busy={aiField === 'price'} />
+                        </div>
                         <input value={pForm.price} onChange={e => setPForm(f => ({ ...f, price: e.target.value }))}
                           placeholder="$0.00"
                           className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
                       </div>
                     </div>
 
-                    <label className="text-xs text-gray-500 mb-1.5 block">Part #</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-500">Part #</label>
+                      <AiFillButton onClick={() => aiFillOne('partNum')} busy={aiField === 'partNum'} />
+                    </div>
                     <input value={pForm.partNum} onChange={e => setPForm(f => ({ ...f, partNum: e.target.value }))}
                       className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
-                    <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-500">Part link</label>
+                      <AiFillButton onClick={() => aiFillOne('supplierLink')} busy={aiField === 'supplierLink'} />
+                    </div>
                     <input value={pForm.supplierLink} onChange={e => setPForm(f => ({ ...f, supplierLink: e.target.value }))}
                       placeholder="https://…"
                       className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
-                    <label className="text-xs text-gray-500 mb-1.5 block">Picture URL</label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs text-gray-500">Picture URL</label>
+                      <AiFillButton onClick={() => aiFillOne('imageUrl')} busy={aiField === 'imageUrl'} title="AI find an image" />
+                    </div>
                     <div className="flex items-center gap-3 mb-5">
                       <PartImage url={pForm.imageUrl.trim()} className="w-14 h-14" />
                       <input value={pForm.imageUrl} onChange={e => setPForm(f => ({ ...f, imageUrl: e.target.value }))}
