@@ -4,6 +4,7 @@ import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, Chevro
 import { motion } from 'framer-motion';
 import { getSetting, setSetting } from '@/api/appSettings';
 import { useBackground, backgroundStyle } from '@/lib/BackgroundContext';
+import BackfillPicturesButton from '@/components/BackfillPicturesButton';
 
 const API_KEYS = [
   {
@@ -309,14 +310,17 @@ export default function Settings() {
               <Lightbulb className="w-4 h-4 text-gray-400" />
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Inventory</h2>
             </div>
-            <button
-              onClick={() => navigate('/InventoryIdeas')}
-              className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 transition-colors"
-              style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
-            >
-              <span className="text-white font-medium">Inventory Ideas</span>
-              <ChevronRight className="w-5 h-5 text-gray-500" />
-            </button>
+            <div className="space-y-3">
+              <button
+                onClick={() => navigate('/InventoryIdeas')}
+                className="w-full flex items-center justify-between px-5 py-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 hover:bg-zinc-900 transition-colors"
+                style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+              >
+                <span className="text-white font-medium">Inventory Ideas</span>
+                <ChevronRight className="w-5 h-5 text-gray-500" />
+              </button>
+              <BackfillPicturesButton />
+            </div>
           </div>
 
           {/* Diagnostics */}
