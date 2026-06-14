@@ -1162,17 +1162,25 @@ export default function PartsLibrary() {
   // Everything in the cart is routable (a real link, or a name we can search).
   const buyableCount = Object.keys(cart.cart).length;
 
-  // Order: open each cart item's link in its own tab. Parts without a link fall
-  // back to an Amazon search by name so every part still gets a tab.
+  // Order: open every cart item's link in its own tab, all at once. We click a real
+  // <a target="_blank"> per URL instead of window.open() in a loop — Chrome treats
+  // those as user-initiated navigations and opens them all, where multiple
+  // window.open() calls get pop-up-blocked after the first. Parts without a link
+  // fall back to an Amazon search by name so every part still gets a tab.
   const handleOrder = () => {
     Object.values(cart.cart).forEach(({ part }) => {
       const link = (part?.supplierLink || '').trim();
       const name = (part?.partName || '').trim();
       const url = link || (name ? `https://www.amazon.com/s?k=${encodeURIComponent(name)}` : '');
-      if (url) window.open(url, '_blank', 'noopener');
+      if (!url) return;
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     });
-    // The first tab rides the click; opening several at once can trip Chrome's
-    // pop-up blocker, so the user may need to allow pop-ups for this site.
   };
 
   return (
@@ -1342,7 +1350,7 @@ export default function PartsLibrary() {
                   className="w-full flex items-center justify-center gap-2 bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 mb-2">
                   <ShoppingCart className="w-4 h-4" /> Order{buyableCount > 0 ? ` (${buyableCount})` : ''}
                 </button>
-                <p className="text-gray-400 text-[11px] text-center mb-2">Opens each part's link in its own tab — allow pop-ups if your browser blocks them.</p>
+                <p className="text-gray-400 text-[11px] text-center mb-2">Opens every part in its own tab, all at once.</p>
                 <button onClick={() => cart.clear()}
                   className="w-full flex items-center justify-center gap-2 text-gray-600 hover:text-red-600 py-2.5 rounded-full font-medium transition-colors">
                   <Trash2 className="w-4 h-4" /> Clear cart
