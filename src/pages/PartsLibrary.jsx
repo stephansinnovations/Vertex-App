@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -414,8 +414,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
                       </button>
                     </div>
 
-                    <span {...editGestureProps(() => openEditPart(part), null)}
-                      className="text-[#0F1111] text-sm leading-snug cursor-pointer line-clamp-2 hover:text-[#C7511F]" title="Hold or double-tap to edit">{part.partName}</span>
+                    <span className="text-[#0F1111] text-sm leading-snug line-clamp-2">{part.partName}</span>
                     {part.price && <div className="mt-1 text-[#0F1111] text-base font-bold">{part.price}</div>}
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
                       {part.supplierLink ? (
@@ -427,7 +426,16 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged }) {
                         <button onClick={() => navigator.clipboard.writeText(part.partNum)} className="text-gray-500 font-mono text-xs hover:text-gray-900 cursor-copy" title="Copy part number">{part.partNum}</button>
                       )}
                     </div>
-                    <div className="mt-auto pt-2 text-[11px] text-gray-400">Allocated: {allocated}</div>
+                    <div className="mt-auto pt-2 flex items-center justify-between">
+                      <span className="text-[11px] text-gray-400">Allocated: {allocated}</span>
+                      <button
+                        onClick={() => openEditPart(part)}
+                        title="Edit part"
+                        className="text-gray-300 hover:text-[#146EB4] transition-colors p-0.5"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 );
               })}
