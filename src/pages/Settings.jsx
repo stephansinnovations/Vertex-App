@@ -20,6 +20,7 @@ const API_KEYS = [
     placeholder: 'AIza...',
     secret: true,
     hint: 'Get one free at aistudio.google.com/apikey',
+    balanceUrl: 'https://aistudio.google.com/app/usage',
   },
 ];
 
