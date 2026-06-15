@@ -107,14 +107,11 @@ export default function Home() {
           aria-label="Vertex Room"
           className="select-none mb-4"
           style={{
-            width: 96,
-            height: 26,
-            borderRadius: 13,
-            background: 'linear-gradient(180deg, rgba(168,85,247,0.3), rgba(109,40,217,0.3))',
-            backdropFilter: 'saturate(160%) blur(20px)',
-            WebkitBackdropFilter: 'saturate(160%) blur(20px)',
-            border: '0.5px solid rgba(168,85,247,0.5)',
-            boxShadow: '0 0 18px rgba(139,92,246,0.5), 0 2px 8px rgba(0,0,0,0.25)',
+            width: 52,
+            height: 12,
+            borderRadius: 6,
+            background: '#a855f7',
+            boxShadow: '0 0 14px 2px rgba(168,85,247,0.85), 0 0 28px rgba(168,85,247,0.5)',
           }}
         />
 
