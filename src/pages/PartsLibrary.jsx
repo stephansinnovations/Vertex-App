@@ -4,7 +4,7 @@ import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, 
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
-import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, findPartImage, fillPartField, guessPartCategory } from '@/api/geminiParts';
+import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, fillPartField, guessPartCategory } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 
 function extractSpreadsheetId(url) {
@@ -143,7 +143,7 @@ async function uploadPartImage(file) {
   return urlData.publicUrl;
 }
 
-function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
+function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEditPart }) {
   const { add: addToCart } = useCart();
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
@@ -158,35 +158,6 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
   const [titleErr, setTitleErr] = useState(null);
   const suppressToggle = useRef(false);
   const titleGesture = editGestureProps(() => { setTitleDraft(category.name); setTitleErr(null); setEditingTitle(true); }, suppressToggle);
-
-  // Edit-part popup (also hosts Delete + picture tools)
-  const [editPart, setEditPart] = useState(null); // the original part being edited
-  const [editForm, setEditForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [editErr, setEditErr] = useState(null);
-  const [confirmDelInEdit, setConfirmDelInEdit] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [uploadingImg, setUploadingImg] = useState(false);
-  const [findingImg, setFindingImg] = useState(false);
-  const [aiFillingEdit, setAiFillingEdit] = useState(false);
-  const editFileRef = useRef(null);
-  const [aiEditField, setAiEditField] = useState(null); // which edit field is AI-filling
-
-  // Per-field AI fill in the Edit modal (the little sparkle next to each input).
-  const aiFillEditField = async (field) => {
-    if (aiEditField) return;
-    setAiEditField(field);
-    setEditErr(null);
-    try {
-      const val = await fillPartField(field, editForm);
-      if (val) setEditForm(f => ({ ...f, [field]: val }));
-      else setEditErr('AI couldn’t fill that — add a part link or more details first.');
-    } catch (e) {
-      setEditErr(e?.message || 'AI fill failed.');
-    } finally {
-      setAiEditField(null);
-    }
-  };
 
   // Drag a part onto another subcategory to move it there.
   const [dragOver, setDragOver] = useState(false);
@@ -211,114 +182,6 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
       alert(`Could not move "${payload.part.partName}": ${err.message || 'failed'}`);
     } finally {
       setMoving(false);
-    }
-  };
-
-  const openEditPart = (part) => {
-    setEditPart(part);
-    setEditForm({
-      partName: part.partName || '', supplier: part.supplier || '',
-      supplierLink: part.supplierLink || '', partNum: part.partNum || '', price: part.price || '',
-      imageUrl: part.imageUrl || '', contactEmail: part.contactEmail || '',
-    });
-    setEditErr(null);
-    setConfirmDelInEdit(false);
-  };
-
-  const saveEditPart = async () => {
-    if (!editForm.partName.trim() || savingEdit) return;
-    setSavingEdit(true);
-    setEditErr(null);
-    try {
-      const token = await getSheetsAccessToken();
-      await updatePartRow(spreadsheetId, tab, category.name, editPart, {
-        partName: editForm.partName.trim(),
-        supplier: editForm.supplier.trim(),
-        supplierLink: editForm.supplierLink.trim(),
-        partNum: editForm.partNum.trim(),
-        price: editForm.price.trim(),
-        imageUrl: editForm.imageUrl.trim(),
-        contactEmail: editForm.contactEmail.trim(),
-      }, token);
-      setEditPart(null);
-      onChanged && onChanged();
-    } catch (e) {
-      setEditErr(e.message || 'Failed to save part');
-    } finally {
-      setSavingEdit(false);
-    }
-  };
-
-  const deleteEditPart = async () => {
-    if (!editPart || deleting) return;
-    setDeleting(true);
-    setEditErr(null);
-    try {
-      const token = await getSheetsAccessToken();
-      await deletePartRow(spreadsheetId, tab, category.name, editPart, token);
-      setEditPart(null);
-      onChanged && onChanged();
-    } catch (e) {
-      setEditErr(e.message || 'Delete failed');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  // Edit-modal picture tools
-  const onPickEditImage = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    setUploadingImg(true);
-    setEditErr(null);
-    try {
-      const url = await uploadPartImage(file);
-      setEditForm(f => ({ ...f, imageUrl: url }));
-    } catch {
-      setEditErr('Image upload failed — create a "part-images" bucket (public) in Supabase Storage.');
-    } finally {
-      setUploadingImg(false);
-    }
-  };
-
-  const aiFindEditImage = async () => {
-    if (findingImg) return;
-    setFindingImg(true);
-    setEditErr(null);
-    try {
-      const url = await findPartImage({
-        partName: editForm.partName, supplier: editForm.supplier,
-        partNum: editForm.partNum, supplierLink: editForm.supplierLink,
-      });
-      if (url) setEditForm(f => ({ ...f, imageUrl: url }));
-      else setEditErr('AI could not find an image for this part.');
-    } catch (e) {
-      setEditErr(e.message || 'Image search failed');
-    } finally {
-      setFindingImg(false);
-    }
-  };
-
-  const aiFillEditFromLink = async () => {
-    const link = editForm.supplierLink.trim();
-    if (!link || aiFillingEdit) return;
-    setAiFillingEdit(true);
-    setEditErr(null);
-    try {
-      const r = await extractPartFromUrl(link);
-      setEditForm(f => ({
-        ...f,
-        partName: r.partName || f.partName,
-        supplier: r.supplier || f.supplier,
-        partNum: r.partNum || f.partNum,
-        price: r.price || f.price,
-        imageUrl: r.imageUrl || f.imageUrl,
-      }));
-    } catch (e) {
-      setEditErr(e.message || 'AI autofill failed');
-    } finally {
-      setAiFillingEdit(false);
     }
   };
 
@@ -485,7 +348,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
                     <div className="mt-auto pt-2 flex items-center justify-between">
                       <span className="text-[11px] text-gray-400">Allocated: {allocated}</span>
                       <button
-                        onClick={() => openEditPart(part)}
+                        onClick={() => onEditPart && onEditPart(tab, category.name, part)}
                         title="Edit part"
                         className="text-gray-300 hover:text-[#146EB4] transition-colors p-0.5"
                       >
@@ -509,118 +372,11 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
         </div>
       )}
 
-      {/* Edit part modal */}
-      {editPart && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => !savingEdit && !deleting && setEditPart(null)} />
-          <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">Edit Part</h2>
-              <button onClick={() => !savingEdit && !deleting && setEditPart(null)} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
-            </div>
-
-            {/* Part link (top) — AI reads it to fill everything */}
-            <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
-            <div className="flex items-center gap-2 mb-1">
-              <input value={editForm.supplierLink} onChange={e => setEditForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="https://…"
-                className="flex-1 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
-              <button onClick={aiFillEditFromLink} disabled={!editForm.supplierLink.trim() || aiFillingEdit}
-                title="Auto-fill part info from this link with AI"
-                className="flex items-center gap-1.5 text-sm font-semibold px-3 py-3 rounded-xl transition-colors disabled:opacity-40 whitespace-nowrap"
-                style={{ background: 'rgba(124,58,237,0.10)', color: '#6d28d9', border: '1px solid rgba(124,58,237,0.30)' }}>
-                <Sparkles className={`w-4 h-4 ${aiFillingEdit ? 'animate-pulse' : ''}`} /> {aiFillingEdit ? 'Filling…' : 'AI fill'}
-              </button>
-            </div>
-            <p className="text-gray-400 text-[11px] mb-4">AI reads the link and fills in every field — or tap ✨ next to a field to fill just that one.</p>
-
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-gray-500">Part name *</label>
-              <AiFillButton onClick={() => aiFillEditField('partName')} busy={aiEditField === 'partName'} />
-            </div>
-            <input value={editForm.partName}
-              onChange={e => setEditForm(f => ({ ...f, partName: e.target.value }))}
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs text-gray-500">Supplier</label>
-                  <AiFillButton onClick={() => aiFillEditField('supplier')} busy={aiEditField === 'supplier'} />
-                </div>
-                <input value={editForm.supplier} onChange={e => setEditForm(f => ({ ...f, supplier: e.target.value }))}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
-              </div>
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs text-gray-500">Price</label>
-                  <AiFillButton onClick={() => aiFillEditField('price')} busy={aiEditField === 'price'} />
-                </div>
-                <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))} placeholder="$0.00"
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-gray-500">Part #</label>
-              <AiFillButton onClick={() => aiFillEditField('partNum')} busy={aiEditField === 'partNum'} />
-            </div>
-            <input value={editForm.partNum} onChange={e => setEditForm(f => ({ ...f, partNum: e.target.value }))}
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs text-gray-500">Supplier contact email</label>
-              <AiFillButton onClick={() => aiFillEditField('contactEmail')} busy={aiEditField === 'contactEmail'} title="AI find a contact email" />
-            </div>
-            <input type="email" value={editForm.contactEmail} onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))}
-              placeholder="contact@supplier.com"
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            {/* Picture (bottom) with upload + AI find */}
-            <label className="text-xs text-gray-500 mb-1.5 block">Picture</label>
-            <div className="flex items-start gap-3 mb-2">
-              <PartImage url={editForm.imageUrl.trim()} className="w-20 h-20" />
-              <div className="flex-1 flex flex-col gap-2">
-                <input ref={editFileRef} type="file" accept="image/*" capture="environment" onChange={onPickEditImage} className="hidden" />
-                <button onClick={() => editFileRef.current?.click()} disabled={uploadingImg}
-                  className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium py-2 rounded-lg transition-colors disabled:opacity-60">
-                  <Camera className="w-4 h-4" /> {uploadingImg ? 'Uploading…' : 'Upload photo'}
-                </button>
-                <button onClick={aiFindEditImage} disabled={findingImg}
-                  className="flex items-center justify-center gap-2 text-sm font-medium py-2 rounded-lg transition-colors disabled:opacity-60"
-                  style={{ background: 'rgba(124,58,237,0.10)', color: '#6d28d9', border: '1px solid rgba(124,58,237,0.30)' }}>
-                  <Sparkles className={`w-4 h-4 ${findingImg ? 'animate-pulse' : ''}`} /> {findingImg ? 'Finding image…' : 'Find image with AI'}
-                </button>
-              </div>
-            </div>
-            <input value={editForm.imageUrl} onChange={e => setEditForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="…or paste an image URL"
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            {editErr && <p className="text-red-600 text-xs mb-3">{editErr}</p>}
-
-            <button onClick={saveEditPart} disabled={!editForm.partName.trim() || savingEdit || deleting}
-              className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 flex items-center justify-center gap-2 mb-3">
-              {savingEdit ? 'Saving…' : <><Check className="w-4 h-4" /> Save changes</>}
-            </button>
-
-            {confirmDelInEdit ? (
-              <button onClick={deleteEditPart} disabled={deleting}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 text-white py-3 rounded-full font-semibold hover:bg-red-500 transition-colors disabled:opacity-50">
-                <Trash2 className="w-4 h-4" /> {deleting ? 'Deleting…' : 'Tap again to confirm delete'}
-              </button>
-            ) : (
-              <button onClick={() => setConfirmDelInEdit(true)} disabled={savingEdit}
-                className="w-full flex items-center justify-center gap-2 text-red-600 hover:text-red-700 py-2.5 rounded-full font-medium transition-colors disabled:opacity-50">
-                <Trash2 className="w-4 h-4" /> Delete part
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-function SheetFolder({ tab, spreadsheetId, onRenamed, onAddPart }) {
+function SheetFolder({ tab, spreadsheetId, onRenamed, onAddPart, onEditPart }) {
   const [open, setOpen] = useState(false);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -719,7 +475,7 @@ function SheetFolder({ tab, spreadsheetId, onRenamed, onAddPart }) {
             <div className="px-5 py-4"><p className="text-gray-400 text-sm">No subcategories found</p></div>
           )}
           {categories.map((cat, i) => (
-            <CategoryRow key={cat.name + i} category={cat} spreadsheetId={spreadsheetId} tab={tab} onChanged={loadCategories} onAddPart={onAddPart} />
+            <CategoryRow key={cat.name + i} category={cat} spreadsheetId={spreadsheetId} tab={tab} onChanged={loadCategories} onAddPart={onAddPart} onEditPart={onEditPart} />
           ))}
 
           {!loading && (
@@ -1083,12 +839,20 @@ export default function PartsLibrary() {
   const [quickSaving, setQuickSaving] = useState(false);
   const [quickErr, setQuickErr] = useState(null);
 
+  // When set, the Add Part modal is in "edit" mode for this existing part
+  // ({ tab, category, part }); saving updates it (or moves it if its category /
+  // subcategory changed) instead of inserting a new row.
+  const [editingOriginal, setEditingOriginal] = useState(null);
+  const [confirmDel, setConfirmDel] = useState(false);
+
   const openAdd = () => {
     setAddErr(null);
     setAiErr(null);
     setQuickAdd(null);
     setAddStarted(false);
     setSubmitTried(false);
+    setEditingOriginal(null);
+    setConfirmDel(false);
     setAddTab('');
     setAddCategory('');
     setAddCats([]);
@@ -1104,6 +868,29 @@ export default function PartsLibrary() {
     setAddStarted(true);
     setAddTab(presetTab);
     pendingSubcatRef.current = presetSubcat || null; // applied when the tab's cats load
+  };
+
+  // Edit a part: open the same Add Part form, prefilled with the part (including its
+  // category + subcategory). Saving updates it in place, or moves it if you change
+  // the category/subcategory.
+  const openEditFor = (srcTab, srcCat, part) => {
+    setAddErr(null);
+    setAiErr(null);
+    setQuickAdd(null);
+    setSubmitTried(false);
+    setConfirmDel(false);
+    setEditingOriginal({ tab: srcTab, category: srcCat, part });
+    setAddStarted(true);
+    setAddTab(srcTab);
+    setAddCategory('');
+    setAddCats([]);
+    pendingSubcatRef.current = srcCat || null; // applied when the tab's cats load
+    setPForm({
+      partName: part.partName || '', supplier: part.supplier || '', supplierLink: part.supplierLink || '',
+      partNum: part.partNum || '', price: part.price || '', imageUrl: part.imageUrl || '',
+      contactEmail: part.contactEmail || '',
+    });
+    setShowAdd(true);
   };
 
   // Per-field AI auto-fill (the little sparkle next to each Add-Part field).
@@ -1210,7 +997,7 @@ export default function PartsLibrary() {
     setAddErr(null);
     try {
       const token = await getSheetsAccessToken();
-      await addPartToCategory(spreadsheetId, addTab, addCategory, {
+      const fields = {
         partName: pForm.partName.trim(),
         supplier: pForm.supplier.trim(),
         supplierLink: pForm.supplierLink.trim(),
@@ -1218,12 +1005,41 @@ export default function PartsLibrary() {
         price: pForm.price.trim(),
         imageUrl: pForm.imageUrl.trim(),
         contactEmail: pForm.contactEmail.trim(),
-      }, token);
+      };
+      if (editingOriginal) {
+        const samePlace = addTab === editingOriginal.tab && addCategory === editingOriginal.category;
+        if (samePlace) {
+          await updatePartRow(spreadsheetId, addTab, addCategory, editingOriginal.part, fields, token);
+        } else {
+          // Category/subcategory changed → move: add to the new spot, then remove the old.
+          await addPartToCategory(spreadsheetId, addTab, addCategory, fields, token);
+          await deletePartRow(spreadsheetId, editingOriginal.tab, editingOriginal.category, editingOriginal.part, token);
+        }
+      } else {
+        await addPartToCategory(spreadsheetId, addTab, addCategory, fields, token);
+      }
       setShowAdd(false);
       setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
       window.location.reload();
     } catch (e) {
-      setAddErr(e.message || 'Failed to add part');
+      setAddErr(e.message || (editingOriginal ? 'Failed to save part' : 'Failed to add part'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete the part being edited (only available in edit mode).
+  const deleteEditingPart = async () => {
+    if (!editingOriginal || saving) return;
+    setSaving(true);
+    setAddErr(null);
+    try {
+      const token = await getSheetsAccessToken();
+      await deletePartRow(spreadsheetId, editingOriginal.tab, editingOriginal.category, editingOriginal.part, token);
+      setShowAdd(false);
+      window.location.reload();
+    } catch (e) {
+      setAddErr(e.message || 'Failed to delete part');
     } finally {
       setSaving(false);
     }
@@ -1387,7 +1203,7 @@ export default function PartsLibrary() {
             {loading && <p className="text-gray-600 text-sm">Loading categories…</p>}
             {error && <p className="text-red-600 text-sm">{error}</p>}
             {sheetTabs.map((tab) => (
-              <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} onRenamed={reloadTabs} onAddPart={openAddFor} />
+              <SheetFolder key={tab} tab={tab} spreadsheetId={spreadsheetId} onRenamed={reloadTabs} onAddPart={openAddFor} onEditPart={openEditFor} />
             ))}
             {!loading && !error && sheetTabs.length === 0 && (
               <div className="bg-white border border-gray-200 rounded-xl px-6 py-8 text-center">
@@ -1486,7 +1302,7 @@ export default function PartsLibrary() {
           <div className="absolute inset-0 bg-black/40" onClick={() => !saving && setShowAdd(false)} />
           <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-gray-900">Add Part</h2>
+              <h2 className="text-lg font-bold text-gray-900">{editingOriginal ? 'Edit Part' : 'Add Part'}</h2>
               <button onClick={() => !saving && setShowAdd(false)} className="text-gray-400 hover:text-gray-900">
                 <X className="w-5 h-5" />
               </button>
@@ -1660,9 +1476,24 @@ export default function PartsLibrary() {
 
                     <button onClick={submitPart} disabled={!pForm.partName.trim() || saving}
                       className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
-                      {saving ? 'Adding…' : <><Check className="w-4 h-4" /> Add to sheet</>}
+                      {saving ? (editingOriginal ? 'Saving…' : 'Adding…') : <><Check className="w-4 h-4" /> {editingOriginal ? 'Save changes' : 'Add to sheet'}</>}
                     </button>
-                    <p className="text-gray-400 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>
+
+                    {editingOriginal && (
+                      confirmDel ? (
+                        <button onClick={deleteEditingPart} disabled={saving}
+                          className="w-full mt-3 flex items-center justify-center gap-2 bg-red-600 text-white py-3 rounded-full font-semibold hover:bg-red-500 transition-colors disabled:opacity-50">
+                          <Trash2 className="w-4 h-4" /> {saving ? 'Deleting…' : 'Tap again to confirm delete'}
+                        </button>
+                      ) : (
+                        <button onClick={() => setConfirmDel(true)} disabled={saving}
+                          className="w-full mt-3 flex items-center justify-center gap-2 text-red-600 hover:text-red-700 py-2.5 rounded-full font-medium transition-colors disabled:opacity-50">
+                          <Trash2 className="w-4 h-4" /> Delete part
+                        </button>
+                      )
+                    )}
+
+                    {!editingOriginal && <p className="text-gray-400 text-[11px] text-center mt-2">First time, Google will ask you to sign in and allow Sheets access.</p>}
                   </>
                 )}
               </>
