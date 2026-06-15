@@ -423,8 +423,14 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
                     draggable
                     onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/json', JSON.stringify({ tab, category: category.name, part })); e.currentTarget.style.opacity = '0.4'; }}
                     onDragEnd={(e) => { e.currentTarget.style.opacity = '1'; }}
-                    title="Drag to another subcategory to move"
-                    className="group flex flex-col bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg hover:border-gray-300 transition-all cursor-grab active:cursor-grabbing">
+                    onClick={(e) => {
+                      // Click anywhere on the card opens the part's link — but never
+                      // when a real control (button/link/input) was clicked.
+                      if (e.target.closest('button, a, input')) return;
+                      if (part.supplierLink) window.open(part.supplierLink, '_blank', 'noopener,noreferrer');
+                    }}
+                    title="Click to open link · drag to move"
+                    className={`group flex flex-col bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg hover:border-gray-300 transition-all active:cursor-grabbing ${part.supplierLink ? 'cursor-pointer' : 'cursor-grab'}`}>
                     <div className="relative w-full aspect-square mb-3">
                       <PartImage url={part.imageUrl} className="w-full h-full" />
 
