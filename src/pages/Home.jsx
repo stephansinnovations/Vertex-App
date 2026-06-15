@@ -9,17 +9,16 @@ import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
 import { useVertexChat } from '@/lib/VertexChatContext';
-import { useAuth } from '@/lib/AuthContext';
 
 const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8b7f61/0e0de3cfb_VertexBannerLogoPrint.png';
 
-// The "apps" that live in the iOS-style dock. SOPs, Builds and Contacts are
-// admin-only (hidden for members; their routes are gated by AdminRoute too).
+// The five "apps" that live in the iOS-style dock. (SOPs, Builds and Contacts
+// are shown to everyone, but their routes are gated to admins by AdminRoute.)
 const DOCK_APPS = [
-  { image: sopIcon,   label: 'SOPs',      path: createPageUrl('SOPList'), adminOnly: true },
+  { image: sopIcon,   label: 'SOPs',      path: createPageUrl('SOPList') },
   { image: partsIcon, label: 'Inventory', path: '/PartsLibrary' },
-  { image: buildsIcon, label: 'Builds',   path: '/Builds', adminOnly: true },
-  { image: contactsIcon, label: 'Contacts', path: '/Contacts', adminOnly: true },
+  { image: buildsIcon, label: 'Builds',   path: '/Builds' },
+  { image: contactsIcon, label: 'Contacts', path: '/Contacts' },
   { icon: UserCircle, label: 'Profile',   path: '/Profile',               gradient: 'linear-gradient(160deg, #c084fc 0%, #7c3aed 100%)' },
 ];
 
@@ -79,8 +78,6 @@ function AppIcon({ icon: Icon, image, label, gradient, onClick }) {
 export default function Home() {
   const navigate = useNavigate();
   const { open: openChat } = useVertexChat();
-  const { isAdmin } = useAuth();
-  const dockApps = DOCK_APPS.filter(app => isAdmin || !app.adminOnly);
 
   return (
     <motion.div
@@ -133,7 +130,7 @@ export default function Home() {
             boxShadow: '0 8px 32px rgba(0,0,0,0.28)',
           }}
         >
-          {dockApps.map(app => (
+          {DOCK_APPS.map(app => (
             <AppIcon
               key={app.label}
               icon={app.icon}
