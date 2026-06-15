@@ -1378,8 +1378,14 @@ export default function PartsLibrary() {
       {/* ───────────── Top bar (Amazon blue) ───────────── */}
       <header className="sticky top-0 z-30 shadow-md">
         <div className="px-4 py-2.5 flex items-center gap-3 flex-wrap" style={{ background: 'linear-gradient(180deg,#232F3E 0%,#131A22 100%)' }}>
-          <button onClick={() => navigate('/')} className="text-gray-200 hover:text-white transition-colors" title="Back">
-            <ArrowLeft className="w-5 h-5" />
+          <button
+            onClick={() => navigate('/')}
+            className="text-gray-200 hover:text-white transition-colors -m-2 p-2 flex items-center justify-center"
+            style={{ minWidth: 44, minHeight: 44 }}
+            title="Back"
+            aria-label="Back"
+          >
+            <ArrowLeft className="w-6 h-6" />
           </button>
           <h1 className="text-white text-xl font-extrabold tracking-tight whitespace-nowrap">Parts</h1>
 
