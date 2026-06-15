@@ -47,6 +47,19 @@ function AppIcon({ icon: Icon, label, gradient, onClick }) {
         />
         <Icon className="relative z-10" style={{ width: 28, height: 28, color: '#fff', strokeWidth: 2 }} />
       </div>
+      <span
+        className="mt-1.5 text-center"
+        style={{
+          fontSize: 11,
+          fontWeight: 500,
+          letterSpacing: 0.1,
+          color: 'rgba(255,255,255,0.9)',
+          textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
     </button>
   );
 }
@@ -102,7 +115,7 @@ export default function Home() {
 
         {/* iOS-style frosted dock */}
         <div
-          className="flex items-center justify-center gap-3"
+          className="flex items-center justify-center gap-3 md:gap-7"
           style={{
             padding: '12px 14px',
             borderRadius: 34,
