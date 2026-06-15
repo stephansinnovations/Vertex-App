@@ -24,7 +24,19 @@ const MASTER_CRAFTER = {
     + 'linear-gradient(180deg, #1c1610 0%, #0e0b08 45%, #050403 100%)',
 };
 
-const SEED = [MASTER_CRAFTER, ORIGINAL];
+// Blue counterpart to Master Crafter — cool steel-blue light over deep navy
+// fading to black. Same mood as the original theme, blue highlights instead of gold.
+const BLUEPRINT = {
+  id: 'blueprint',
+  name: 'Blueprint',
+  type: 'css',
+  value:
+    'radial-gradient(ellipse 90% 60% at 50% -10%, rgba(86,156,255,0.24), transparent 60%), '
+    + 'radial-gradient(ellipse 120% 80% at 50% 115%, rgba(40,96,180,0.20), transparent 60%), '
+    + 'linear-gradient(180deg, #0f1726 0%, #0a0f1a 45%, #03050b 100%)',
+};
+
+const SEED = [BLUEPRINT, MASTER_CRAFTER, ORIGINAL];
 
 // Inline style for a swatch/preview of a background.
 export function backgroundStyle(bg) {
@@ -64,7 +76,7 @@ export function BackgroundProvider({ children }) {
     } catch { /* ignore */ }
     return SEED;
   });
-  const [activeId, setActiveId] = useState(() => localStorage.getItem(LS_ACTIVE) || MASTER_CRAFTER.id);
+  const [activeId, setActiveId] = useState(() => localStorage.getItem(LS_ACTIVE) || BLUEPRINT.id);
 
   useEffect(() => { localStorage.setItem(LS_LIST, JSON.stringify(backgrounds)); }, [backgrounds]);
   useEffect(() => {
