@@ -84,7 +84,7 @@ function PartImage({ url, className = 'w-14 h-14' }) {
       </div>
     );
   }
-  return <img src={url} alt="" loading="lazy" onError={() => setErr(true)}
+  return <img src={url} alt="" loading="lazy" draggable={false} onError={() => setErr(true)}
     // Some endpoints (e.g. Amazon's ASIN image for items with no photo) return a
     // 1×1 transparent placeholder with HTTP 200 — treat those as "no image".
     onLoad={(e) => { if (e.target.naturalWidth <= 1 || e.target.naturalHeight <= 1) setErr(true); }}
@@ -170,6 +170,49 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
   const [findingImg, setFindingImg] = useState(false);
   const [aiFillingEdit, setAiFillingEdit] = useState(false);
   const editFileRef = useRef(null);
+  const [aiEditField, setAiEditField] = useState(null); // which edit field is AI-filling
+
+  // Per-field AI fill in the Edit modal (the little sparkle next to each input).
+  const aiFillEditField = async (field) => {
+    if (aiEditField) return;
+    setAiEditField(field);
+    setEditErr(null);
+    try {
+      const val = await fillPartField(field, editForm);
+      if (val) setEditForm(f => ({ ...f, [field]: val }));
+      else setEditErr('AI couldn’t fill that — add a part link or more details first.');
+    } catch (e) {
+      setEditErr(e?.message || 'AI fill failed.');
+    } finally {
+      setAiEditField(null);
+    }
+  };
+
+  // Drag a part onto another subcategory to move it there.
+  const [dragOver, setDragOver] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const handleDropPart = async (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    let payload;
+    try { payload = JSON.parse(e.dataTransfer.getData('application/json')); } catch { return; }
+    if (!payload?.part?.partName) return;
+    if (payload.tab === tab && payload.category === category.name) return; // same place
+    setMoving(true);
+    try {
+      const token = await getSheetsAccessToken();
+      // Add to the target first, then remove from the source — a failure mid-way
+      // leaves a duplicate (recoverable) rather than losing the part.
+      await addPartToCategory(spreadsheetId, tab, category.name, payload.part, token);
+      await deletePartRow(spreadsheetId, payload.tab, payload.category, payload.part, token);
+      if (payload.tab === tab) onChanged && onChanged();
+      else window.location.reload(); // cross-tab: refresh so the source tab updates too
+    } catch (err) {
+      alert(`Could not move "${payload.part.partName}": ${err.message || 'failed'}`);
+    } finally {
+      setMoving(false);
+    }
+  };
 
   const openEditPart = (part) => {
     setEditPart(part);
@@ -326,7 +369,17 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
   };
 
   return (
-    <div className="border-b border-gray-100 last:border-b-0">
+    <div
+      onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOver(false); }}
+      onDrop={handleDropPart}
+      className={`relative border-b border-gray-100 last:border-b-0 transition-colors ${dragOver ? 'bg-violet-50 ring-2 ring-inset ring-violet-400 rounded-xl' : ''}`}
+    >
+      {moving && (
+        <div className="absolute inset-0 z-10 bg-white/70 flex items-center justify-center rounded-xl">
+          <div className="w-6 h-6 border-2 border-violet-200 border-t-violet-600 rounded-full animate-spin" />
+        </div>
+      )}
       {editingTitle ? (
         <div className="flex items-center gap-2 px-4 py-3">
           <input value={titleDraft} autoFocus
@@ -366,7 +419,12 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
                 const added = addedKey === part.partName;
 
                 return (
-                  <div key={i} className="group flex flex-col bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg hover:border-gray-300 transition-all">
+                  <div key={i}
+                    draggable
+                    onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('application/json', JSON.stringify({ tab, category: category.name, part })); e.currentTarget.style.opacity = '0.4'; }}
+                    onDragEnd={(e) => { e.currentTarget.style.opacity = '1'; }}
+                    title="Drag to another subcategory to move"
+                    className="group flex flex-col bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg hover:border-gray-300 transition-all cursor-grab active:cursor-grabbing">
                     <div className="relative w-full aspect-square mb-3">
                       <PartImage url={part.imageUrl} className="w-full h-full" />
 
@@ -405,7 +463,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
                     {part.price && <div className="mt-1 text-[#0F1111] text-base font-bold">{part.price}</div>}
                     <div className="mt-1 flex items-center gap-2 flex-wrap">
                       {part.supplierLink ? (
-                        <a href={part.supplierLink} target="_blank" rel="noopener noreferrer" className="text-[#007185] hover:text-[#C7511F] text-xs hover:underline">{part.supplier || 'Link'}</a>
+                        <a href={part.supplierLink} target="_blank" rel="noopener noreferrer" draggable={false} className="text-[#007185] hover:text-[#C7511F] text-xs hover:underline">{part.supplier || 'Link'}</a>
                       ) : part.supplier ? (
                         <button onClick={() => navigator.clipboard.writeText(part.supplier)} className="text-gray-500 text-xs hover:text-gray-900 cursor-copy" title="Copy supplier name">{part.supplier}</button>
                       ) : null}
@@ -413,7 +471,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
                         <button onClick={() => navigator.clipboard.writeText(part.partNum)} className="text-gray-500 font-mono text-xs hover:text-gray-900 cursor-copy" title="Copy part number">{part.partNum}</button>
                       )}
                       {part.contactEmail && (
-                        <a href={`mailto:${part.contactEmail}`} className="inline-flex items-center gap-1 text-[#007185] hover:text-[#C7511F] text-xs hover:underline" title={`Email ${part.contactEmail}`}>
+                        <a href={`mailto:${part.contactEmail}`} draggable={false} className="inline-flex items-center gap-1 text-[#007185] hover:text-[#C7511F] text-xs hover:underline" title={`Email ${part.contactEmail}`}>
                           <Mail className="w-3 h-3" /> Contact
                         </a>
                       )}
@@ -455,7 +513,63 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
               <button onClick={() => !savingEdit && !deleting && setEditPart(null)} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
             </div>
 
-            {/* Picture with upload + AI find */}
+            {/* Part link (top) — AI reads it to fill everything */}
+            <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
+            <div className="flex items-center gap-2 mb-1">
+              <input value={editForm.supplierLink} onChange={e => setEditForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="https://…"
+                className="flex-1 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
+              <button onClick={aiFillEditFromLink} disabled={!editForm.supplierLink.trim() || aiFillingEdit}
+                title="Auto-fill part info from this link with AI"
+                className="flex items-center gap-1.5 text-sm font-semibold px-3 py-3 rounded-xl transition-colors disabled:opacity-40 whitespace-nowrap"
+                style={{ background: 'rgba(124,58,237,0.10)', color: '#6d28d9', border: '1px solid rgba(124,58,237,0.30)' }}>
+                <Sparkles className={`w-4 h-4 ${aiFillingEdit ? 'animate-pulse' : ''}`} /> {aiFillingEdit ? 'Filling…' : 'AI fill'}
+              </button>
+            </div>
+            <p className="text-gray-400 text-[11px] mb-4">AI reads the link and fills in every field — or tap ✨ next to a field to fill just that one.</p>
+
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-500">Part name *</label>
+              <AiFillButton onClick={() => aiFillEditField('partName')} busy={aiEditField === 'partName'} />
+            </div>
+            <input value={editForm.partName}
+              onChange={e => setEditForm(f => ({ ...f, partName: e.target.value }))}
+              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-gray-500">Supplier</label>
+                  <AiFillButton onClick={() => aiFillEditField('supplier')} busy={aiEditField === 'supplier'} />
+                </div>
+                <input value={editForm.supplier} onChange={e => setEditForm(f => ({ ...f, supplier: e.target.value }))}
+                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs text-gray-500">Price</label>
+                  <AiFillButton onClick={() => aiFillEditField('price')} busy={aiEditField === 'price'} />
+                </div>
+                <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))} placeholder="$0.00"
+                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-500">Part #</label>
+              <AiFillButton onClick={() => aiFillEditField('partNum')} busy={aiEditField === 'partNum'} />
+            </div>
+            <input value={editForm.partNum} onChange={e => setEditForm(f => ({ ...f, partNum: e.target.value }))}
+              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
+
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-gray-500">Supplier contact email</label>
+              <AiFillButton onClick={() => aiFillEditField('contactEmail')} busy={aiEditField === 'contactEmail'} title="AI find a contact email" />
+            </div>
+            <input type="email" value={editForm.contactEmail} onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))}
+              placeholder="contact@supplier.com"
+              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
+
+            {/* Picture (bottom) with upload + AI find */}
             <label className="text-xs text-gray-500 mb-1.5 block">Picture</label>
             <div className="flex items-start gap-3 mb-2">
               <PartImage url={editForm.imageUrl.trim()} className="w-20 h-20" />
@@ -474,46 +588,6 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart }) {
             </div>
             <input value={editForm.imageUrl} onChange={e => setEditForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="…or paste an image URL"
               className="w-full bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            <label className="text-xs text-gray-500 mb-1.5 block">Part name *</label>
-            <input value={editForm.partName}
-              onChange={e => setEditForm(f => ({ ...f, partName: e.target.value }))}
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-xs text-gray-500 mb-1.5 block">Supplier</label>
-                <input value={editForm.supplier} onChange={e => setEditForm(f => ({ ...f, supplier: e.target.value }))}
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500 mb-1.5 block">Price</label>
-                <input value={editForm.price} onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))} placeholder="$0.00"
-                  className="w-full bg-white border border-gray-300 rounded-xl px-3 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
-              </div>
-            </div>
-
-            <label className="text-xs text-gray-500 mb-1.5 block">Part #</label>
-            <input value={editForm.partNum} onChange={e => setEditForm(f => ({ ...f, partNum: e.target.value }))}
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            <label className="text-xs text-gray-500 mb-1.5 block">Supplier contact email</label>
-            <input type="email" value={editForm.contactEmail} onChange={e => setEditForm(f => ({ ...f, contactEmail: e.target.value }))}
-              placeholder="contact@supplier.com"
-              className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
-
-            <label className="text-xs text-gray-500 mb-1.5 block">Part link</label>
-            <div className="flex items-center gap-2 mb-2">
-              <input value={editForm.supplierLink} onChange={e => setEditForm(f => ({ ...f, supplierLink: e.target.value }))} placeholder="https://…"
-                className="flex-1 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
-              <button onClick={aiFillEditFromLink} disabled={!editForm.supplierLink.trim() || aiFillingEdit}
-                title="Auto-fill part info from this link with AI"
-                className="flex items-center gap-1.5 text-sm font-semibold px-3 py-3 rounded-xl transition-colors disabled:opacity-40 whitespace-nowrap"
-                style={{ background: 'rgba(124,58,237,0.10)', color: '#6d28d9', border: '1px solid rgba(124,58,237,0.30)' }}>
-                <Sparkles className={`w-4 h-4 ${aiFillingEdit ? 'animate-pulse' : ''}`} /> {aiFillingEdit ? 'Filling…' : 'AI fill'}
-              </button>
-            </div>
-            <p className="text-gray-400 text-[11px] mb-4">AI reads the link and fills in name, supplier, price, part # and image.</p>
 
             {editErr && <p className="text-red-600 text-xs mb-3">{editErr}</p>}
 
