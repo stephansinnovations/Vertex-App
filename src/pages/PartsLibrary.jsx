@@ -884,6 +884,25 @@ export default function PartsLibrary() {
   const [aiFilling, setAiFilling] = useState(false);
   const [aiErr, setAiErr] = useState(null);
   const photoInputRef = useRef(null);
+  const addFileRef = useRef(null); // Add Part "Upload photo" file input
+  const [uploadingAddImg, setUploadingAddImg] = useState(false);
+
+  // Upload a picture file for the Add Part form → Supabase Storage → set the URL.
+  const onPickAddImage = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingAddImg(true);
+    setAddErr(null);
+    try {
+      const url = await uploadPartImage(file);
+      setPForm(f => ({ ...f, imageUrl: url }));
+    } catch {
+      setAddErr('Image upload failed — create a "part-images" bucket (public) in Supabase Storage.');
+    } finally {
+      setUploadingAddImg(false);
+    }
+  };
 
   // Take/upload a photo → Gemini identifies the part and finds a buy link.
   // Reached via the Inventory deep-link (?photo=1); the in-modal button was removed.
@@ -1617,14 +1636,21 @@ export default function PartsLibrary() {
                       className="w-full bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 placeholder:text-gray-400 text-sm mb-4 focus:outline-none focus:border-[#146EB4]" />
 
                     <div className="flex items-center justify-between mb-1.5">
-                      <label className="text-xs text-gray-500">Picture URL</label>
+                      <label className="text-xs text-gray-500">Picture</label>
                       <AiFillButton onClick={() => aiFillOne('imageUrl')} busy={aiField === 'imageUrl'} title="AI find an image" />
                     </div>
-                    <div className="flex items-center gap-3 mb-5">
-                      <PartImage url={pForm.imageUrl.trim()} className="w-14 h-14" />
-                      <input value={pForm.imageUrl} onChange={e => setPForm(f => ({ ...f, imageUrl: e.target.value }))}
-                        placeholder="https://…/image.jpg"
-                        className="flex-1 bg-white border border-gray-300 rounded-xl px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
+                    <div className="flex items-start gap-3 mb-5">
+                      <PartImage url={pForm.imageUrl.trim()} className="w-20 h-20" />
+                      <div className="flex-1 flex flex-col gap-2">
+                        <input ref={addFileRef} type="file" accept="image/*" capture="environment" onChange={onPickAddImage} className="hidden" />
+                        <button type="button" onClick={() => addFileRef.current?.click()} disabled={uploadingAddImg}
+                          className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-800 text-sm font-medium py-2 rounded-lg transition-colors disabled:opacity-60">
+                          <Camera className="w-4 h-4" /> {uploadingAddImg ? 'Uploading…' : 'Upload photo'}
+                        </button>
+                        <input value={pForm.imageUrl} onChange={e => setPForm(f => ({ ...f, imageUrl: e.target.value }))}
+                          placeholder="…or paste an image URL"
+                          className="w-full bg-white border border-gray-300 rounded-xl px-3 py-2.5 text-gray-900 text-sm focus:outline-none focus:border-[#146EB4]" />
+                      </div>
                     </div>
 
                     {addErr && <p className="text-red-600 text-xs mb-3">{addErr}</p>}
