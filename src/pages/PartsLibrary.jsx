@@ -1102,6 +1102,21 @@ export default function PartsLibrary() {
   // pop-ups — so we open what we can and, if any were blocked, surface a one-time
   // hint telling the user to allow pop-ups (after which every part opens at once).
   // Parts without a link fall back to an Amazon search by name.
+  // Open a Gmail compose tab (signed-in account) pre-addressed to the supplier,
+  // with an "Order …" subject and the part # + quantity in the body.
+  const emailSupplier = (item) => {
+    const part = item.part || {};
+    const to = part.contactEmail || '';
+    const su = `Order ${part.partName || 'part'}`;
+    const body = [
+      part.partName ? `Part: ${part.partName}` : '',
+      part.partNum ? `Part #: ${part.partNum}` : '',
+      `Quantity: ${item.qty || 1}`,
+    ].filter(Boolean).join('\n');
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const handleOrder = () => {
     const urls = Object.values(cart.cart).map(({ part }) => {
       const link = (part?.supplierLink || '').trim();
@@ -1259,11 +1274,29 @@ export default function PartsLibrary() {
               <>
                 <div className="space-y-3 mb-5">
                   {Object.entries(cart.cart).map(([key, item]) => (
-                    <div key={key} className="flex items-center gap-3 border border-gray-100 rounded-xl p-2">
+                    <div key={key}
+                      onClick={(e) => {
+                        // Click anywhere on the row (but not a control) opens the part's link.
+                        if (e.target.closest('button, a, input')) return;
+                        if (item.part?.supplierLink) window.open(item.part.supplierLink, '_blank', 'noopener,noreferrer');
+                      }}
+                      className={`flex items-center gap-3 border border-gray-100 rounded-xl p-2 ${item.part?.supplierLink ? 'cursor-pointer hover:border-gray-300' : ''}`}>
                       <PartImage url={item.part?.imageUrl} className="w-12 h-12" />
                       <div className="flex-1 min-w-0">
                         <p className="text-[#0F1111] text-sm leading-snug line-clamp-2">{item.part?.partName || key}</p>
                         {item.part?.price && <p className="text-[#0F1111] text-sm font-bold">{item.part.price}</p>}
+                        <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                          {item.part?.partNum && (
+                            <button onClick={() => navigator.clipboard.writeText(item.part.partNum)}
+                              className="text-gray-500 font-mono text-xs hover:text-gray-900 cursor-copy" title="Copy part number">#{item.part.partNum}</button>
+                          )}
+                          {item.part?.contactEmail && (
+                            <button onClick={() => emailSupplier(item)}
+                              className="inline-flex items-center gap-1 text-[#007185] hover:text-[#C7511F] text-xs" title={`Email ${item.part.contactEmail} to order`}>
+                              <Mail className="w-3 h-3" /> Contact
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-full px-1">
                         <button onClick={() => cart.setQty(key, (item.qty || 1) - 1)} className="w-6 h-6 flex items-center justify-center text-gray-600 hover:text-gray-900"><Minus className="w-3.5 h-3.5" /></button>
