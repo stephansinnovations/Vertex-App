@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail, Package, PackageCheck } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -25,6 +25,16 @@ function loadStock() {
 
 function saveStock(s) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(s));
+  window.dispatchEvent(new Event('stockchange'));
+}
+
+// Add a quantity to a part's on-hand stock counter (used when an order is received).
+function addToStock(partName, qty) {
+  if (!partName) return;
+  const s = loadStock();
+  const cur = parseInt(s[partName]);
+  s[partName] = String((isNaN(cur) ? 0 : cur) + (Number(qty) || 0));
+  saveStock(s);
 }
 
 // ── Cart (parts the user wants to order) ────────────────────────────────────
@@ -63,6 +73,38 @@ function useCart() {
   const clear = () => saveCart({});
   const count = Object.values(cart).reduce((n, i) => n + (i.qty || 0), 0);
   return { cart, add, setQty, remove, clear, count };
+}
+
+// ── Orders (parts marked as ordered, awaiting delivery) ─────────────────────
+// Persisted in localStorage; an 'orderschange' event keeps components in sync.
+const ORDERS_KEY = 'partsLibraryOrders';
+
+function loadOrders() {
+  try { return JSON.parse(localStorage.getItem(ORDERS_KEY)) || {}; } catch { return {}; }
+}
+
+function saveOrders(o) {
+  localStorage.setItem(ORDERS_KEY, JSON.stringify(o));
+  window.dispatchEvent(new Event('orderschange'));
+}
+
+function useOrders() {
+  const [orders, setOrders] = useState(loadOrders);
+  useEffect(() => {
+    const h = () => setOrders(loadOrders());
+    window.addEventListener('orderschange', h);
+    return () => window.removeEventListener('orderschange', h);
+  }, []);
+  const place = (part, qty) => {
+    const o = loadOrders();
+    const k = part?.partName;
+    if (!k) return;
+    o[k] = { part: { ...(o[k]?.part || {}), ...part }, qty: (o[k]?.qty || 0) + (qty || 1), orderedAt: new Date().toISOString() };
+    saveOrders(o);
+  };
+  const remove = (k) => { const o = loadOrders(); delete o[k]; saveOrders(o); };
+  const count = Object.keys(orders).length;
+  return { orders, place, remove, count };
 }
 
 // Stock circle color from how much is on-hand vs. allocated to builds.
@@ -208,6 +250,13 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEdi
 
   useEffect(() => {
     getBuilds().then(data => setBuilds(data));
+  }, []);
+
+  // Keep the on-hand counters in sync when stock changes elsewhere (e.g. receiving an order).
+  useEffect(() => {
+    const h = () => setStock(loadStock());
+    window.addEventListener('stockchange', h);
+    return () => window.removeEventListener('stockchange', h);
   }, []);
 
   const handleStockChange = (partName, value) => {
@@ -606,8 +655,22 @@ export default function PartsLibrary() {
   // Name to sign supplier order emails with (from the signed-in account).
   const senderName = senderNameFrom(user, profile);
   const cart = useCart();
+  const orders = useOrders();
   const [showCart, setShowCart] = useState(false);
+  const [showOrders, setShowOrders] = useState(false);
   const [orderBlocked, setOrderBlocked] = useState(false); // browser blocked the extra Order tabs
+
+  // Mark a cart item as ordered → move it from the cart into Orders.
+  const placeOrder = (key, item) => {
+    orders.place(item.part, item.qty || 1);
+    cart.remove(key);
+  };
+
+  // Mark an order as received → add its quantity to the part's on-hand stock counter.
+  const receiveOrder = (key, item) => {
+    addToStock(key, item.qty || 1);
+    orders.remove(key);
+  };
   const [sheetTabs, setSheetTabs] = useState([]);
   const [spreadsheetId, setSpreadsheetId] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1196,6 +1259,13 @@ export default function PartsLibrary() {
                 <Plus className="w-4 h-4" /> Add Part
               </button>
             )}
+            <button onClick={() => setShowOrders(true)} title="Orders"
+              className="relative flex items-center justify-center text-white border border-[#3a4553] bg-[#2b3848] hover:bg-[#3a4553] p-2 rounded-md transition-colors">
+              <Package className="w-5 h-5" />
+              {orders.count > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#FFD814] text-[#0F1111] text-[11px] font-bold flex items-center justify-center">{orders.count}</span>
+              )}
+            </button>
             <button onClick={() => setShowCart(true)} title="Cart"
               className="relative flex items-center justify-center text-white border border-[#3a4553] bg-[#2b3848] hover:bg-[#3a4553] p-2 rounded-md transition-colors">
               <ShoppingCart className="w-5 h-5" />
@@ -1310,7 +1380,13 @@ export default function PartsLibrary() {
                         if (item.part?.supplierLink) window.open(item.part.supplierLink, '_blank', 'noopener,noreferrer');
                       }}
                       className={`flex items-center gap-3 border border-gray-100 rounded-xl p-2 ${item.part?.supplierLink ? 'cursor-pointer hover:border-gray-300' : ''}`}>
-                      <PartImage url={item.part?.imageUrl} className="w-12 h-12" />
+                      <div className="relative flex-shrink-0">
+                        <PartImage url={item.part?.imageUrl} className="w-12 h-12" />
+                        <button onClick={() => placeOrder(key, item)} title="Mark as ordered"
+                          className="absolute -bottom-1.5 -right-1.5 w-6 h-6 rounded-full bg-[#146EB4] hover:bg-[#0e5a96] text-white shadow-md ring-2 ring-white flex items-center justify-center transition-colors">
+                          <PackageCheck className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[#0F1111] text-sm leading-snug line-clamp-2">{item.part?.partName || key}</p>
                         {item.part?.price && <p className="text-[#0F1111] text-sm font-bold">{item.part.price}</p>}
@@ -1359,6 +1435,40 @@ export default function PartsLibrary() {
                   <Trash2 className="w-4 h-4" /> Clear cart
                 </button>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ───────────── Orders modal ───────────── */}
+      {showOrders && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowOrders(false)} />
+          <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Package className="w-5 h-5" /> Orders ({orders.count})</h2>
+              <button onClick={() => setShowOrders(false)} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
+            </div>
+
+            {Object.keys(orders.orders).length === 0 ? (
+              <p className="text-gray-500 text-sm py-6 text-center">No orders yet. In the cart, tap the blue order button on a part's image to mark it ordered.</p>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(orders.orders).map(([key, item]) => (
+                  <div key={key} className="flex items-center gap-3 border border-gray-100 rounded-xl p-2">
+                    <PartImage url={item.part?.imageUrl} className="w-12 h-12" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[#0F1111] text-sm leading-snug line-clamp-2">{item.part?.partName || key}</p>
+                      <p className="text-gray-500 text-xs mt-0.5">Qty {item.qty}{item.orderedAt ? ` · ordered ${new Date(item.orderedAt).toLocaleDateString()}` : ''}</p>
+                    </div>
+                    <button onClick={() => receiveOrder(key, item)}
+                      title="Mark received — adds the quantity to your on-hand stock"
+                      className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-full transition-colors whitespace-nowrap flex-shrink-0">
+                      <Check className="w-3.5 h-3.5" /> Received
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
