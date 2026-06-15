@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail, Package, PackageCheck, Undo2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail, Package, PackageCheck, Undo2, Inbox } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, fillPartField, guessPartCategory } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 import { useAuth } from '@/lib/AuthContext';
+import { getQueue, updateQueueItem, deleteQueueItem, clearFinishedQueue } from '@/api/partQueue';
 
 function extractSpreadsheetId(url) {
   try {
@@ -1228,6 +1229,77 @@ export default function PartsLibrary() {
     window.open(orderEmailUrl(item.part || {}, item.qty || 1, senderName), '_blank', 'noopener,noreferrer');
   };
 
+  // ── Add-from-URL queue (fed by the Chrome extension) ───────────────────────
+  const [showQueue, setShowQueue] = useState(false);
+  const [queueItems, setQueueItems] = useState([]);
+  const [queueProcessing, setQueueProcessing] = useState(false);
+  const [queueErr, setQueueErr] = useState(null);
+
+  const refreshQueue = async () => {
+    try { setQueueItems(await getQueue()); } catch { /* table may not exist yet */ }
+  };
+
+  // Poll the queue so the badge + panel reflect URLs added from the extension.
+  useEffect(() => {
+    if (!spreadsheetId) return;
+    refreshQueue();
+    const id = setInterval(refreshQueue, 10000);
+    return () => clearInterval(id);
+  }, [spreadsheetId]);
+
+  // Process pending queue items one at a time: AI-fill each URL and write it into
+  // the best-matching existing category/subcategory. Re-reads the queue each loop
+  // so URLs added (via the extension) while running get picked up.
+  const processQueue = async () => {
+    if (queueProcessing || !spreadsheetId) return;
+    setQueueProcessing(true);
+    setQueueErr(null);
+    try {
+      const token = await getSheetsAccessToken(); // one sign-in for the whole run
+      const taxonomy = {};
+      const results = await Promise.all(sheetTabs.map(t =>
+        getSheetCategories(spreadsheetId, t)
+          .then(r => ({ t, cats: (r.data.categories || []).map(c => c.name) }))
+          .catch(() => ({ t, cats: [] }))
+      ));
+      results.forEach(({ t, cats }) => { taxonomy[t] = cats; });
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        const items = await getQueue();
+        setQueueItems(items);
+        const next = items.find(i => i.status === 'pending');
+        if (!next) break;
+        await updateQueueItem(next.id, { status: 'processing' });
+        setQueueItems(await getQueue());
+        try {
+          const r = await extractPartFromUrl(next.url, taxonomy);
+          const matchTab = sheetTabs.find(t => t.toLowerCase() === (r.category || '').toLowerCase());
+          const matchSub = matchTab && (taxonomy[matchTab] || []).find(s => s.toLowerCase() === (r.subcategory || '').toLowerCase());
+          if (matchTab && matchSub) {
+            await addPartToCategory(spreadsheetId, matchTab, matchSub, {
+              partName: r.partName, supplier: r.supplier, supplierLink: next.url,
+              partNum: r.partNum, price: r.price, imageUrl: r.imageUrl, contactEmail: '',
+            }, token);
+            await updateQueueItem(next.id, { status: 'done', part_name: r.partName || '', category: matchTab, subcategory: matchSub, done_at: new Date().toISOString() });
+          } else {
+            await updateQueueItem(next.id, { status: 'error', part_name: r.partName || '', category: r.category || '', subcategory: r.subcategory || '', error: 'No matching category/subcategory — add manually' });
+          }
+        } catch (e) {
+          await updateQueueItem(next.id, { status: 'error', error: (e.message || 'failed').slice(0, 200) });
+        }
+        setQueueItems(await getQueue());
+      }
+    } catch (e) {
+      setQueueErr(e.message || 'Could not process the queue');
+    } finally {
+      setQueueProcessing(false);
+      refreshQueue();
+    }
+  };
+
+  const pendingQueueCount = queueItems.filter(i => i.status === 'pending' || i.status === 'processing').length;
+
   const handleOrder = () => {
     // Open each part that has a real link; parts without one are skipped.
     const urls = Object.values(cart.cart)
@@ -1277,6 +1349,13 @@ export default function PartsLibrary() {
                 <Plus className="w-4 h-4" /> Add Part
               </button>
             )}
+            <button onClick={() => { setShowQueue(true); refreshQueue(); }} title="Add-from-URL queue"
+              className="relative flex items-center justify-center text-white border border-[#3a4553] bg-[#2b3848] hover:bg-[#3a4553] p-2 rounded-md transition-colors">
+              <Inbox className="w-5 h-5" />
+              {pendingQueueCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#FFD814] text-[#0F1111] text-[11px] font-bold flex items-center justify-center">{pendingQueueCount}</span>
+              )}
+            </button>
             <button onClick={() => setShowOrders(true)} title="Orders"
               className="relative flex items-center justify-center text-white border border-[#3a4553] bg-[#2b3848] hover:bg-[#3a4553] p-2 rounded-md transition-colors">
               <Package className="w-5 h-5" />
@@ -1453,6 +1532,53 @@ export default function PartsLibrary() {
                   <Trash2 className="w-4 h-4" /> Clear cart
                 </button>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ───────────── Add-from-URL queue modal ───────────── */}
+      {showQueue && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => !queueProcessing && setShowQueue(false)} />
+          <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Inbox className="w-5 h-5" /> Add queue</h2>
+              <button onClick={() => !queueProcessing && setShowQueue(false)} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
+            </div>
+            <p className="text-gray-400 text-[11px] mb-4">URLs queued from the browser extension. Start to AI-fill each and add it to the matching category.</p>
+
+            <div className="flex items-center gap-2 mb-4">
+              <button onClick={processQueue} disabled={queueProcessing || pendingQueueCount === 0}
+                className="flex-1 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-bold py-2.5 rounded-full flex items-center justify-center gap-2">
+                {queueProcessing ? <><span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" /> Processing…</> : <><Sparkles className="w-4 h-4" /> Start{pendingQueueCount > 0 ? ` (${pendingQueueCount})` : ''}</>}
+              </button>
+              <button onClick={async () => { await clearFinishedQueue(); refreshQueue(); }} disabled={queueProcessing}
+                className="text-gray-500 hover:text-gray-800 text-xs px-2 disabled:opacity-50" title="Remove done & errored items">Clear done</button>
+            </div>
+
+            {queueErr && <p className="text-red-600 text-xs mb-3">{queueErr}</p>}
+
+            {queueItems.length === 0 ? (
+              <p className="text-gray-500 text-sm py-6 text-center">Queue is empty. Use the Vertex Parts Queue browser extension to add product pages.</p>
+            ) : (
+              <div className="space-y-2">
+                {queueItems.map((it) => {
+                  const badge = { pending: 'bg-amber-100 text-amber-700', processing: 'bg-violet-100 text-violet-700', done: 'bg-green-100 text-green-700', error: 'bg-red-100 text-red-700' }[it.status] || 'bg-gray-100 text-gray-600';
+                  let host = it.url; try { host = new URL(it.url).hostname.replace(/^www\./, ''); } catch { /* keep url */ }
+                  return (
+                    <div key={it.id} className="flex items-center gap-2 border border-gray-100 rounded-xl p-2.5">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[#0F1111] text-sm leading-snug truncate">{it.part_name || host}</p>
+                        <p className="text-gray-400 text-xs truncate">{it.error || (it.category ? `${it.category} · ${it.subcategory}` : it.url)}</p>
+                      </div>
+                      <span className={`text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full ${badge}`}>{it.status}</span>
+                      <button onClick={async () => { await deleteQueueItem(it.id); refreshQueue(); }} disabled={queueProcessing}
+                        className="text-gray-300 hover:text-red-600 disabled:opacity-40"><X className="w-4 h-4" /></button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
         </div>

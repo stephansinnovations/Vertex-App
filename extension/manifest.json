@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "Vertex Parts Queue",
+  "version": "1.0.0",
+  "description": "Queue the current product page (e.g. on Amazon) to auto-add to your Vertex parts library.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Add this page to the Vertex parts queue"
+  },
+  "permissions": ["tabs"],
+  "host_permissions": ["https://ufktfpwcobqxyjyiteot.supabase.co/*"]
+}
