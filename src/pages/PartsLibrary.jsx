@@ -6,6 +6,7 @@ import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCa
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
 import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, fillPartField, guessPartCategory } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
+import { useAuth } from '@/lib/AuthContext';
 
 function extractSpreadsheetId(url) {
   try {
@@ -566,6 +567,9 @@ function findLibraryMatches(name, parts) {
 
 export default function PartsLibrary() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  // Name to sign supplier order emails with (from the signed-in account).
+  const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || '';
   const cart = useCart();
   const [showCart, setShowCart] = useState(false);
   const [orderBlocked, setOrderBlocked] = useState(false); // browser blocked the extra Order tabs
@@ -1124,7 +1128,7 @@ export default function PartsLibrary() {
       '',
       'Best regards,',
       '',
-      '[]',
+      senderName,
     ].join('\n');
     const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
