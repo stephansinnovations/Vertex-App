@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Package, Users, Bus, UserCircle } from 'lucide-react';
-import vertexLogo from '@/assets/Vertex-logo.webp';
 import sopIcon from '@/assets/sop-icon.png';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
@@ -102,24 +101,20 @@ export default function Home() {
         {/* Vertex Room — low-profile purple glow pill, right above the dock */}
         <motion.button
           onClick={() => navigate('/AIRoom')}
-          whileTap={{ scale: 0.93 }}
-          className="flex items-center justify-center gap-1.5 select-none mb-4"
+          whileTap={{ scale: 0.9 }}
+          aria-label="Vertex Room"
+          className="select-none mb-4"
           style={{
-            height: 34,
-            padding: '0 16px',
-            borderRadius: 17,
-            background: 'linear-gradient(180deg, rgba(168,85,247,0.22), rgba(109,40,217,0.22))',
+            width: 96,
+            height: 26,
+            borderRadius: 13,
+            background: 'linear-gradient(180deg, rgba(168,85,247,0.3), rgba(109,40,217,0.3))',
             backdropFilter: 'saturate(160%) blur(20px)',
             WebkitBackdropFilter: 'saturate(160%) blur(20px)',
-            border: '0.5px solid rgba(168,85,247,0.45)',
-            boxShadow: '0 0 18px rgba(139,92,246,0.45), 0 2px 8px rgba(0,0,0,0.25)',
+            border: '0.5px solid rgba(168,85,247,0.5)',
+            boxShadow: '0 0 18px rgba(139,92,246,0.5), 0 2px 8px rgba(0,0,0,0.25)',
           }}
-        >
-          <img src={vertexLogo} alt="" className="w-4 h-4 object-contain" style={{ filter: 'brightness(1.6)' }} />
-          <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.2 }}>
-            Vertex Room
-          </span>
-        </motion.button>
+        />
 
         {/* iOS-style frosted dock */}
         <div
