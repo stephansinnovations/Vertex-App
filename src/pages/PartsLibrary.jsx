@@ -144,7 +144,7 @@ async function uploadPartImage(file) {
 }
 
 function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEditPart }) {
-  const { add: addToCart } = useCart();
+  const { add: addToCart, cart: cartItems } = useCart();
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
   const [builds, setBuilds] = useState(buildsCache || []);
@@ -280,6 +280,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEdi
                 const circleColor = stockColor(hasStock, stockVal, allocated);
                 const editingThis = editStockKey === part.partName;
                 const added = addedKey === part.partName;
+                const cartQty = cartItems[part.partName]?.qty || 0;
 
                 return (
                   <div key={i}
@@ -318,13 +319,18 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEdi
                         </button>
                       )}
 
-                      {/* Add-to-cart circle — bottom-right (Amazon yellow) */}
+                      {/* Add-to-cart circle — bottom-right (Amazon yellow). On click it
+                          flashes green showing the in-cart quantity; a small badge in the
+                          top-right corner shows that quantity whenever it's 1 or more. */}
                       <button
                         onClick={() => handleAddToCart(part)}
                         title="Add to cart"
                         className={`absolute bottom-1.5 right-1.5 w-9 h-9 rounded-full shadow-md ring-2 ring-white flex items-center justify-center transition-all hover:scale-105 ${added ? 'bg-green-500 text-white' : 'bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111]'}`}
                       >
-                        {added ? <Check className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}
+                        {added ? <span className="text-sm font-extrabold leading-none">{cartQty}</span> : <ShoppingCart className="w-4 h-4" />}
+                        {cartQty > 0 && !added && (
+                          <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#146EB4] text-white text-[10px] font-bold flex items-center justify-center ring-1 ring-white">{cartQty}</span>
+                        )}
                       </button>
                     </div>
 
