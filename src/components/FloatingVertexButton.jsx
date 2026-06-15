@@ -15,7 +15,7 @@ export default function FloatingVertexButton() {
   const firedRef = useRef(false);
   const [pressing, setPressing] = useState(false);
 
-  if (pathname === '/' || pathname === '/Home') return null;
+  if (pathname === '/' || pathname === '/Home' || pathname === '/Login') return null;
 
   // On the Parts Library the orb doubles as the "scan a part" button: a tap fires
   // the photo flow on that page (it listens for this event) instead of navigating.
