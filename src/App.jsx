@@ -53,6 +53,9 @@ const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 
+// Auto-registered pages that are admin-only (members are redirected home).
+const ADMIN_ONLY_PAGES = new Set(['SOPList', 'SOPView', 'SOPEditor']);
+
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
@@ -84,40 +87,43 @@ const AuthenticatedApp = () => {
           <MainPage />
         </LayoutWrapper>
       } />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
-          }
-        />
-      ))}
+      {Object.entries(Pages).map(([path, Page]) => {
+        const page = <Page />;
+        return (
+          <Route
+            key={path}
+            path={`/${path}`}
+            element={
+              <LayoutWrapper currentPageName={path}>
+                {ADMIN_ONLY_PAGES.has(path) ? <AdminRoute>{page}</AdminRoute> : page}
+              </LayoutWrapper>
+            }
+          />
+        );
+      })}
       <Route path="/WorkOrderPage" element={<WorkOrderPage />} />
       <Route path="/Home" element={<Home />} />
       <Route path="/PartsLibrary" element={<PartsLibrary />} />
       <Route path="/MasterSheet" element={<MasterSheet />} />
-      <Route path="/Builds" element={<Builds />} />
-      <Route path="/BuildDetail" element={<BuildDetail />} />
-      <Route path="/BuildParts" element={<BuildParts />} />
-      <Route path="/BuildPartsLibrary" element={<BuildPartsLibrary />} />
+      <Route path="/Builds" element={<AdminRoute><Builds /></AdminRoute>} />
+      <Route path="/BuildDetail" element={<AdminRoute><BuildDetail /></AdminRoute>} />
+      <Route path="/BuildParts" element={<AdminRoute><BuildParts /></AdminRoute>} />
+      <Route path="/BuildPartsLibrary" element={<AdminRoute><BuildPartsLibrary /></AdminRoute>} />
       <Route path="/MeetingNotes" element={<MeetingNotes />} />
       <Route path="/Inventory" element={<Inventory />} />
       <Route path="/Stock" element={<Stock />} />
       <Route path="/StockLocation" element={<StockLocation />} />
       <Route path="/GeminiScanner" element={<GeminiScanner />} />
       <Route path="/InventoryIdeas" element={<InventoryIdeas />} />
-      <Route path="/BuildSheet" element={<BuildSheet />} />
-      <Route path="/Contacts" element={<Contacts />} />
-      <Route path="/BuildWorkOrder" element={<BuildWorkOrder />} />
+      <Route path="/BuildSheet" element={<AdminRoute><BuildSheet /></AdminRoute>} />
+      <Route path="/Contacts" element={<AdminRoute><Contacts /></AdminRoute>} />
+      <Route path="/BuildWorkOrder" element={<AdminRoute><BuildWorkOrder /></AdminRoute>} />
       <Route path="/Profile" element={<Profile />} />
       <Route path="/MyProfile" element={<MyProfile />} />
       <Route path="/TeamProfiles" element={<TeamProfiles />} />
       <Route path="/Vertex" element={<AdminRoute><Vertex /></AdminRoute>} />
-      <Route path="/BuildPhases" element={<BuildPhases />} />
-      <Route path="/PhaseDetail" element={<PhaseDetail />} />
+      <Route path="/BuildPhases" element={<AdminRoute><BuildPhases /></AdminRoute>} />
+      <Route path="/PhaseDetail" element={<AdminRoute><PhaseDetail /></AdminRoute>} />
       <Route path="/AIRoom" element={<AdminRoute><AIRoom /></AdminRoute>} />
       <Route path="/Rooms" element={<AdminRoute><RoomsView /></AdminRoute>} />
       <Route path="/Settings" element={<AdminRoute><Settings /></AdminRoute>} />
