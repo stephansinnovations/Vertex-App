@@ -146,6 +146,8 @@ async function uploadPartImage(file) {
 
 function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEditPart }) {
   const { add: addToCart, cart: cartItems } = useCart();
+  const { user, profile } = useAuth();
+  const senderName = senderNameFrom(user, profile);
   const [open, setOpen] = useState(false);
   const [stock, setStock] = useState(loadStock);
   const [builds, setBuilds] = useState(buildsCache || []);
@@ -347,9 +349,10 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEdi
                         <button onClick={() => navigator.clipboard.writeText(part.partNum)} className="text-gray-500 font-mono text-xs hover:text-gray-900 cursor-copy" title="Copy part number">{part.partNum}</button>
                       )}
                       {part.contactEmail && (
-                        <a href={`mailto:${part.contactEmail}`} draggable={false} className="inline-flex items-center gap-1 text-[#007185] hover:text-[#C7511F] text-xs hover:underline" title={`Email ${part.contactEmail}`}>
+                        <button onClick={() => window.open(orderEmailUrl(part, cartQty || 1, senderName), '_blank', 'noopener,noreferrer')}
+                          draggable={false} className="inline-flex items-center gap-1 text-[#007185] hover:text-[#C7511F] text-xs hover:underline" title={`Email ${part.contactEmail} to order`}>
                           <Mail className="w-3 h-3" /> Contact
-                        </a>
+                        </button>
                       )}
                     </div>
                     <div className="mt-auto pt-2 flex items-center justify-between">
@@ -542,6 +545,38 @@ function parsePrice(p) {
   return isNaN(n) ? 0 : n;
 }
 
+// Name to sign supplier order emails with (from the signed-in account).
+function senderNameFrom(user, profile) {
+  return profile?.full_name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || '';
+}
+
+// Gmail compose URL for an order email to a part's supplier (used by the cart and
+// the part-card Contact buttons). Pre-fills To, an "Order …" subject, and a body
+// with the part name / # / quantity, ship-to address, and the sender's name.
+function orderEmailUrl(part = {}, qty = 1, senderName = '') {
+  const to = part.contactEmail || '';
+  const su = `Order ${part.partName || 'part'}`;
+  const body = [
+    'Hello,',
+    '',
+    'I would like to place an order for the following parts:',
+    '',
+    `  - Part Name: ${part.partName || ''}`,
+    `  - Part #: ${part.partNum || ''}`,
+    `  - Quantity: ${qty || 1}`,
+    '',
+    'Please ship these items to the following address:',
+    '3075 N 75th St, Boulder, CO 80301',
+    '',
+    'Please let me know if you need any additional information to process this order or if you can provide an estimated delivery date.',
+    '',
+    'Best regards,',
+    '',
+    senderName,
+  ].join('\n');
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
+}
+
 // ── Fuzzy library matching (scan → find the part you already stock) ──────────
 // Identified names are wordy ("Victron 100/30 MPPT Solar Charge Controller"); the
 // library entries are terser. Score by how many significant tokens overlap, in
@@ -569,7 +604,7 @@ export default function PartsLibrary() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   // Name to sign supplier order emails with (from the signed-in account).
-  const senderName = profile?.full_name || user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email || '';
+  const senderName = senderNameFrom(user, profile);
   const cart = useCart();
   const [showCart, setShowCart] = useState(false);
   const [orderBlocked, setOrderBlocked] = useState(false); // browser blocked the extra Order tabs
@@ -1109,29 +1144,7 @@ export default function PartsLibrary() {
   // Open a Gmail compose tab (signed-in account) pre-addressed to the supplier,
   // with an "Order …" subject and the part # + quantity in the body.
   const emailSupplier = (item) => {
-    const part = item.part || {};
-    const to = part.contactEmail || '';
-    const su = `Order ${part.partName || 'part'}`;
-    const body = [
-      'Hello,',
-      '',
-      'I would like to place an order for the following parts:',
-      '',
-      `  - Part Name: ${part.partName || ''}`,
-      `  - Part #: ${part.partNum || ''}`,
-      `  - Quantity: ${item.qty || 1}`,
-      '',
-      'Please ship these items to the following address:',
-      '3075 N 75th St, Boulder, CO 80301',
-      '',
-      'Please let me know if you need any additional information to process this order or if you can provide an estimated delivery date.',
-      '',
-      'Best regards,',
-      '',
-      senderName,
-    ].join('\n');
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    window.open(orderEmailUrl(item.part || {}, item.qty || 1, senderName), '_blank', 'noopener,noreferrer');
   };
 
   const handleOrder = () => {
