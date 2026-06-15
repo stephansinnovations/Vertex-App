@@ -18,7 +18,9 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   Supabase-backed** (`api/buildsDb.js`, same entity interface) so builds sync across
   devices. Local builds auto-migrate to Supabase once per device on sign-in.
 - **Supabase tables:** `profiles`, `builds`, `app_settings`, `chat_history`, `ai_rooms`,
-  `ai_agents`, `bug_reports`. Builds carry `owner` + RLS (delete-own / admin-any).
+  `ai_agents`, `bug_reports`, `part_queue`, `shared_state`. Builds carry `owner` + RLS
+  (delete-own / admin-any). The internal-tool tables (`bug_reports`, `part_queue`,
+  `shared_state`) use `for all using(true)` — the anon/publishable key is already public.
 - **Build phases** live as `jsonb` on the Supabase build row (synced). Phase parts are
   embedded in `phase.parts`; tasks carry `task.parts`. The standard phase template is
   `DEFAULT_PHASES` in `buildsDb.js` (re-seeded onto any build lacking a "Customer meeting"
@@ -42,14 +44,38 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
 - **Backgrounds:** `BackgroundContext` applies a CSS/image background to `document.body`,
   library + active choice persisted in localStorage.
 - **Parts Library UI** (`pages/PartsLibrary.jsx`) is a single Amazon-style "store" theme:
-  light page, navy header (search + Add Part + Cart), Category → Subcategory →
+  light page, navy header (search + Add Part + Orders + Cart), Category → Subcategory →
   product-card grid (`grid-cols-2` mobile → `lg:grid-cols-5`). The old dark "classic"
-  theme + theme toggle + bulk picture-backfill button were removed.
-- **Per-part cards** overlay two circle buttons on the image: yellow add-to-cart
-  (bottom-right) and a stock-quantity circle (bottom-left) colored by on-hand vs.
-  build-allocated — gray=no count/null, green=surplus, blue=exact, red=short
-  (`stockColor()`). Stock = localStorage `partsLibraryStock`; cart = localStorage
-  `partsLibraryCart` synced across components via a `cartchange` window event (`useCart`).
+  theme + toggle were removed. Bulk **AI picture-backfill** lives in Settings → Inventory
+  (`BackfillPicturesButton`, admin); Settings → Diagnostics has the `/Bugs` page.
+- **Per-part cards** (`/PartsLibrary`, header renamed to just "Parts"): clicking the
+  card opens the part link (skips clicks on buttons/links/inputs); a low-key pencil
+  (bottom-right of card) edits; cards are draggable onto another subcategory to move the
+  part. On the image: yellow add-to-cart (bottom-right, shows in-cart qty + corner
+  badge) and a stock-quantity circle (bottom-left) colored by on-hand vs build-allocated
+  — gray=no count, green=surplus, blue=exact, red=short (`stockColor()`).
+- **Shop-wide shared state:** cart, orders, stock counters and the add-part queue all
+  **sync across all devices/accounts** (global, not per-user). Cart/orders/stock are
+  localStorage caches (`partsLibrary{Cart,Orders,Stock}` + `cartchange`/`orderschange`/
+  `stockchange` window events) **mirrored to Supabase `shared_state` blobs** (keys
+  `cart`/`orders`/`stock`); a single 6s poller pulls remote changes, with a 4s
+  post-write guard so in-flight writes aren't clobbered. Falls back to local-only if the
+  table/network is down. Run `supabase/shared_state.sql` once.
+- **Orders flow:** the cart's per-item blue circle marks a part **ordered** (cart →
+  Orders modal); **Received** adds its qty to the stock counter (one-level **Undo**
+  reverts it); **Re-add to cart** moves it back. Order button opens each cart part's
+  link in its own tab (anchor-click; browsers still pop-up-block multiples until allowed).
+  Cart/Orders rows have a **Contact** button → Gmail compose order email (`orderEmailUrl`,
+  signed-in user's name as the signoff, ship-to hardcoded in `orderEmailUrl`).
+- **Add Part = Edit Part:** the pencil opens the *same* Add Part modal prefilled
+  (`openEditFor`); changing category/subcategory on save **moves** the part (add new +
+  delete old). Every field has a low-key ✨ that AI-fills just that field
+  (`fillPartField`/`guessPartCategory`); supplier contact email is sheet **column F**.
+- **Add-from-URL queue:** the Chrome extension in `extension/` (load unpacked; talks to
+  Supabase REST with the anon key) queues product URLs into `part_queue`. The Add Part
+  modal also queues via "Add another"; the in-modal Inbox icon opens the queue panel →
+  **Start** signs in once then AI-fills each URL and files it into the matching existing
+  category (no match → flagged `error`). Run `supabase/part_queue.sql` once.
 - **Part images on add/edit:** edit modal uploads to Supabase Storage bucket
   `part-images` (public, like `sop-videos`), plus AI find-image + AI autofill-from-link.
 - **Edit a part:** small pencil at the card's bottom-right opens the edit modal (the
@@ -94,12 +120,25 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   the AI/serverless add-part flow can't be exercised in the local preview.
 - **Build-sheet part qty is per-source (last write wins), not summed** across phases/tasks;
   the in-app per-phase Parts section shows the correct merged total.
+- **Card image must be `absolute inset-0` inside the `aspect-square` box** — an in-flow
+  `<img h-full>` makes a tall photo blow the box up to its natural height. `PartImage`
+  uses `object-contain` (show the whole image, white-boxed), not `object-cover`.
+- **iOS Safari zooms on input focus when font-size < 16px** → `index.css` forces 16px on
+  `input/select/textarea` at `≤640px` (so opening Add Part doesn't zoom the page).
+- **Gemini 503 "model overloaded" is intermittent** — `geminiParts.callGemini` already
+  retries 503/429/500 + network errors up to 4× with exponential backoff.
 
 ## Verifying changes
 - Drive the running app via the **Claude Preview MCP**. Throwaway harness pattern:
   `bubble-check.html` + `src/__bubblecheck.jsx` rendering a page/component in a
   `MemoryRouter` (+ providers), stub `window.fetch` for Sheets/Supabase as needed; **delete
-  both files after**. Don't leave them committed.
+  both files after**. Don't leave them committed. `PartsLibrary` renders fine in a harness
+  with `MemoryRouter` + `AuthProvider` (it'll say "Loading categories…" without a real
+  sheet, but the header/modals + localStorage features — cart/orders/queue/stock — are
+  testable). `CategoryRow` isn't exported, so its card/edit UI can't be harnessed in isolation.
+- **Preview viewport quirk:** after `preview_resize` desktop the viewport can collapse to
+  `width:1` (breaks layout-dependent measurements) — use the **mobile** preset (375px) for
+  reliable width-dependent checks.
 - Lint per file: `npx eslint <file> --quiet`. The unused `Disc` import in
   `PartsLibrary.jsx` is pre-existing — ignore it. Other stray unused lucide imports are
   common; remove them when you touch the file.
