@@ -9,23 +9,44 @@ import { useVertexChat } from '@/lib/VertexChatContext';
 
 const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8b7f61/0e0de3cfb_VertexBannerLogoPrint.png';
 
-// Apple-style glass nav icon
-function NavIcon({ icon: Icon, label, onClick, accent }) {
+// The five "apps" that live in the iOS-style dock
+const DOCK_APPS = [
+  { icon: FileText,   label: 'SOPs',      path: createPageUrl('SOPList'), gradient: 'linear-gradient(160deg, #5b8def 0%, #2f5fd6 100%)' },
+  { icon: Package,    label: 'Inventory', path: '/PartsLibrary',          gradient: 'linear-gradient(160deg, #ffb347 0%, #f08a1d 100%)' },
+  { icon: Bus,        label: 'Builds',    path: '/Builds',                gradient: 'linear-gradient(160deg, #2dd4bf 0%, #0d9488 100%)' },
+  { icon: Users,      label: 'Contacts',  path: '/Contacts',              gradient: 'linear-gradient(160deg, #4ade80 0%, #16a34a 100%)' },
+  { icon: UserCircle, label: 'Profile',   path: '/Profile',               gradient: 'linear-gradient(160deg, #c084fc 0%, #7c3aed 100%)' },
+];
+
+const ICON = 58; // iOS dock app-icon size
+
+// A single iOS-style app icon (rounded "squircle" with gradient + glossy top)
+function AppIcon({ icon: Icon, label, gradient, onClick }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-1.5 select-none active:scale-90 transition-transform duration-100">
-      <Icon
-        className="w-6 h-6"
-        style={{ color: accent ? 'var(--ios-blue)' : 'rgba(255,255,255,0.55)' }}
-        strokeWidth={1.8}
-      />
-      <span style={{
-        fontSize: 10,
-        fontWeight: 500,
-        letterSpacing: 0.2,
-        color: accent ? 'var(--ios-blue)' : 'rgba(255,255,255,0.45)',
-      }}>
-        {label}
-      </span>
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className="flex flex-col items-center select-none active:scale-90 transition-transform duration-100"
+      style={{ width: ICON }}
+    >
+      <div
+        className="relative flex items-center justify-center overflow-hidden"
+        style={{
+          width: ICON,
+          height: ICON,
+          borderRadius: ICON * 0.2237, // iOS squircle ratio
+          background: gradient,
+          boxShadow: '0 6px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.18)',
+          border: '0.5px solid rgba(255,255,255,0.18)',
+        }}
+      >
+        {/* Glossy highlight across the top half */}
+        <div
+          className="absolute inset-x-0 top-0 pointer-events-none"
+          style={{ height: '52%', background: 'linear-gradient(to bottom, rgba(255,255,255,0.32), transparent)' }}
+        />
+        <Icon className="relative z-10" style={{ width: 28, height: 28, color: '#fff', strokeWidth: 2 }} />
+      </div>
     </button>
   );
 }
@@ -54,42 +75,53 @@ export default function Home() {
       />
 
       {/* Bottom area */}
-      <div className="fixed bottom-0 left-0 right-0 z-40">
+      <div className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center"
+        style={{ paddingBottom: `calc(1rem + env(safe-area-inset-bottom))` }}>
 
-        {/* Vertex AI bubble — floating above dock */}
-        <div className="flex justify-center pb-3">
-          <motion.button
-            onClick={() => navigate('/AIRoom')}
-            whileTap={{ scale: 0.88 }}
-            className="relative select-none"
-            style={{ filter: 'drop-shadow(0 8px 24px rgba(139,92,246,0.5))' }}
-          >
-            {/* Glass sphere */}
-            <div className="w-16 h-16 rounded-full relative overflow-hidden flex items-center justify-center"
-              style={{
-                background: 'radial-gradient(circle at 35% 28%, rgba(139,92,246,0.7), rgba(80,40,160,0.85))',
-                boxShadow: '0 8px 32px rgba(139,92,246,0.45), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.2)',
-                border: '0.5px solid rgba(255,255,255,0.3)',
-              }}>
-              {/* Specular highlight */}
-              <div className="absolute top-1.5 left-3 w-7 h-3.5 rounded-full opacity-40"
-                style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.9), transparent)' }} />
-              {/* Bottom shadow */}
-              <div className="absolute bottom-0 inset-x-0 h-6 rounded-b-full opacity-20"
-                style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)' }} />
-              <img src={vertexLogo} alt="Vertex" className="w-9 h-9 object-contain relative z-10" />
-            </div>
-          </motion.button>
-        </div>
+        {/* Vertex Room — iOS "Search"-style pill, right above the dock */}
+        <motion.button
+          onClick={() => navigate('/AIRoom')}
+          whileTap={{ scale: 0.93 }}
+          className="flex items-center justify-center gap-1.5 select-none mb-4"
+          style={{
+            height: 38,
+            padding: '0 16px',
+            borderRadius: 19,
+            background: 'rgba(255,255,255,0.16)',
+            backdropFilter: 'saturate(180%) blur(24px)',
+            WebkitBackdropFilter: 'saturate(180%) blur(24px)',
+            border: '0.5px solid rgba(255,255,255,0.25)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.28)',
+          }}
+        >
+          <img src={vertexLogo} alt="" className="w-4 h-4 object-contain" style={{ filter: 'brightness(1.6)' }} />
+          <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.2 }}>
+            Vertex Room
+          </span>
+        </motion.button>
 
-        {/* iOS-style tab bar */}
-        <div className="ios-tab-bar flex items-center justify-around px-6 pt-3"
-          style={{ paddingBottom: `calc(1.5rem + env(safe-area-inset-bottom))` }}>
-          <NavIcon icon={FileText} label="SOPs" onClick={() => navigate(createPageUrl('SOPList'))} />
-          <NavIcon icon={Package} label="Inventory" onClick={() => navigate('/PartsLibrary')} />
-          <NavIcon icon={Bus} label="Builds" onClick={() => navigate('/Builds')} />
-          <NavIcon icon={Users} label="Contacts" onClick={() => navigate('/Contacts')} />
-          <NavIcon icon={UserCircle} label="Profile" onClick={() => navigate('/Profile')} />
+        {/* iOS-style frosted dock */}
+        <div
+          className="flex items-center justify-center gap-3"
+          style={{
+            padding: '12px 14px',
+            borderRadius: 34,
+            background: 'rgba(255,255,255,0.14)',
+            backdropFilter: 'saturate(180%) blur(28px)',
+            WebkitBackdropFilter: 'saturate(180%) blur(28px)',
+            border: '0.5px solid rgba(255,255,255,0.2)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}
+        >
+          {DOCK_APPS.map(app => (
+            <AppIcon
+              key={app.label}
+              icon={app.icon}
+              label={app.label}
+              gradient={app.gradient}
+              onClick={() => navigate(app.path)}
+            />
+          ))}
         </div>
       </div>
     </motion.div>
