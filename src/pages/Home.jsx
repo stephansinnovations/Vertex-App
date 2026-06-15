@@ -1,8 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Bus, UserCircle } from 'lucide-react';
+import { Users, UserCircle } from 'lucide-react';
 import sopIcon from '@/assets/sop-icon.png';
 import partsIcon from '@/assets/parts-icon.png';
+import buildsIcon from '@/assets/builds-icon.png';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
@@ -14,7 +15,7 @@ const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8
 const DOCK_APPS = [
   { image: sopIcon,   label: 'SOPs',      path: createPageUrl('SOPList') },
   { image: partsIcon, label: 'Inventory', path: '/PartsLibrary' },
-  { icon: Bus,        label: 'Builds',    path: '/Builds',                gradient: 'linear-gradient(160deg, #2dd4bf 0%, #0d9488 100%)' },
+  { image: buildsIcon, label: 'Builds',   path: '/Builds' },
   { icon: Users,      label: 'Contacts',  path: '/Contacts',              gradient: 'linear-gradient(160deg, #4ade80 0%, #16a34a 100%)' },
   { icon: UserCircle, label: 'Profile',   path: '/Profile',               gradient: 'linear-gradient(160deg, #c084fc 0%, #7c3aed 100%)' },
 ];
