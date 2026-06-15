@@ -133,7 +133,7 @@ function PartImage({ url, className = 'w-14 h-14' }) {
     // Some endpoints (e.g. Amazon's ASIN image for items with no photo) return a
     // 1×1 transparent placeholder with HTTP 200 — treat those as "no image".
     onLoad={(e) => { if (e.target.naturalWidth <= 1 || e.target.naturalHeight <= 1) setErr(true); }}
-    className={`${className} rounded-lg object-cover bg-white border border-gray-200 flex-shrink-0`} />;
+    className={`${className} rounded-lg object-contain bg-white border border-gray-200 flex-shrink-0`} />;
 }
 
 // Low-key AI auto-fill icon, shown to the right of an Add-Part field's label.
