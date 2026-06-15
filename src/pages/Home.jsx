@@ -1,10 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { UserCircle } from 'lucide-react';
 import sopIcon from '@/assets/sop-icon.png';
 import partsIcon from '@/assets/parts-icon.png';
 import buildsIcon from '@/assets/builds-icon.png';
 import contactsIcon from '@/assets/contacts-icon.png';
+import profileIcon from '@/assets/profile-icon.png';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
@@ -19,7 +19,7 @@ const DOCK_APPS = [
   { image: partsIcon, label: 'Inventory', path: '/PartsLibrary' },
   { image: buildsIcon, label: 'Builds',   path: '/Builds' },
   { image: contactsIcon, label: 'Contacts', path: '/Contacts' },
-  { icon: UserCircle, label: 'Profile',   path: '/Profile',               gradient: 'linear-gradient(160deg, #c084fc 0%, #7c3aed 100%)' },
+  { image: profileIcon, label: 'Profile', path: '/Profile' },
 ];
 
 const ICON = 58; // iOS dock app-icon size
