@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileText, Package, Users, Bus, UserCircle } from 'lucide-react';
+import { Package, Users, Bus, UserCircle } from 'lucide-react';
 import vertexLogo from '@/assets/Vertex-logo.webp';
+import sopIcon from '@/assets/sop-icon.webp';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
@@ -11,7 +12,7 @@ const DEFAULT_LOGO = 'https://media.base44.com/images/public/6993c32ea9b395384e8
 
 // The five "apps" that live in the iOS-style dock
 const DOCK_APPS = [
-  { icon: FileText,   label: 'SOPs',      path: createPageUrl('SOPList'), gradient: 'linear-gradient(160deg, #5b8def 0%, #2f5fd6 100%)' },
+  { image: sopIcon,   label: 'SOPs',      path: createPageUrl('SOPList') },
   { icon: Package,    label: 'Inventory', path: '/PartsLibrary',          gradient: 'linear-gradient(160deg, #ffb347 0%, #f08a1d 100%)' },
   { icon: Bus,        label: 'Builds',    path: '/Builds',                gradient: 'linear-gradient(160deg, #2dd4bf 0%, #0d9488 100%)' },
   { icon: Users,      label: 'Contacts',  path: '/Contacts',              gradient: 'linear-gradient(160deg, #4ade80 0%, #16a34a 100%)' },
@@ -20,8 +21,9 @@ const DOCK_APPS = [
 
 const ICON = 58; // iOS dock app-icon size
 
-// A single iOS-style app icon (rounded "squircle" with gradient + glossy top)
-function AppIcon({ icon: Icon, label, gradient, onClick }) {
+// A single iOS-style app icon — either a gradient squircle with a lucide glyph,
+// or a full-bleed custom image that already carries its own squircle artwork.
+function AppIcon({ icon: Icon, image, label, gradient, onClick }) {
   return (
     <button
       onClick={onClick}
@@ -35,17 +37,23 @@ function AppIcon({ icon: Icon, label, gradient, onClick }) {
           width: ICON,
           height: ICON,
           borderRadius: ICON * 0.2237, // iOS squircle ratio
-          background: gradient,
-          boxShadow: '0 6px 16px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.18)',
-          border: '0.5px solid rgba(255,255,255,0.18)',
+          background: image ? 'transparent' : gradient,
+          boxShadow: '0 6px 16px rgba(0,0,0,0.35)' + (image ? '' : ', inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -1px 0 rgba(0,0,0,0.18)'),
+          border: image ? 'none' : '0.5px solid rgba(255,255,255,0.18)',
         }}
       >
-        {/* Glossy highlight across the top half */}
-        <div
-          className="absolute inset-x-0 top-0 pointer-events-none"
-          style={{ height: '52%', background: 'linear-gradient(to bottom, rgba(255,255,255,0.32), transparent)' }}
-        />
-        <Icon className="relative z-10" style={{ width: 28, height: 28, color: '#fff', strokeWidth: 2 }} />
+        {image ? (
+          <img src={image} alt="" className="w-full h-full object-cover" draggable={false} />
+        ) : (
+          <>
+            {/* Glossy highlight across the top half */}
+            <div
+              className="absolute inset-x-0 top-0 pointer-events-none"
+              style={{ height: '52%', background: 'linear-gradient(to bottom, rgba(255,255,255,0.32), transparent)' }}
+            />
+            <Icon className="relative z-10" style={{ width: 28, height: 28, color: '#fff', strokeWidth: 2 }} />
+          </>
+        )}
       </div>
       <span
         className="mt-1.5 text-center"
@@ -130,6 +138,7 @@ export default function Home() {
             <AppIcon
               key={app.label}
               icon={app.icon}
+              image={app.image}
               label={app.label}
               gradient={app.gradient}
               onClick={() => navigate(app.path)}
