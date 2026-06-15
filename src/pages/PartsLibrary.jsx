@@ -8,6 +8,7 @@ import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, fillPartF
 import { getSetting } from '@/api/appSettings';
 import { useAuth } from '@/lib/AuthContext';
 import { addToQueue, getQueue, updateQueueItem, deleteQueueItem, clearFinishedQueue } from '@/api/partQueue';
+import { loadShared, saveShared } from '@/api/sharedState';
 
 function extractSpreadsheetId(url) {
   try {
@@ -40,8 +41,13 @@ function addToStock(partName, qty) {
 }
 
 // ── Cart (parts the user wants to order) ────────────────────────────────────
-// Persisted in localStorage; a 'cartchange' event keeps every component in sync.
+// Persisted in localStorage (fast in-tab cache + 'cartchange' event) and mirrored
+// to Supabase `shared_state` so the cart/orders sync across all devices & accounts.
 const CART_KEY = 'partsLibraryCart';
+
+// Timestamp of the last local mutation — the cross-device poller pauses briefly
+// after it so an in-flight Supabase write isn't clobbered by a stale read.
+let lastSharedMutation = 0;
 
 function loadCart() {
   try { return JSON.parse(localStorage.getItem(CART_KEY)) || {}; } catch { return {}; }
@@ -50,6 +56,8 @@ function loadCart() {
 function saveCart(c) {
   localStorage.setItem(CART_KEY, JSON.stringify(c));
   window.dispatchEvent(new Event('cartchange'));
+  lastSharedMutation = Date.now();
+  saveShared('cart', c).catch(() => { /* offline / table missing — local copy kept */ });
 }
 
 function useCart() {
@@ -88,6 +96,25 @@ function loadOrders() {
 function saveOrders(o) {
   localStorage.setItem(ORDERS_KEY, JSON.stringify(o));
   window.dispatchEvent(new Event('orderschange'));
+  lastSharedMutation = Date.now();
+  saveShared('orders', o).catch(() => { /* offline / table missing — local copy kept */ });
+}
+
+// One poller (mounted once by the page) pulls the shared cart/orders from Supabase
+// and updates the local cache when another device changed them.
+async function syncSharedOnce() {
+  if (Date.now() - lastSharedMutation < 4000) return; // let a local write settle first
+  try {
+    const [cartVal, ordersVal] = await Promise.all([loadShared('cart'), loadShared('orders')]);
+    if (cartVal && JSON.stringify(cartVal) !== localStorage.getItem(CART_KEY)) {
+      localStorage.setItem(CART_KEY, JSON.stringify(cartVal));
+      window.dispatchEvent(new Event('cartchange'));
+    }
+    if (ordersVal && JSON.stringify(ordersVal) !== localStorage.getItem(ORDERS_KEY)) {
+      localStorage.setItem(ORDERS_KEY, JSON.stringify(ordersVal));
+      window.dispatchEvent(new Event('orderschange'));
+    }
+  } catch { /* table may not exist yet */ }
 }
 
 function useOrders() {
@@ -661,6 +688,13 @@ export default function PartsLibrary() {
   const [showCart, setShowCart] = useState(false);
   const [showOrders, setShowOrders] = useState(false);
   const [orderBlocked, setOrderBlocked] = useState(false); // browser blocked the extra Order tabs
+
+  // Keep the cart + orders synced across devices/accounts (single poller).
+  useEffect(() => {
+    syncSharedOnce();
+    const id = setInterval(syncSharedOnce, 6000);
+    return () => clearInterval(id);
+  }, []);
 
   // Mark a cart item as ordered → move it from the cart into Orders.
   const placeOrder = (key, item) => {
