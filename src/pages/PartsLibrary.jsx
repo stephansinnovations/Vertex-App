@@ -350,7 +350,7 @@ function CategoryRow({ category, spreadsheetId, tab, onChanged, onAddPart, onEdi
                     title="Click to open link · drag to move"
                     className={`group flex flex-col bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg hover:border-gray-300 transition-all active:cursor-grabbing ${part.supplierLink ? 'cursor-pointer' : 'cursor-grab'}`}>
                     <div className="relative w-full aspect-square mb-3">
-                      <PartImage url={part.imageUrl} className="w-full h-full" />
+                      <PartImage url={part.imageUrl} className="absolute inset-0 w-full h-full" />
 
                       {/* Quantity (stock) circle — bottom-left, colored by stock logic */}
                       {editingThis ? (
@@ -1393,7 +1393,7 @@ export default function PartsLibrary() {
                 {searchResults.map((p, i) => (
                   <div key={p.tab + p.category + p.partName + i} className="group flex flex-col bg-white border border-gray-200 rounded-xl p-3 hover:shadow-lg transition-all">
                     <div className="relative w-full aspect-square mb-3">
-                      <PartImage url={p.imageUrl} className="w-full h-full" />
+                      <PartImage url={p.imageUrl} className="absolute inset-0 w-full h-full" />
                       <button onClick={() => cart.add(p)} title="Add to cart"
                         className="absolute bottom-1.5 right-1.5 w-9 h-9 rounded-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] shadow-md ring-2 ring-white flex items-center justify-center transition-all hover:scale-105">
                         <ShoppingCart className="w-4 h-4" />
