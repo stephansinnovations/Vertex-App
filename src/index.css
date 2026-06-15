@@ -147,3 +147,14 @@
 :root {
   --ios-blue: #007AFF;
 }
+
+/* iOS Safari auto-zooms the page when a focused input/select/textarea has a
+   font-size < 16px. Force 16px on small screens so opening a modal (e.g. tapping
+   "Add Part", which autofocuses a field) never zooms the viewport in. */
+@media (max-width: 640px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
