@@ -1098,8 +1098,8 @@ export default function PartsLibrary() {
 
   const cartTotal = Object.values(cart.cart).reduce((s, i) => s + parsePrice(i.part?.price) * (i.qty || 0), 0);
 
-  // Everything in the cart is routable (a real link, or a name we can search).
-  const buyableCount = Object.keys(cart.cart).length;
+  // Only parts with a real link can be opened by Order.
+  const buyableCount = Object.values(cart.cart).filter(i => (i.part?.supplierLink || '').trim()).length;
 
   // Order: open every cart item's link in its own tab. Browsers allow only the
   // first new tab per click and block the rest until the site is allowed to open
@@ -1135,11 +1135,10 @@ export default function PartsLibrary() {
   };
 
   const handleOrder = () => {
-    const urls = Object.values(cart.cart).map(({ part }) => {
-      const link = (part?.supplierLink || '').trim();
-      const name = (part?.partName || '').trim();
-      return link || (name ? `https://www.amazon.com/s?k=${encodeURIComponent(name)}` : '');
-    }).filter(Boolean);
+    // Open each part that has a real link; parts without one are skipped.
+    const urls = Object.values(cart.cart)
+      .map(({ part }) => (part?.supplierLink || '').trim())
+      .filter(Boolean);
     let blocked = 0;
     urls.forEach(url => {
       const w = window.open(url, '_blank');
