@@ -99,24 +99,24 @@ export default function Home() {
       <div className="fixed bottom-0 left-0 right-0 z-40 flex flex-col items-center"
         style={{ paddingBottom: `calc(1rem + env(safe-area-inset-bottom))` }}>
 
-        {/* Vertex Room — iOS "Search"-style pill, right above the dock */}
+        {/* Vertex Room — low-profile purple glow pill, right above the dock */}
         <motion.button
           onClick={() => navigate('/AIRoom')}
           whileTap={{ scale: 0.93 }}
           className="flex items-center justify-center gap-1.5 select-none mb-4"
           style={{
-            height: 38,
+            height: 34,
             padding: '0 16px',
-            borderRadius: 19,
-            background: 'rgba(255,255,255,0.16)',
-            backdropFilter: 'saturate(180%) blur(24px)',
-            WebkitBackdropFilter: 'saturate(180%) blur(24px)',
-            border: '0.5px solid rgba(255,255,255,0.25)',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.28)',
+            borderRadius: 17,
+            background: 'linear-gradient(180deg, rgba(168,85,247,0.22), rgba(109,40,217,0.22))',
+            backdropFilter: 'saturate(160%) blur(20px)',
+            WebkitBackdropFilter: 'saturate(160%) blur(20px)',
+            border: '0.5px solid rgba(168,85,247,0.45)',
+            boxShadow: '0 0 18px rgba(139,92,246,0.45), 0 2px 8px rgba(0,0,0,0.25)',
           }}
         >
           <img src={vertexLogo} alt="" className="w-4 h-4 object-contain" style={{ filter: 'brightness(1.6)' }} />
-          <span style={{ fontSize: 14, fontWeight: 500, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.2 }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.2 }}>
             Vertex Room
           </span>
         </motion.button>
