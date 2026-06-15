@@ -84,17 +84,43 @@ function parseJson(text) {
   return JSON.parse(raw);
 }
 
-async function callGemini(body) {
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function callGemini(body, { retries = 4 } = {}) {
   const key = await getGeminiKey();
-  const res = await fetch(endpoint(key), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) throw new Error(`Gemini error ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  const data = await res.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  return parts.map(p => p.text).filter(Boolean).join('');
+  let lastStatus = 0;
+  let lastText = '';
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let res;
+    try {
+      res = await fetch(endpoint(key), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      // Network blip — treat like a transient error and retry.
+      lastStatus = 0; lastText = e?.message || 'network error';
+      if (attempt < retries) { await sleep(700 * 2 ** attempt + Math.random() * 400); continue; }
+      throw new Error(`Gemini request failed: ${lastText}`);
+    }
+    if (res.ok) {
+      const data = await res.json();
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      return parts.map(p => p.text).filter(Boolean).join('');
+    }
+    lastStatus = res.status;
+    lastText = (await res.text()).slice(0, 200);
+    // 503 (overloaded), 429 (rate limit) and 500 are transient → back off and retry.
+    if ([429, 500, 503].includes(res.status) && attempt < retries) {
+      await sleep(700 * 2 ** attempt + Math.random() * 400);
+      continue;
+    }
+    break;
+  }
+  if (lastStatus === 503) throw new Error('Gemini is busy right now (503). It auto-retried a few times — please try again in a moment.');
+  if (lastStatus === 429) throw new Error('Gemini rate limit hit (429). Wait a few seconds and try again.');
+  throw new Error(`Gemini error ${lastStatus}: ${lastText}`);
 }
 
 // Read a product URL and extract the part fields. When `taxonomy` is provided
