@@ -7,7 +7,7 @@ import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth'
 import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, fillPartField, guessPartCategory } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 import { useAuth } from '@/lib/AuthContext';
-import { getQueue, updateQueueItem, deleteQueueItem, clearFinishedQueue } from '@/api/partQueue';
+import { addToQueue, getQueue, updateQueueItem, deleteQueueItem, clearFinishedQueue } from '@/api/partQueue';
 
 function extractSpreadsheetId(url) {
   try {
@@ -1300,6 +1300,25 @@ export default function PartsLibrary() {
 
   const pendingQueueCount = queueItems.filter(i => i.status === 'pending' || i.status === 'processing').length;
 
+  // "Add another": queue the current part's link and reset the form so you can
+  // paste the next one. The queue (Inbox icon in the modal) AI-fills + adds them.
+  const [addingAnother, setAddingAnother] = useState(false);
+  const addAnotherToQueue = async () => {
+    const link = pForm.supplierLink.trim();
+    if (!link || addingAnother) { if (!link) setAddErr('Paste a part link first to queue it.'); return; }
+    setAddingAnother(true);
+    setAddErr(null);
+    try {
+      await addToQueue(link);
+      refreshQueue();
+      openAdd(); // fresh link step for the next part (modal stays open)
+    } catch (e) {
+      setAddErr(e.message || 'Could not add to queue');
+    } finally {
+      setAddingAnother(false);
+    }
+  };
+
   const handleOrder = () => {
     // Open each part that has a real link; parts without one are skipped.
     const urls = Object.values(cart.cart)
@@ -1349,13 +1368,6 @@ export default function PartsLibrary() {
                 <Plus className="w-4 h-4" /> Add Part
               </button>
             )}
-            <button onClick={() => { setShowQueue(true); refreshQueue(); }} title="Add-from-URL queue"
-              className="relative flex items-center justify-center text-white border border-[#3a4553] bg-[#2b3848] hover:bg-[#3a4553] p-2 rounded-md transition-colors">
-              <Inbox className="w-5 h-5" />
-              {pendingQueueCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#FFD814] text-[#0F1111] text-[11px] font-bold flex items-center justify-center">{pendingQueueCount}</span>
-              )}
-            </button>
             <button onClick={() => setShowOrders(true)} title="Orders"
               className="relative flex items-center justify-center text-white border border-[#3a4553] bg-[#2b3848] hover:bg-[#3a4553] p-2 rounded-md transition-colors">
               <Package className="w-5 h-5" />
@@ -1539,7 +1551,7 @@ export default function PartsLibrary() {
 
       {/* ───────────── Add-from-URL queue modal ───────────── */}
       {showQueue && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
           <div className="absolute inset-0 bg-black/40" onClick={() => !queueProcessing && setShowQueue(false)} />
           <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-1">
@@ -1641,9 +1653,20 @@ export default function PartsLibrary() {
           <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-gray-900">{editingOriginal ? 'Edit Part' : 'Add Part'}</h2>
-              <button onClick={() => !saving && setShowAdd(false)} className="text-gray-400 hover:text-gray-900">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1">
+                {!editingOriginal && (
+                  <button onClick={() => { setShowQueue(true); refreshQueue(); }} title="Part queue"
+                    className="relative text-gray-400 hover:text-violet-600 p-1.5 transition-colors">
+                    <Inbox className="w-5 h-5" />
+                    {pendingQueueCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-violet-600 text-white text-[10px] font-bold flex items-center justify-center">{pendingQueueCount}</span>
+                    )}
+                  </button>
+                )}
+                <button onClick={() => !saving && setShowAdd(false)} className="text-gray-400 hover:text-gray-900 p-1.5">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {!isGoogleOAuthConfigured() && (
@@ -1697,7 +1720,13 @@ export default function PartsLibrary() {
                   className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-full transition-colors flex items-center justify-center gap-2 mb-1">
                   <Sparkles className="w-4 h-4" /> {aiFilling ? 'Filling…' : 'Fill with AI'}
                 </button>
-                <p className="text-gray-400 text-[11px] text-center mb-4">Fills every field from the link — or tap ✨ next to any field to fill just that one.</p>
+                <p className="text-gray-400 text-[11px] text-center mb-2">Fills every field from the link — or tap ✨ next to any field to fill just that one.</p>
+                {!editingOriginal && (
+                  <button onClick={addAnotherToQueue} disabled={addingAnother || !pForm.supplierLink.trim()}
+                    className="w-full mb-4 flex items-center justify-center gap-2 text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50 text-sm font-semibold py-2.5 rounded-full transition-colors">
+                    <Inbox className="w-4 h-4" /> {addingAnother ? 'Queuing…' : `Add another (queue this link)${pendingQueueCount > 0 ? ` · ${pendingQueueCount} queued` : ''}`}
+                  </button>
+                )}
 
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs text-gray-500">Category</label>
