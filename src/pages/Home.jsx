@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Package, Users, Bus, UserCircle } from 'lucide-react';
 import vertexLogo from '@/assets/Vertex-logo.webp';
-import sopIcon from '@/assets/sop-icon.webp';
+import sopIcon from '@/assets/sop-icon.png';
 import { createPageUrl } from '../utils';
 import { motion } from 'framer-motion';
 import HomeShortcuts from '@/components/HomeShortcuts';
