@@ -1341,7 +1341,7 @@ export default function PartsLibrary() {
           <button onClick={() => navigate('/')} className="text-gray-200 hover:text-white transition-colors" title="Back">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-white text-xl font-extrabold tracking-tight whitespace-nowrap">Parts Library</h1>
+          <h1 className="text-white text-xl font-extrabold tracking-tight whitespace-nowrap">Parts</h1>
 
           {sheetTabs.length > 0 && (
             <div className="relative flex-1 min-w-[180px] max-w-2xl order-last w-full sm:order-none sm:w-auto">
