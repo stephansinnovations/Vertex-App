@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail, Package, PackageCheck } from 'lucide-react';
+import { ArrowLeft, ChevronRight, ChevronDown, Plus, Minus, AlertCircle, Check, X, Sparkles, Camera, Trash2, Search, Image as ImageIcon, ShoppingCart, Pencil, Mail, Package, PackageCheck, Undo2 } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { getSheetTabs, getSheetCategories, addPartToCategory, addSheetTab, addCategory as addCategoryToSheet, deletePartRow, renameSheetTab, renameCategory, updatePartRow } from '@/api/googleSheets';
 import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth';
@@ -28,12 +28,13 @@ function saveStock(s) {
   window.dispatchEvent(new Event('stockchange'));
 }
 
-// Add a quantity to a part's on-hand stock counter (used when an order is received).
+// Add (or, with a negative qty, subtract) from a part's on-hand stock counter —
+// used when an order is received, and reversed when that receive is undone.
 function addToStock(partName, qty) {
   if (!partName) return;
   const s = loadStock();
   const cur = parseInt(s[partName]);
-  s[partName] = String((isNaN(cur) ? 0 : cur) + (Number(qty) || 0));
+  s[partName] = String(Math.max(0, (isNaN(cur) ? 0 : cur) + (Number(qty) || 0)));
   saveStock(s);
 }
 
@@ -667,8 +668,25 @@ export default function PartsLibrary() {
   };
 
   // Mark an order as received → add its quantity to the part's on-hand stock counter.
+  // Remember the last one so an accidental "Received" can be undone.
+  const [lastReceived, setLastReceived] = useState(null); // { key, item }
   const receiveOrder = (key, item) => {
     addToStock(key, item.qty || 1);
+    orders.remove(key);
+    setLastReceived({ key, item });
+  };
+  const undoReceive = () => {
+    if (!lastReceived) return;
+    const { key, item } = lastReceived;
+    addToStock(key, -(item.qty || 1)); // take the quantity back off stock
+    orders.place(item.part, item.qty || 1); // restore the order
+    setLastReceived(null);
+  };
+
+  // Re-add an order's part back to the cart (and take it out of Orders).
+  const reAddToCart = (key, item) => {
+    const qty = item.qty || 1;
+    for (let i = 0; i < qty; i++) cart.add(item.part);
     orders.remove(key);
   };
   const [sheetTabs, setSheetTabs] = useState([]);
@@ -1443,12 +1461,21 @@ export default function PartsLibrary() {
       {/* ───────────── Orders modal ───────────── */}
       {showOrders && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowOrders(false)} />
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setShowOrders(false); setLastReceived(null); }} />
           <div className="relative w-full sm:max-w-md bg-white border border-gray-200 rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Package className="w-5 h-5" /> Orders ({orders.count})</h2>
-              <button onClick={() => setShowOrders(false)} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
+              <button onClick={() => { setShowOrders(false); setLastReceived(null); }} className="text-gray-400 hover:text-gray-900"><X className="w-5 h-5" /></button>
             </div>
+
+            {lastReceived && (
+              <div className="mb-3 flex items-center justify-between gap-2 bg-green-50 border border-green-200 rounded-xl px-3 py-2">
+                <p className="text-green-800 text-xs min-w-0 truncate">Received {lastReceived.item.qty} × {lastReceived.item.part?.partName || lastReceived.key} — added to stock.</p>
+                <button onClick={undoReceive} className="flex items-center gap-1 text-green-700 hover:text-green-900 text-xs font-semibold flex-shrink-0">
+                  <Undo2 className="w-3.5 h-3.5" /> Undo
+                </button>
+              </div>
+            )}
 
             {Object.keys(orders.orders).length === 0 ? (
               <p className="text-gray-500 text-sm py-6 text-center">No orders yet. In the cart, tap the blue order button on a part's image to mark it ordered.</p>
@@ -1461,11 +1488,18 @@ export default function PartsLibrary() {
                       <p className="text-[#0F1111] text-sm leading-snug line-clamp-2">{item.part?.partName || key}</p>
                       <p className="text-gray-500 text-xs mt-0.5">Qty {item.qty}{item.orderedAt ? ` · ordered ${new Date(item.orderedAt).toLocaleDateString()}` : ''}</p>
                     </div>
-                    <button onClick={() => receiveOrder(key, item)}
-                      title="Mark received — adds the quantity to your on-hand stock"
-                      className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-full transition-colors whitespace-nowrap flex-shrink-0">
-                      <Check className="w-3.5 h-3.5" /> Received
-                    </button>
+                    <div className="flex flex-col items-stretch gap-1 flex-shrink-0">
+                      <button onClick={() => receiveOrder(key, item)}
+                        title="Mark received — adds the quantity to your on-hand stock"
+                        className="flex items-center justify-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-3 py-2 rounded-full transition-colors whitespace-nowrap">
+                        <Check className="w-3.5 h-3.5" /> Received
+                      </button>
+                      <button onClick={() => reAddToCart(key, item)}
+                        title="Move this part back to the cart"
+                        className="flex items-center justify-center gap-1 text-gray-400 hover:text-gray-700 text-[11px] transition-colors">
+                        <ShoppingCart className="w-3 h-3" /> Re-add to cart
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
