@@ -1109,10 +1109,23 @@ export default function PartsLibrary() {
     const to = part.contactEmail || '';
     const su = `Order ${part.partName || 'part'}`;
     const body = [
-      part.partName ? `Part: ${part.partName}` : '',
-      part.partNum ? `Part #: ${part.partNum}` : '',
-      `Quantity: ${item.qty || 1}`,
-    ].filter(Boolean).join('\n');
+      'Hello,',
+      '',
+      'I would like to place an order for the following parts:',
+      '',
+      `  - Part Name: ${part.partName || ''}`,
+      `  - Part #: ${part.partNum || ''}`,
+      `  - Quantity: ${item.qty || 1}`,
+      '',
+      'Please ship these items to the following address:',
+      '3075 N 75th St, Boulder, CO 80301',
+      '',
+      'Please let me know if you need any additional information to process this order or if you can provide an estimated delivery date.',
+      '',
+      'Best regards,',
+      '',
+      '[]',
+    ].join('\n');
     const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(su)}&body=${encodeURIComponent(body)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
