@@ -21,6 +21,10 @@ function extractSpreadsheetId(url) {
 
 const STOCK_KEY = 'partsLibraryStock';
 
+// Timestamp of the last local mutation (cart/orders/stock) — the cross-device
+// poller pauses briefly after it so an in-flight Supabase write isn't clobbered.
+let lastSharedMutation = 0;
+
 function loadStock() {
   try { return JSON.parse(localStorage.getItem(STOCK_KEY)) || {}; } catch { return {}; }
 }
@@ -28,6 +32,8 @@ function loadStock() {
 function saveStock(s) {
   localStorage.setItem(STOCK_KEY, JSON.stringify(s));
   window.dispatchEvent(new Event('stockchange'));
+  lastSharedMutation = Date.now();
+  saveShared('stock', s).catch(() => { /* offline / table missing — local copy kept */ });
 }
 
 // Add (or, with a negative qty, subtract) from a part's on-hand stock counter —
@@ -44,10 +50,6 @@ function addToStock(partName, qty) {
 // Persisted in localStorage (fast in-tab cache + 'cartchange' event) and mirrored
 // to Supabase `shared_state` so the cart/orders sync across all devices & accounts.
 const CART_KEY = 'partsLibraryCart';
-
-// Timestamp of the last local mutation — the cross-device poller pauses briefly
-// after it so an in-flight Supabase write isn't clobbered by a stale read.
-let lastSharedMutation = 0;
 
 function loadCart() {
   try { return JSON.parse(localStorage.getItem(CART_KEY)) || {}; } catch { return {}; }
@@ -105,7 +107,7 @@ function saveOrders(o) {
 async function syncSharedOnce() {
   if (Date.now() - lastSharedMutation < 4000) return; // let a local write settle first
   try {
-    const [cartVal, ordersVal] = await Promise.all([loadShared('cart'), loadShared('orders')]);
+    const [cartVal, ordersVal, stockVal] = await Promise.all([loadShared('cart'), loadShared('orders'), loadShared('stock')]);
     if (cartVal && JSON.stringify(cartVal) !== localStorage.getItem(CART_KEY)) {
       localStorage.setItem(CART_KEY, JSON.stringify(cartVal));
       window.dispatchEvent(new Event('cartchange'));
@@ -113,6 +115,10 @@ async function syncSharedOnce() {
     if (ordersVal && JSON.stringify(ordersVal) !== localStorage.getItem(ORDERS_KEY)) {
       localStorage.setItem(ORDERS_KEY, JSON.stringify(ordersVal));
       window.dispatchEvent(new Event('orderschange'));
+    }
+    if (stockVal && JSON.stringify(stockVal) !== localStorage.getItem(STOCK_KEY)) {
+      localStorage.setItem(STOCK_KEY, JSON.stringify(stockVal));
+      window.dispatchEvent(new Event('stockchange'));
     }
   } catch { /* table may not exist yet */ }
 }
