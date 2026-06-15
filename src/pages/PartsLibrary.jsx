@@ -804,6 +804,7 @@ export default function PartsLibrary() {
   const [saving, setSaving] = useState(false);
   const [submitTried, setSubmitTried] = useState(false); // flags missing category/subcategory red
   const [addErr, setAddErr] = useState(null);
+  const [dupInfo, setDupInfo] = useState(null); // { fields, where } when a possible duplicate is detected
   const [aiFilling, setAiFilling] = useState(false);
   const [aiErr, setAiErr] = useState(null);
   const photoInputRef = useRef(null);
@@ -1025,6 +1026,7 @@ export default function PartsLibrary() {
     setAddCats([]);
     pendingSubcatRef.current = null;
     setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
+    setDupInfo(null);
     setShowAdd(true);
   };
 
@@ -1057,6 +1059,7 @@ export default function PartsLibrary() {
       partNum: part.partNum || '', price: part.price || '', imageUrl: part.imageUrl || '',
       contactEmail: part.contactEmail || '',
     });
+    setDupInfo(null);
     setShowAdd(true);
   };
 
@@ -1156,14 +1159,38 @@ export default function PartsLibrary() {
       .finally(() => setLoadingCats(false));
   }, [showAdd, addTab, spreadsheetId]);
 
-  const submitPart = async () => {
+  // Scan the whole library for a part that looks like the same item — matched by
+  // name (case-insensitive) or by an identical supplier link. Returns the first
+  // match as { tab, category, part } or null.
+  const findDuplicate = async (fields) => {
+    const norm = (s) => (s || '').trim().toLowerCase();
+    const normLink = (s) => norm(s).replace(/\/+$/, '');
+    const name = norm(fields.partName);
+    const link = normLink(fields.supplierLink);
+    for (const tab of sheetTabs) {
+      let cats;
+      try {
+        const res = await getSheetCategories(spreadsheetId, tab);
+        cats = res.data.categories || [];
+      } catch { continue; } // a tab we can't read shouldn't block adding
+      for (const cat of cats) {
+        for (const part of (cat.parts || [])) {
+          const sameName = name && norm(part.partName) === name;
+          const sameLink = link && normLink(part.supplierLink) === link;
+          if (sameName || sameLink) return { tab, category: cat.name, part, sameLink: !!sameLink };
+        }
+      }
+    }
+    return null;
+  };
+
+  const submitPart = async (force = false) => {
     if (saving) return;
     if (!addTab || !addCategory) { setSubmitTried(true); return; } // turn the empty select(s) red
     if (!pForm.partName.trim()) return;
     setSaving(true);
     setAddErr(null);
     try {
-      const token = await getSheetsAccessToken();
       const fields = {
         partName: pForm.partName.trim(),
         supplier: pForm.supplier.trim(),
@@ -1173,6 +1200,12 @@ export default function PartsLibrary() {
         imageUrl: pForm.imageUrl.trim(),
         contactEmail: pForm.contactEmail.trim(),
       };
+      // On a fresh add (not edit, not already confirmed), warn about duplicates first.
+      if (!editingOriginal && !force) {
+        const dup = await findDuplicate(fields);
+        if (dup) { setDupInfo({ fields, where: dup }); setSaving(false); return; }
+      }
+      const token = await getSheetsAccessToken();
       if (editingOriginal) {
         const samePlace = addTab === editingOriginal.tab && addCategory === editingOriginal.category;
         if (samePlace) {
@@ -1887,10 +1920,37 @@ export default function PartsLibrary() {
                       <p className="text-red-600 text-xs mb-3">Pick a category and subcategory before adding to the sheet.</p>
                     )}
 
-                    <button onClick={submitPart} disabled={!pForm.partName.trim() || saving}
+                    <button onClick={() => submitPart()} disabled={!pForm.partName.trim() || saving}
                       className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
                       {saving ? (editingOriginal ? 'Saving…' : 'Adding…') : <><Check className="w-4 h-4" /> {editingOriginal ? 'Save changes' : 'Add to sheet'}</>}
                     </button>
+
+                    {dupInfo && (
+                      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50" onClick={() => setDupInfo(null)}>
+                        <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+                          <div className="flex items-start gap-3 mb-3">
+                            <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <h3 className="text-gray-900 font-bold text-base">Possible duplicate</h3>
+                              <p className="text-gray-600 text-sm mt-1">
+                                {dupInfo.where.sameLink ? 'A part with the same link' : `“${dupInfo.where.part.partName}”`} already exists in{' '}
+                                <span className="font-semibold text-gray-800">{dupInfo.where.tab} › {dupInfo.where.category}</span>. Add it anyway?
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 mt-4">
+                            <button onClick={() => setDupInfo(null)}
+                              className="flex-1 py-2.5 rounded-full font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">
+                              Cancel
+                            </button>
+                            <button onClick={() => { setDupInfo(null); submitPart(true); }}
+                              className="flex-1 py-2.5 rounded-full font-bold text-[#0F1111] bg-[#FFD814] hover:bg-[#F7CA00] transition-colors">
+                              Add anyway
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {editingOriginal && (
                       confirmDel ? (
