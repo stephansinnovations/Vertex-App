@@ -27,6 +27,12 @@ let cmdChars = [];
 let autoReconnect = false;
 let statusListeners = [];
 
+// Test mode: pretend a board is connected so the whole UI/visualization can be
+// driven without hardware. Writes become no-ops (no characteristics), but commands
+// still update the shared flowerState, so the visualization animates as if live.
+let testMode = false;
+let testFlowerCount = 3;
+
 export function isBluetoothSupported() {
   return typeof navigator !== 'undefined' && !!navigator.bluetooth;
 }
@@ -76,14 +82,33 @@ async function handleDisconnect() {
   if (autoReconnect) emitStatus('failed');
 }
 
-export function isConnected() {
+function realConnected() {
   return !!(device && device.gatt && device.gatt.connected && cmdChars.length);
 }
 
-// Number of flower command channels on the connected device (0 when disconnected).
-// Each channel maps, in order, to a flower in the app's layout.
+export function isConnected() {
+  return testMode || realConnected();
+}
+
+// Number of connected flower channels (0 when disconnected). In test mode this is
+// the reported layout total so every flower shows as connected.
 export function getFlowerCount() {
-  return isConnected() ? cmdChars.length : 0;
+  if (testMode) return testFlowerCount;
+  return realConnected() ? cmdChars.length : 0;
+}
+
+export function isTestMode() { return testMode; }
+
+// Enter/leave test mode (fakes a connection for testing the UI without hardware).
+export function setTestMode(on) {
+  testMode = !!on;
+  emitStatus(testMode ? 'connected' : 'disconnected');
+}
+
+// The visualization reports the total flower count so test mode lights them all and
+// the engine spreads stereo across the right number.
+export function setTestFlowerCount(n) {
+  testFlowerCount = Math.max(1, Number(n) || 1);
 }
 
 // Split a string into ≤maxBytes UTF-8 packets, appending the terminator to the

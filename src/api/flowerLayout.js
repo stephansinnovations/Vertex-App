@@ -1,11 +1,7 @@
-// The app's model of the physical flower hardware: how many flowers, which GPIO
-// pin each strip is on, how many LEDs per strip, and the layout shape. Drives the
-// visualization, the per-flower connection indicators, and pattern math.
-//
-// This mirrors the firmware's constants.py (NAMES / DATA_PINS / LED_LENGTHS). The
-// BLE protocol can't reconfigure the firmware at runtime, so editing this here
-// updates the app's picture of the hardware — changing the *physical* wiring/pins
-// still needs a firmware reflash to match.
+// The app's model of the physical hardware: a list of bouquets, each driven by its
+// own ESP32 and holding (by default) three flowers. Per flower we keep the GPIO pin,
+// LED count, and layout shape. Drives the visualization, connection indicators, and
+// pattern math. Mirrors the firmware's constants.py per bouquet.
 
 import { getSetting, setSetting } from './appSettings';
 
@@ -13,24 +9,44 @@ const KEY = 'flowerLayout';
 
 export const SHAPES = ['circle', 'line'];
 
-// Default = the current bouquet: 3 flowers, pins 2/3/5, 15 LEDs each, circle.
-export const DEFAULT_LAYOUT = {
-  flowers: [
-    { name: 'Flower 1.1', pin: 2, ledCount: 15, shape: 'circle' },
-    { name: 'Flower 1.2', pin: 3, ledCount: 15, shape: 'circle' },
-    { name: 'Flower 1.3', pin: 5, ledCount: 15, shape: 'circle' },
-  ],
-};
-
-function sanitize(layout) {
-  if (!layout || !Array.isArray(layout.flowers) || !layout.flowers.length) return null;
-  const flowers = layout.flowers.slice(0, 16).map((f, i) => ({
+function sanFlower(f, i) {
+  return {
     name: String(f?.name ?? `Flower ${i + 1}`).slice(0, 40),
     pin: Number.isFinite(+f?.pin) ? Math.max(0, Math.min(48, Math.round(+f.pin))) : 0,
     ledCount: Number.isFinite(+f?.ledCount) ? Math.max(1, Math.min(300, Math.round(+f.ledCount))) : 15,
     shape: SHAPES.includes(f?.shape) ? f.shape : 'circle',
-  }));
-  return { flowers };
+  };
+}
+
+// A fresh bouquet = 3 flowers on the standard pins.
+export function newBouquet(index) {
+  const n = index + 1;
+  return {
+    name: `Bouquet ${n}`,
+    flowers: [
+      { name: `Flower ${n}.1`, pin: 2, ledCount: 15, shape: 'circle' },
+      { name: `Flower ${n}.2`, pin: 3, ledCount: 15, shape: 'circle' },
+      { name: `Flower ${n}.3`, pin: 5, ledCount: 15, shape: 'circle' },
+    ],
+  };
+}
+
+// Default = one bouquet (the current rig).
+export const DEFAULT_LAYOUT = { bouquets: [newBouquet(0)] };
+
+// Accept the new shape ({ bouquets }) or migrate the old flat shape ({ flowers }).
+function sanitize(layout) {
+  if (!layout) return null;
+  let bouquets;
+  if (Array.isArray(layout.bouquets)) bouquets = layout.bouquets;
+  else if (Array.isArray(layout.flowers)) bouquets = [{ name: 'Bouquet 1', flowers: layout.flowers }];
+  else return null;
+  bouquets = bouquets.slice(0, 8).map((b, bi) => ({
+    name: String(b?.name ?? `Bouquet ${bi + 1}`).slice(0, 40),
+    flowers: (Array.isArray(b?.flowers) ? b.flowers : []).slice(0, 12).map(sanFlower),
+  })).filter((b) => b.flowers.length);
+  if (!bouquets.length) return null;
+  return { bouquets };
 }
 
 export async function loadLayout() {
@@ -50,6 +66,12 @@ export async function saveLayout(layout) {
   return clean;
 }
 
-export function newFlower(index) {
-  return { name: `Flower ${index + 1}`, pin: 0, ledCount: 15, shape: 'circle' };
+// All flowers across every bouquet, in order — the global index matches the order
+// commands/connection channels are assigned in.
+export function allFlowers(layout) {
+  return (layout?.bouquets || []).flatMap((b) => b.flowers);
+}
+
+export function totalFlowers(layout) {
+  return allFlowers(layout).length;
 }

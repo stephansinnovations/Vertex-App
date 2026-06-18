@@ -13,6 +13,8 @@ import {
   sendReactive,
   refreshFlowers,
   onStatus,
+  setTestMode,
+  isTestMode,
 } from '@/api/flowerBle';
 import { AudioReactor, hsvToHex } from '@/api/audioReactive';
 import { modEngine } from '@/api/modEngine';
@@ -61,6 +63,14 @@ export default function MusicApp() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [testMode, setTestModeState] = useState(isTestMode());
+
+  const toggleTest = (on) => {
+    if (on === testMode) return;
+    setTestMode(on); // emits status → connected reflects it
+    setTestModeState(on);
+    setError('');
+  };
 
   // --- Music-sync state ---
   const [syncing, setSyncing] = useState(false);
@@ -248,6 +258,22 @@ export default function MusicApp() {
       </div>
 
       <div className="flex-1 w-full max-w-4xl mx-auto px-4 pb-24 flex flex-col gap-5">
+        {/* Test mode / Live toggle */}
+        <div className="flex items-center justify-center gap-2">
+          <div className="flex items-center gap-1 p-1 rounded-full bg-white/5">
+            {[{ id: false, label: 'Live' }, { id: true, label: 'Test mode' }].map(({ id, label }) => (
+              <button
+                key={label}
+                onClick={() => toggleTest(id)}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium transition ${testMode === id ? (id ? 'bg-[#36d6c3] text-black' : 'bg-white text-black') : 'text-white/50 hover:text-white/80'}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          {testMode && <span className="text-[11px] text-[#36d6c3]/80">Pretending an ESP32 is connected — no hardware needed.</span>}
+        </div>
+
         {/* Top region: macros (left) · visualization (center) · params (right) */}
         <div className="flex flex-col lg:flex-row gap-5">
           {/* Left — macro knobs going down */}
@@ -302,7 +328,7 @@ export default function MusicApp() {
                 <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reconnecting to flowers…
               </span>
             )}
-            {connected && (
+            {connected && !testMode && (
               <button
                 onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); if (modEngine.running) { modEngine.stop(); setRunning(false); } await disconnect(); setConnected(false); setWaving(false); }}
                 className="flex items-center gap-2 text-xs text-white/45 hover:text-white/70 transition"
