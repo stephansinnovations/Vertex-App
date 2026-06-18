@@ -95,6 +95,8 @@ class ModEngine {
       _trigTime: 0,
     }));
     this.bpm = 120;
+    this.audioLevel = 0; // 0..1 live music level while detecting tempo
+    this.detecting = false; // listening for BPM
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.

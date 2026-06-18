@@ -10,13 +10,12 @@ import {
   setSolid,
   setBrightness as setFlowerBrightness,
   sendCommand,
-  sendReactive,
   refreshFlowers,
   onStatus,
   setTestMode,
   isTestMode,
 } from '@/api/flowerBle';
-import { AudioReactor, hsvToHex } from '@/api/audioReactive';
+import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import { modEngine } from '@/api/modEngine';
 import BouquetVisualizer from '@/components/BouquetVisualizer';
 import LfoModule from '@/components/LfoModule';
@@ -105,20 +104,13 @@ export default function MusicApp() {
     setError('');
   };
 
-  // --- Music-sync state ---
+  // --- Tempo-detection (Sync to music) state ---
   const [syncing, setSyncing] = useState(false);
   const [audioSource, setAudioSource] = useState('mic'); // 'mic' | 'tab'
-  const [autoColor, setAutoColor] = useState(true);
   const [level, setLevel] = useState(0);
   const reactorRef = useRef(null);
-  const peakRef = useRef(0);
-  const hueRef = useRef(270);
-  const lastMeterRef = useRef(0);
+  const trackerRef = useRef(null);
   const wakeLockRef = useRef(null);
-  const colorRef = useRef(color);
-  const autoColorRef = useRef(autoColor);
-  useEffect(() => { colorRef.current = color; }, [color]);
-  useEffect(() => { autoColorRef.current = autoColor; }, [autoColor]);
 
   // Re-render on engine ticks so macro meters / playhead stay live.
   useEffect(() => modEngine.subscribe(bump), []);
@@ -189,24 +181,8 @@ export default function MusicApp() {
     return () => clearTimeout(t);
   }, [brightness, connected, waving, running]);
 
-  const handleAudioFrame = useCallback(({ level: lvl, beat }) => {
-    const peak = Math.max(lvl, peakRef.current * 0.9);
-    peakRef.current = peak;
-    let bri = Math.round(Math.min(1, 0.18 + peak * 2.4) * 100);
-    if (beat) bri = 100;
-    bri = Math.max(6, Math.min(100, bri));
-    const cmd = { br: String(bri) };
-    if (autoColorRef.current) {
-      hueRef.current = (hueRef.current + 0.6 + peak * 6 + (beat ? 35 : 0)) % 360;
-      cmd.co = hsvToHex(hueRef.current, 1, 1);
-    } else {
-      cmd.co = colorRef.current;
-    }
-    sendReactive(cmd);
-    const now = performance.now();
-    if (now - lastMeterRef.current > 66) { lastMeterRef.current = now; setLevel(peak); }
-  }, []);
-
+  // Sync to music = detect the music's BPM and feed it to the LFOs (tempo-synced
+  // LFOs follow it; Trigger-mode LFOs retrigger on the beat). Nothing else.
   const handleSyncToggle = useCallback(async () => {
     setError('');
     if (syncing) {
@@ -214,29 +190,35 @@ export default function MusicApp() {
       reactorRef.current = null;
       setSyncing(false);
       setLevel(0);
-      try { await stopFlowers(); } catch { /* ignore */ }
+      modEngine.detecting = false;
+      modEngine.audioLevel = 0;
+      modEngine.emit();
       return;
     }
-    if (!connected) { setError('Connect to your flowers first.'); return; }
     try {
+      trackerRef.current = new BpmTracker();
       const reactor = new AudioReactor();
-      reactor.onFrame = handleAudioFrame;
-      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; };
+      let lastEmit = 0;
+      reactor.onFrame = ({ level: lvl, beat }) => {
+        modEngine.audioLevel = lvl;
+        if (beat) { modEngine.bpm = trackerRef.current.push(performance.now()); modEngine.onBeat(); }
+        const now = performance.now();
+        if (now - lastEmit > 60) { lastEmit = now; setLevel(lvl); modEngine.emit(); }
+      };
+      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; modEngine.detecting = false; modEngine.audioLevel = 0; modEngine.emit(); };
       await reactor.start(audioSource);
       reactorRef.current = reactor;
+      modEngine.detecting = true;
       setSyncing(true);
-      setWaving(false);
-      peakRef.current = 0;
-      try { await sendCommand({ mo: ['wave'] }); await sendCommand({ sp: '30' }); } catch { /* via reactive */ }
     } catch (e) {
       reactorRef.current?.stop();
       reactorRef.current = null;
       setError(/denied|NotAllowed/i.test(e?.message || '')
         ? 'Audio permission denied — allow microphone/tab audio and try again.'
-        : (e?.message || 'Could not start audio.'));
+        : (e?.message || 'Could not listen.'));
       setSyncing(false);
     }
-  }, [syncing, connected, audioSource, handleAudioFrame]);
+  }, [syncing, audioSource]);
 
   useEffect(() => {
     const off = onStatus((s) => {
@@ -443,18 +425,14 @@ export default function MusicApp() {
                 </button>
               ))}
             </div>
-            <button onClick={handleSyncToggle} disabled={!connected}
-              className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition disabled:opacity-40 ${syncing ? 'bg-white text-black' : 'bg-[#36d6c3] text-black hover:bg-[#36d6c3]/90'}`}>
-              {syncing ? 'Stop sync' : 'Start sync'}
+            <button onClick={handleSyncToggle}
+              className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition ${syncing ? 'bg-white text-black' : 'bg-[#36d6c3] text-black hover:bg-[#36d6c3]/90'}`}>
+              {syncing ? `Stop · ${modEngine.bpm} BPM` : 'Detect tempo'}
             </button>
             <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
-              <div className="h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: autoColor ? `hsl(${hueRef.current}, 90%, 60%)` : color }} />
+              <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
             </div>
-            <label className="flex items-center gap-2 text-[11px] text-white/50 cursor-pointer select-none">
-              <input type="checkbox" checked={autoColor} onChange={(e) => setAutoColor(e.target.checked)} style={{ accentColor: '#36d6c3' }} />
-              Auto-cycle color with the music
-            </label>
-            {!connected && <p className="text-[11px] text-amber-300/70">Connect to your flowers first.</p>}
+            <p className="text-[11px] text-white/40 leading-relaxed">Detects the music&apos;s BPM and locks your tempo-synced LFOs to it — nothing else. Set an LFO&apos;s TEMPO to 1&nbsp;bar / 1&frasl;2 / 1&frasl;4…</p>
             {audioSource === 'tab' && <p className="text-[10px] text-amber-300/60 leading-relaxed">Tab mode pauses Bluetooth when hidden — keep this window visible, or use Microphone.</p>}
           </div>
         </div>

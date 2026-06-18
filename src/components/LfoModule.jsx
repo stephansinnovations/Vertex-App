@@ -45,9 +45,16 @@ export default function LfoModule() {
         ))}
       </div>
 
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
+        {/* Always-on BPM + live music level (top-right) */}
+        <div className="absolute top-1.5 right-2 z-10 flex items-center gap-2 pointer-events-none">
+          <span className="w-16 h-1.5 rounded-full bg-black/40 overflow-hidden">
+            <span className="block h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(modEngine.audioLevel * 140))}%`, background: '#36d6c3' }} />
+          </span>
+          <span className="text-[11px] tabular-nums text-white/75 font-medium">{modEngine.bpm} <span className="text-white/40">BPM</span></span>
+        </div>
         {/* Toolbar */}
-        <div className="flex items-center gap-1 px-1.5 py-1.5" style={{ background: '#1b1f26' }}>
+        <div className="flex items-center gap-1 px-1.5 py-1.5 pr-24" style={{ background: '#1b1f26' }}>
           <span className="p-1 rounded bg-white/10 text-white/85"><Pencil className="w-3.5 h-3.5" /></span>
           <span className="p-1 rounded text-white/35" aria-hidden>
             <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="1.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeOpacity="0.5" fill="none" /><path d="M2.5 11 L11.5 3" stroke="currentColor" strokeWidth="1.4" fill="none" /></svg>
