@@ -188,18 +188,21 @@ export default function FlowerSetup() {
             </span>
           </div>
           <div className="flex flex-wrap items-start justify-center gap-5 py-2">
-            {layout.flowers.map((f, i) => (
-              <FlowerView
-                key={i}
-                flower={f}
-                index={i}
-                head={head}
-                connected={connected && i < flowerCount}
-                liveColor={live.color}
-                brightness={live.brightness}
-                isWave={Array.isArray(live.motion) && live.motion.includes('wave')}
-              />
-            ))}
+            {layout.flowers.map((f, i) => {
+              const pf = Array.isArray(live.perFlower) ? live.perFlower[i] : null;
+              return (
+                <FlowerView
+                  key={i}
+                  flower={f}
+                  index={i}
+                  head={head}
+                  connected={connected && i < flowerCount}
+                  liveColor={pf?.color ?? live.color}
+                  brightness={pf?.brightness ?? live.brightness}
+                  isWave={Array.isArray(live.motion) && live.motion.includes('wave')}
+                />
+              );
+            })}
           </div>
           {!connected && (
             <button

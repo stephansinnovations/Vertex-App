@@ -17,7 +17,7 @@ const toPx = (xn, yn) => ({
   y: PAD.t + (1 - yn) * (H - PAD.t - PAD.b),
 });
 
-export default function LfoEditor({ points, onChange, playhead = null }) {
+export default function LfoEditor({ points, onChange, playhead = null, gridX = 8 }) {
   const svgRef = useRef(null);
   const dragRef = useRef(null); // { kind:'point'|'curve', index, startY, startCurve }
   const [, force] = useState(0);
@@ -118,15 +118,18 @@ export default function LfoEditor({ points, onChange, playhead = null }) {
       </defs>
 
       {/* Grid */}
-      {[0.25, 0.5, 0.75].map((g) => (
-        <line key={`v${g}`} x1={toPx(g, 0).x} y1={PAD.t} x2={toPx(g, 0).x} y2={H - PAD.b} stroke="#ffffff" strokeOpacity="0.06" />
+      {Array.from({ length: Math.max(0, gridX - 1) }, (_, i) => (i + 1) / gridX).map((g) => (
+        <line key={`v${g}`} x1={toPx(g, 0).x} y1={PAD.t} x2={toPx(g, 0).x} y2={H - PAD.b} stroke="#ffffff" strokeOpacity="0.05" />
       ))}
       {[0.5].map((g) => (
-        <line key={`h${g}`} x1={PAD.l} y1={toPx(0, g).y} x2={W - PAD.r} y2={toPx(0, g).y} stroke="#ffffff" strokeOpacity="0.06" />
+        <line key={`h${g}`} x1={PAD.l} y1={toPx(0, g).y} x2={W - PAD.r} y2={toPx(0, g).y} stroke="#ffffff" strokeOpacity="0.05" />
       ))}
 
       <path d={areaPath} fill="url(#lfoFill)" />
       <path d={linePath} fill="none" stroke={TEAL} strokeWidth="2.5" strokeLinejoin="round" />
+
+      {/* Phase / start handle (bottom-left), decorative like Vital */}
+      <rect x={PAD.l + 2} y={H - PAD.b - 6} width="16" height="7" rx="3.5" fill="#cfd6d8" opacity="0.85" />
 
       {/* Playhead */}
       {playhead != null && (

@@ -10,8 +10,11 @@
 // rate-limited, frame-dropping command to the flowers.
 
 import { setFlowerState, stateFromCommand } from './flowerState';
-import { sendReactive } from './flowerBle';
+import { sendReactive, sendReactivePerFlower, getFlowerCount } from './flowerBle';
 import { hsvToHex } from './audioReactive';
+
+export const MODES = ['Trigger', 'Loop', 'Sync'];
+const MAX_DELAY_SEC = 4;
 
 // --- Curve sampling -------------------------------------------------------------
 
@@ -77,13 +80,19 @@ class ModEngine {
       points: clonePoints(PRESETS.Triangle),
       preset: 'Triangle',
       rate: 0.5, // Hz (used when sync === 'free')
-      sync: 'free', // 'free' or a SYNC_DIVISIONS key
+      sync: '1/2', // 'free' or a SYNC_DIVISIONS key
+      mode: 'Loop', // Trigger | Loop | Sync
       smooth: 0, // 0..1
+      delay: 0, // 0..1 → onset delay after (re)trigger
+      stereo: 0, // 0..1 → phase spread across flowers
+      gridX: 8, // horizontal grid divisions
       phase: 0,
       value: 0,
       _smoothed: 0,
+      _trigTime: 0,
     }));
     this.bpm = 120;
+    this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     this.params = {
       brightness: { source: NONE, min: 0, max: 100 },
@@ -113,7 +122,10 @@ class ModEngine {
   start() {
     if (this.running) return;
     this.running = true;
-    this._last = performance.now();
+    const now = performance.now();
+    this._last = now;
+    this._startTime = now;
+    for (const lfo of this.lfos) { lfo._trigTime = now; lfo.phase = 0; }
     this._tick();
   }
 
@@ -124,6 +136,42 @@ class ModEngine {
     this.emit();
   }
 
+  // Call on a detected beat — retriggers any LFO in Trigger mode (phase-lock to beat).
+  onBeat() {
+    const now = performance.now();
+    for (const lfo of this.lfos) {
+      if (lfo.mode === 'Trigger') { lfo._trigTime = now; lfo.phase = 0; }
+    }
+  }
+
+  // Build a flower command from an array of per-LFO values (so stereo can recompute
+  // with phase-offset LFO values per flower).
+  _commandFrom(lfoValues) {
+    const macroVals = this.macros.map((m) => {
+      let v = m.base;
+      if (m.source) {
+        const [kind, i] = m.source.split(':');
+        if (kind === 'lfo') v += (lfoValues[Number(i)] ?? 0) * m.amount;
+      }
+      return Math.max(0, Math.min(1, v));
+    });
+    const resolve = (src) => {
+      if (!src) return null;
+      const [kind, i] = src.split(':');
+      if (kind === 'lfo') return lfoValues[Number(i)] ?? null;
+      if (kind === 'macro') return macroVals[Number(i)] ?? null;
+      return null;
+    };
+    const cmd = {};
+    const b = resolve(this.params.brightness.source);
+    if (b != null) { const { min, max } = this.params.brightness; cmd.br = String(Math.round(min + (max - min) * b)); }
+    const c = resolve(this.params.color.source);
+    if (c != null) { const { min, max } = this.params.color; cmd.co = hsvToHex(min + (max - min) * c, 1, 1); }
+    const s = resolve(this.params.speed.source);
+    if (s != null) { const { min, max } = this.params.speed; cmd.sp = String(Math.round(min + (max - min) * s)); }
+    return cmd;
+  }
+
   _tick = () => {
     if (!this.running) return;
     this._raf = requestAnimationFrame(this._tick);
@@ -132,10 +180,22 @@ class ModEngine {
     this._last = now;
     if (dt > 0.1) dt = 0.1;
 
-    // Advance + sample LFOs (synced LFOs derive their frequency from the BPM).
+    // Advance + sample each LFO per its mode, with onset delay.
     for (const lfo of this.lfos) {
-      lfo.phase = (lfo.phase + dt * effectiveRate(lfo, this.bpm)) % 1;
-      const raw = sampleCurve(lfo.points, lfo.phase);
+      const freq = effectiveRate(lfo, this.bpm);
+      const since = (now - (lfo._trigTime || now)) / 1000;
+      const delaySec = (lfo.delay || 0) * MAX_DELAY_SEC;
+      let raw;
+      if (since < delaySec) {
+        lfo.phase = 0; // hold at start during the delay
+        raw = sampleCurve(lfo.points, 0);
+      } else if (lfo.mode === 'Sync') {
+        lfo.phase = (((now - this._startTime) / 1000) * freq) % 1;
+        raw = sampleCurve(lfo.points, lfo.phase);
+      } else {
+        lfo.phase = (lfo.phase + dt * freq) % 1;
+        raw = sampleCurve(lfo.points, lfo.phase);
+      }
       if (lfo.smooth > 0) {
         const coeff = Math.exp(-dt / (0.015 + lfo.smooth * 0.6));
         lfo._smoothed = lfo._smoothed * coeff + raw * (1 - coeff);
@@ -146,7 +206,7 @@ class ModEngine {
       }
     }
 
-    // Macros: base + routed LFO.
+    // Macros (for the live meters).
     for (const m of this.macros) {
       let v = m.base;
       const s = this._resolve(m.source);
@@ -154,27 +214,33 @@ class ModEngine {
       m.value = Math.max(0, Math.min(1, v));
     }
 
-    // Parameters.
-    const cmd = {};
-    const bSrc = this._resolve(this.params.brightness.source);
-    if (bSrc != null) {
-      const { min, max } = this.params.brightness;
-      cmd.br = String(Math.round(min + (max - min) * bSrc));
-    }
-    const cSrc = this._resolve(this.params.color.source);
-    if (cSrc != null) {
-      const { min, max } = this.params.color;
-      cmd.co = hsvToHex(min + (max - min) * cSrc, 1, 1);
-    }
-    const sSrc = this._resolve(this.params.speed.source);
-    if (sSrc != null) {
-      const { min, max } = this.params.speed;
-      cmd.sp = String(Math.round(min + (max - min) * sSrc));
-    }
+    const baseVals = this.lfos.map((l) => l.value);
+    const anyStereo = this.lfos.some((l) => l.stereo > 0.001);
+    const send = now - this._lastSend > 70;
 
-    if (Object.keys(cmd).length) {
-      setFlowerState(stateFromCommand(cmd)); // instant for the visualization
-      if (now - this._lastSend > 70) { this._lastSend = now; sendReactive(cmd); }
+    if (!anyStereo) {
+      const cmd = this._commandFrom(baseVals);
+      if (Object.keys(cmd).length) {
+        setFlowerState({ ...stateFromCommand(cmd), perFlower: null });
+        if (send) { this._lastSend = now; sendReactive(cmd); }
+      }
+    } else {
+      // Per-flower: offset each LFO's phase across the bouquet for a stereo spread.
+      const F = Math.max(getFlowerCount() || 3, 1);
+      const cmds = [];
+      const perFlower = [];
+      for (let k = 0; k < F; k += 1) {
+        const vals = this.lfos.map((l) => (l.stereo > 0.001
+          ? sampleCurve(l.points, (l.phase + l.stereo * (k / F)) % 1)
+          : l.value));
+        const cmd = this._commandFrom(vals);
+        cmds.push(cmd);
+        const st = stateFromCommand(cmd);
+        perFlower.push({ color: st.color, brightness: st.brightness });
+      }
+      const first = stateFromCommand(cmds[0] || {});
+      setFlowerState({ ...first, perFlower });
+      if (send && Object.keys(cmds[0] || {}).length) { this._lastSend = now; sendReactivePerFlower(cmds); }
     }
 
     // Throttle UI notifications to ~20fps.

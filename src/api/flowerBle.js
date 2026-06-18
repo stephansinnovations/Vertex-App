@@ -190,6 +190,26 @@ export function sendReactive(command) {
   return true;
 }
 
+// Like sendReactive but with a distinct command per flower (for stereo spread).
+// cmds[i] drives channel i; a shorter array reuses its last entry. Does NOT mirror
+// to flowerState (the caller sets per-flower state itself).
+export function sendReactivePerFlower(cmds) {
+  if (_reactiveBusy || !isConnected()) return false;
+  _reactiveBusy = true;
+  (async () => {
+    for (let i = 0; i < cmdChars.length; i += 1) {
+      const cmd = cmds[i] || cmds[cmds.length - 1];
+      if (!cmd) continue;
+      const packets = splitIntoPackets(JSON.stringify(cmd));
+      for (const packet of packets) {
+        // eslint-disable-next-line no-await-in-loop
+        await writePacket(cmdChars[i], packet);
+      }
+    }
+  })().catch(() => {}).finally(() => { _reactiveBusy = false; });
+  return true;
+}
+
 // Light the flowers a solid color (no motion). Used for instant feedback on connect
 // and when the user just wants steady color.
 export async function setSolid(color, brightness = 100) {

@@ -1,11 +1,24 @@
 import React, { useReducer, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Square, Bluetooth, Loader2, Mic, MonitorSpeaker } from 'lucide-react';
-import { modEngine, PRESETS, PRESET_NAMES, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
+import { ArrowLeft, Play, Square, Bluetooth, Loader2, Mic, MonitorSpeaker, ChevronLeft, ChevronRight, Pencil, Minus } from 'lucide-react';
+import { modEngine, PRESETS, PRESET_NAMES, SYNC_NAMES, MODES, effectiveRate } from '@/api/modEngine';
 import { onFlowerState, getFlowerState } from '@/api/flowerState';
 import { isConnected, connectFlowers, onStatus, isBluetoothSupported } from '@/api/flowerBle';
 import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import LfoEditor from '@/components/LfoEditor';
+import Knob from '@/components/Knob';
+
+const TEMPO_OPTIONS = ['free', ...SYNC_NAMES];
+
+// A labelled cell in the bottom control bar (Vital-style: content on top, caption below).
+function Cell({ label, children, className = '' }) {
+  return (
+    <div className={`flex-1 flex flex-col items-center justify-between gap-1 py-2 px-0.5 min-w-0 ${className}`}>
+      <div className="flex-1 flex items-center justify-center w-full">{children}</div>
+      <span className="text-[9px] tracking-[0.15em] text-white/40">{label}</span>
+    </div>
+  );
+}
 
 const clonePoints = (pts) => pts.map((p) => ({ x: p.x, y: p.y, curve: p.curve || 0 }));
 
@@ -88,7 +101,7 @@ export default function Modulation() {
     try {
       const tracker = new BpmTracker();
       const reactor = new AudioReactor();
-      reactor.onFrame = ({ beat }) => { if (beat) { modEngine.bpm = tracker.push(performance.now()); bump(); } };
+      reactor.onFrame = ({ beat }) => { if (beat) { modEngine.bpm = tracker.push(performance.now()); modEngine.onBeat(); bump(); } };
       reactor.onEnded = () => { setDetecting(false); reactorRef.current = null; };
       await reactor.start(detectSource);
       reactorRef.current = reactor;
@@ -111,50 +124,70 @@ export default function Modulation() {
       </div>
 
       <div className="flex-1 w-full max-w-2xl mx-auto px-4 pb-24 flex flex-col gap-5">
-        {/* LFO editor with tabs */}
-        <div className="flex gap-3">
-          <div className="flex flex-col gap-1.5">
+        {/* ── LFO module (Vital-style) ── */}
+        <div className="rounded-xl overflow-hidden border border-black/50 flex" style={{ background: '#0f1216' }}>
+          {/* LFO tabs */}
+          <div className="flex flex-col w-12 flex-shrink-0" style={{ background: '#14171c' }}>
             {modEngine.lfos.map((l, i) => (
               <button
                 key={i}
                 onClick={() => setActive(i)}
-                className={`px-3 py-2 rounded-lg text-xs font-medium transition whitespace-nowrap ${active === i ? 'bg-white/15 text-white' : 'bg-white/5 text-white/45 hover:text-white/75'}`}
+                className={`flex-1 flex items-center justify-center text-[11px] font-medium border-b border-black/40 transition ${active === i ? 'text-white' : 'text-white/40 hover:text-white/70'}`}
+                style={{ background: active === i ? '#0f1216' : 'transparent' }}
               >
-                {l.name}
+                LFO {i + 1}
               </button>
             ))}
           </div>
-          <div className="flex-1 flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <Select
-                value={lfo.preset}
-                onChange={setPreset}
-                options={PRESET_NAMES.map((n) => ({ value: n, label: n }))}
-              />
-              <span className="text-[10px] text-white/30">drag points · double-click to add/remove · drag ◇ to bend</span>
+
+          <div className="flex-1 flex flex-col min-w-0">
+            {/* Toolbar */}
+            <div className="flex items-center gap-1 px-1.5 py-1.5" style={{ background: '#1b1f26' }}>
+              <span className="p-1 rounded bg-white/10 text-white/85"><Pencil className="w-3.5 h-3.5" /></span>
+              <span className="p-1 rounded text-white/35" aria-hidden>
+                <svg width="14" height="14" viewBox="0 0 14 14"><rect x="1.5" y="1.5" width="11" height="11" rx="1.5" stroke="currentColor" strokeOpacity="0.5" fill="none" /><path d="M2.5 11 L11.5 3" stroke="currentColor" strokeWidth="1.4" fill="none" /></svg>
+              </span>
+              <button
+                onClick={() => { const o = [4, 8, 16, 32]; setLfo({ gridX: o[(o.indexOf(lfo.gridX) + 1) % o.length] || 8 }); }}
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/30 text-[11px] text-white/70 tabular-nums"
+                title="Grid divisions"
+              >
+                {lfo.gridX} <Minus className="w-2.5 h-2.5 text-white/40" /> 1
+              </button>
+              <span className="p-1 rounded text-white/35" aria-hidden>
+                <svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 9 Q4 3 7 7 T13 5" stroke="currentColor" strokeWidth="1.4" fill="none" /></svg>
+              </span>
+              <div className="flex-1 flex items-center justify-center gap-2">
+                <button onClick={() => { const i = PRESET_NAMES.indexOf(lfo.preset); setPreset(PRESET_NAMES[(i - 1 + PRESET_NAMES.length) % PRESET_NAMES.length]); }} className="text-white/50 hover:text-white" aria-label="Previous shape"><ChevronLeft className="w-4 h-4" /></button>
+                <span className="text-xs text-white/85 min-w-[56px] text-center truncate">{lfo.preset}</span>
+                <button onClick={() => { const i = PRESET_NAMES.indexOf(lfo.preset); setPreset(PRESET_NAMES[(i + 1) % PRESET_NAMES.length]); }} className="text-white/50 hover:text-white" aria-label="Next shape"><ChevronRight className="w-4 h-4" /></button>
+              </div>
             </div>
-            <LfoEditor points={lfo.points} onChange={setPoints} playhead={running ? lfo.phase : null} />
-            <div className="flex items-end gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] uppercase tracking-wide text-white/40">Sync</span>
-                <select
-                  value={lfo.sync}
-                  onChange={(e) => setLfo({ sync: e.target.value })}
-                  className="bg-black/40 rounded-lg px-2 py-1.5 text-xs text-white outline-none border border-white/10 focus:border-white/30"
+
+            {/* Graph */}
+            <LfoEditor points={lfo.points} onChange={setPoints} playhead={running ? lfo.phase : null} gridX={lfo.gridX} />
+
+            {/* Bottom control bar */}
+            <div className="flex divide-x divide-black/40" style={{ background: '#1b1f26' }}>
+              <Cell label="MODE">
+                <button onClick={() => { const i = MODES.indexOf(lfo.mode); setLfo({ mode: MODES[(i + 1) % MODES.length] }); }} className="px-1.5 py-1.5 rounded bg-black/30 text-[11px] text-white/85 w-full truncate">
+                  {lfo.mode}
+                </button>
+              </Cell>
+              <Cell label="TEMPO">
+                <button
+                  onClick={() => { const i = TEMPO_OPTIONS.indexOf(lfo.sync); setLfo({ sync: TEMPO_OPTIONS[(i + 1) % TEMPO_OPTIONS.length] }); }}
+                  onWheel={(e) => { if (lfo.sync === 'free') setLfo({ rate: Math.max(0.05, Math.min(5, lfo.rate - Math.sign(e.deltaY) * 0.05)) }); }}
+                  title={`${effectiveRate(lfo, modEngine.bpm).toFixed(2)} Hz`}
+                  className="px-1.5 py-1.5 rounded bg-black/30 text-[11px] text-white/85 flex items-center gap-1 w-full justify-center truncate"
                 >
-                  <option value="free" className="bg-zinc-900">Free</option>
-                  {SYNC_NAMES.map((n) => <option key={n} value={n} className="bg-zinc-900">{n}</option>)}
-                </select>
-              </label>
-              {lfo.sync === 'free' ? (
-                <Slider label="Rate" value={Number(lfo.rate.toFixed(2))} min={0.05} max={5} step={0.05} onChange={(v) => setLfo({ rate: v })} suffix=" Hz" />
-              ) : (
-                <div className="flex flex-col gap-1 flex-1">
-                  <span className="text-[10px] uppercase tracking-wide text-white/40">Rate</span>
-                  <span className="text-xs text-white/70 py-1.5">{effectiveRate(lfo, modEngine.bpm).toFixed(2)} Hz · {lfo.sync} @ {modEngine.bpm} BPM</span>
-                </div>
-              )}
-              <Slider label="Smooth" value={Number(lfo.smooth.toFixed(2))} min={0} max={1} step={0.01} onChange={(v) => setLfo({ smooth: v })} />
+                  {lfo.sync === 'free' ? `${lfo.rate.toFixed(2)}Hz` : lfo.sync}
+                  <span className="text-white/50">&#9834;</span>
+                </button>
+              </Cell>
+              <Cell label="SMOOTH"><Knob value={lfo.smooth} onChange={(v) => setLfo({ smooth: v })} size={40} /></Cell>
+              <Cell label="DELAY"><Knob value={lfo.delay} onChange={(v) => setLfo({ delay: v })} size={40} /></Cell>
+              <Cell label="STEREO"><Knob value={lfo.stereo} onChange={(v) => setLfo({ stereo: v })} size={40} /></Cell>
             </div>
           </div>
         </div>
