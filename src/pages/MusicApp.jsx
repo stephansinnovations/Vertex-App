@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Settings2, Activity } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Settings2, Play, Square } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -15,19 +14,49 @@ import {
   onStatus,
 } from '@/api/flowerBle';
 import { AudioReactor, hsvToHex } from '@/api/audioReactive';
+import { modEngine } from '@/api/modEngine';
+import BouquetVisualizer from '@/components/BouquetVisualizer';
+import LfoModule from '@/components/LfoModule';
+import Knob from '@/components/Knob';
 
-// A small palette of quick colors plus a full picker. Whatever is chosen is the
-// color of the wave sent to the flowers.
 const SWATCHES = ['#8b5cf6', '#ff0040', '#ff7a00', '#ffd400', '#00e676', '#00b8ff', '#ff00d4', '#ffffff'];
+const LFO_OPTS = modEngine.lfos.map((l, i) => ({ value: `lfo:${i}`, label: l.name }));
+const MACRO_OPTS = modEngine.macros.map((m, i) => ({ value: `macro:${i}`, label: m.name }));
+
+// Dropdown to route a parameter to a modulation source (Macro or LFO).
+function SourceSelect({ paramKey, bump }) {
+  return (
+    <select
+      value={modEngine.params[paramKey].source}
+      onChange={(e) => { modEngine.params[paramKey].source = e.target.value; bump(); }}
+      className="w-full bg-black/40 rounded-lg px-2 py-1.5 text-xs text-white/85 outline-none border border-white/10 focus:border-white/30"
+    >
+      <option value="" className="bg-zinc-900">No modulation</option>
+      {MACRO_OPTS.map((o) => <option key={o.value} value={o.value} className="bg-zinc-900">{o.label}</option>)}
+      {LFO_OPTS.map((o) => <option key={o.value} value={o.value} className="bg-zinc-900">{o.label}</option>)}
+    </select>
+  );
+}
+
+function ParamCard({ title, children }) {
+  return (
+    <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-3 flex flex-col gap-2">
+      <span className="text-[10px] uppercase tracking-widest text-white/40">{title}</span>
+      {children}
+    </div>
+  );
+}
 
 export default function MusicApp() {
   const navigate = useNavigate();
+  const [, bump] = useReducer((x) => x + 1, 0);
   const [color, setColor] = useState('#8b5cf6');
   const [brightness, setBrightness] = useState(100);
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [waving, setWaving] = useState(false);
+  const [running, setRunning] = useState(modEngine.running);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -35,17 +64,19 @@ export default function MusicApp() {
   const [syncing, setSyncing] = useState(false);
   const [audioSource, setAudioSource] = useState('mic'); // 'mic' | 'tab'
   const [autoColor, setAutoColor] = useState(true);
-  const [level, setLevel] = useState(0); // smoothed meter value 0..1
+  const [level, setLevel] = useState(0);
   const reactorRef = useRef(null);
   const peakRef = useRef(0);
   const hueRef = useRef(270);
   const lastMeterRef = useRef(0);
   const wakeLockRef = useRef(null);
-  // Keep the latest color/autoColor in refs so the audio callback isn't stale.
   const colorRef = useRef(color);
   const autoColorRef = useRef(autoColor);
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { autoColorRef.current = autoColor; }, [autoColor]);
+
+  // Re-render on engine ticks so macro meters / playhead stay live.
+  useEffect(() => modEngine.subscribe(bump), []);
 
   const supported = isBluetoothSupported();
 
@@ -55,75 +86,55 @@ export default function MusicApp() {
     try {
       const count = await connectFlowers();
       setConnected(true);
-      // Instant feedback: light the flowers solid in the chosen color so it's
-      // obvious the connection works (and confirms commands are landing).
       try { await setSolid(color, brightness); } catch { /* surfaced on Wave */ }
       setError(count ? '' : 'Connected, but no flowers responded.');
     } catch (e) {
-      // The user dismissing the chooser shows as "cancelled" — keep that quiet.
-      if (!/cancelled|User cancelled/i.test(e?.message || '')) {
-        setError(e?.message || 'Could not connect.');
-      }
+      if (!/cancelled|User cancelled/i.test(e?.message || '')) setError(e?.message || 'Could not connect.');
     } finally {
       setConnecting(false);
     }
   }, []);
 
-  // The one button: toggles the colored wave on the bouquet.
+  const toggleRun = () => {
+    if (modEngine.running) { modEngine.stop(); setRunning(false); }
+    else { modEngine.start(); setRunning(true); }
+  };
+
   const handleWave = useCallback(async () => {
     if (busy) return;
     setError('');
     setBusy(true);
     try {
-      if (!waving) {
-        await startWave(color, { speed: 20, brightness });
-        setWaving(true);
-      } else {
-        await stopFlowers();
-        setWaving(false);
-      }
+      if (!waving) { await startWave(color, { speed: 20, brightness }); setWaving(true); }
+      else { await stopFlowers(); setWaving(false); }
     } catch (e) {
       setError(e?.message || 'Command failed.');
-      setConnected(false);
       setWaving(false);
     } finally {
       setBusy(false);
     }
-  }, [busy, waving, color]);
+  }, [busy, waving, color, brightness]);
 
-  // If a wave is running and the color changes, push the new color live.
+  // Manual color → push live when not modulated and not running a wave/engine.
   useEffect(() => {
-    if (!waving) return;
-    let cancelled = false;
-    const t = setTimeout(async () => {
-      try {
-        await startWave(color, { speed: 20, brightness });
-      } catch {
-        if (!cancelled) setWaving(false);
-      }
-    }, 40);
-    return () => { cancelled = true; clearTimeout(t); };
-  }, [color, waving, brightness]);
+    if (!connected || waving || running) return;
+    const t = setTimeout(() => { setSolid(color, brightness).catch(() => {}); }, 40);
+    return () => clearTimeout(t);
+  }, [color, connected, waving, running]);
 
-  // Push brightness live whenever it changes while connected (debounced). When a
-  // wave is running the color effect above already includes brightness, so only
-  // send the standalone brightness command when steady.
+  // Manual brightness → push live (debounced) when steady.
   useEffect(() => {
-    if (!connected || waving) return;
+    if (!connected || waving || running) return;
     const t = setTimeout(() => { setFlowerBrightness(brightness).catch(() => {}); }, 60);
     return () => clearTimeout(t);
-  }, [brightness, connected, waving]);
+  }, [brightness, connected, waving, running]);
 
-  // Map each audio frame onto a flower command. Brightness follows an envelope of
-  // the music's energy (fast attack, slow release) and snaps to 100 on beats; the
-  // colour either stays the chosen swatch or drifts through the spectrum.
   const handleAudioFrame = useCallback(({ level: lvl, beat }) => {
     const peak = Math.max(lvl, peakRef.current * 0.9);
     peakRef.current = peak;
     let bri = Math.round(Math.min(1, 0.18 + peak * 2.4) * 100);
     if (beat) bri = 100;
     bri = Math.max(6, Math.min(100, bri));
-
     const cmd = { br: String(bri) };
     if (autoColorRef.current) {
       hueRef.current = (hueRef.current + 0.6 + peak * 6 + (beat ? 35 : 0)) % 360;
@@ -132,13 +143,8 @@ export default function MusicApp() {
       cmd.co = colorRef.current;
     }
     sendReactive(cmd);
-
-    // Update the on-screen meter at ~15fps so we don't re-render every frame.
     const now = performance.now();
-    if (now - lastMeterRef.current > 66) {
-      lastMeterRef.current = now;
-      setLevel(peak);
-    }
+    if (now - lastMeterRef.current > 66) { lastMeterRef.current = now; setLevel(peak); }
   }, []);
 
   const handleSyncToggle = useCallback(async () => {
@@ -161,11 +167,7 @@ export default function MusicApp() {
       setSyncing(true);
       setWaving(false);
       peakRef.current = 0;
-      // Base look: a continuous wave that the live brightness/colour ride on.
-      try {
-        await sendCommand({ mo: ['wave'] });
-        await sendCommand({ sp: '30' });
-      } catch { /* surfaced via reactive sends */ }
+      try { await sendCommand({ mo: ['wave'] }); await sendCommand({ sp: '30' }); } catch { /* via reactive */ }
     } catch (e) {
       reactorRef.current?.stop();
       reactorRef.current = null;
@@ -176,8 +178,6 @@ export default function MusicApp() {
     }
   }, [syncing, connected, audioSource, handleAudioFrame]);
 
-  // Reflect BLE status (including auto-reconnect after Chrome drops the link when
-  // the tab is backgrounded).
   useEffect(() => {
     const off = onStatus((s) => {
       if (s === 'connected') { setConnected(true); setReconnecting(false); }
@@ -197,9 +197,6 @@ export default function MusicApp() {
     return off;
   }, []);
 
-  // Hold a screen wake lock while syncing so the OS/browser is less likely to
-  // throttle or freeze us mid-show. (Auto-releases when the tab is hidden, so we
-  // re-acquire on visibility change.)
   useEffect(() => {
     if (!syncing) return undefined;
     let released = false;
@@ -221,227 +218,160 @@ export default function MusicApp() {
     };
   }, [syncing]);
 
-  useEffect(() => () => { reactorRef.current?.stop(); disconnect(); }, []);
+  useEffect(() => () => { reactorRef.current?.stop(); }, []);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#0a0a12] via-[#0d0a1a] to-black text-white flex flex-col">
       {/* Header */}
-      <div className="relative flex items-center justify-center px-4 py-5">
-        <button
-          onClick={() => navigate(-1)}
-          className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-white/10 transition"
-          aria-label="Back"
-        >
+      <div className="relative flex items-center justify-center px-4 py-4">
+        <button onClick={() => navigate(-1)} className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-white/10 transition" aria-label="Back">
           <ArrowLeft className="w-6 h-6 text-white/80" />
         </button>
         <h1 className="text-lg font-semibold tracking-[0.25em] uppercase text-white/90">Music App</h1>
         <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
-          <button
-            onClick={() => navigate('/Modulation')}
-            className="p-2 rounded-full hover:bg-white/10 transition"
-            aria-label="Modulation / LFOs"
-          >
-            <Activity className="w-5 h-5 text-white/70" />
-          </button>
-          <button
-            onClick={() => navigate('/FlowerSetup')}
-            className="p-2 rounded-full hover:bg-white/10 transition"
-            aria-label="Flower setup"
-          >
+          <button onClick={() => navigate('/FlowerSetup')} className="p-2 rounded-full hover:bg-white/10 transition" aria-label="Flower setup">
             <Settings2 className="w-5 h-5 text-white/70" />
           </button>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-10 px-6 pb-16">
-        {/* The wave button — a glowing orb that pulses when active */}
-        <div className="flex flex-col items-center gap-6">
-          <motion.button
-            onClick={connected ? handleWave : handleConnect}
-            disabled={connecting || busy}
-            className="relative w-44 h-44 rounded-full flex items-center justify-center select-none disabled:opacity-70"
-            style={{ touchAction: 'manipulation' }}
-            whileTap={{ scale: 0.94 }}
-          >
-            {/* Glow */}
-            <motion.div
-              className="absolute inset-0 rounded-full"
-              animate={waving
-                ? { opacity: [0.5, 1, 0.5], scale: [1, 1.25, 1] }
-                : { opacity: 0.45, scale: 1 }}
-              transition={waving ? { duration: 1.1, repeat: Infinity, ease: 'easeInOut' } : {}}
-              style={{ background: `radial-gradient(circle, ${color}cc, transparent 70%)`, margin: -30, filter: 'blur(22px)' }}
-            />
-            {/* Orb */}
-            <div
-              className="w-44 h-44 rounded-full flex items-center justify-center relative z-10"
-              style={{
-                background: `radial-gradient(circle at 35% 28%, rgba(255,255,255,0.22), ${color}55)`,
-                boxShadow: `0 10px 50px ${color}77, inset 0 3px 0 rgba(255,255,255,0.55), inset 0 -2px 0 rgba(0,0,0,0.25)`,
-                border: '0.5px solid rgba(255,255,255,0.35)',
-              }}
-            >
-              <span className="relative z-10 text-base font-semibold tracking-widest uppercase text-white/95">
-                {connecting
-                  ? <Loader2 className="w-7 h-7 animate-spin" />
-                  : !connected
-                    ? 'Connect'
-                    : busy
-                      ? <Loader2 className="w-7 h-7 animate-spin" />
-                      : waving ? 'Stop' : 'Wave'}
-              </span>
+      <div className="flex-1 w-full max-w-4xl mx-auto px-4 pb-24 flex flex-col gap-5">
+        {/* Top region: macros (left) · visualization (center) · params (right) */}
+        <div className="flex flex-col lg:flex-row gap-5">
+          {/* Left — macro knobs going down */}
+          <div className="flex lg:flex-col items-center justify-center gap-3 flex-wrap">
+            <span className="w-full text-center text-[10px] uppercase tracking-widest text-white/40">Macros</span>
+            {modEngine.macros.map((m, i) => (
+              <div key={i} className="flex flex-col items-center gap-1">
+                <Knob value={m.base} onChange={(v) => { m.base = v; bump(); }} size={48} />
+                <div className="w-12 h-1 rounded-full bg-white/10 overflow-hidden">
+                  <div className="h-full bg-[#36d6c3]" style={{ width: `${Math.round((m.value || 0) * 100)}%` }} />
+                </div>
+                <select
+                  value={m.source}
+                  onChange={(e) => { m.source = e.target.value; bump(); }}
+                  className="text-[10px] bg-black/40 rounded px-1 py-0.5 text-white/70 border border-white/10 max-w-[68px] outline-none"
+                  title={`${m.name} source`}
+                >
+                  <option value="" className="bg-zinc-900">{m.name}</option>
+                  {LFO_OPTS.map((o) => <option key={o.value} value={o.value} className="bg-zinc-900">{o.label}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          {/* Center — live visualization + transport */}
+          <div className="flex-1 flex flex-col items-center justify-start gap-4">
+            <BouquetVisualizer size="lg" />
+            <div className="flex items-center gap-3 flex-wrap justify-center">
+              {!connected ? (
+                <button onClick={handleConnect} disabled={connecting || !supported} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-sm font-medium transition disabled:opacity-50">
+                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bluetooth className="w-4 h-4" />}
+                  {connecting ? 'Connecting…' : 'Connect'}
+                </button>
+              ) : (
+                <button onClick={toggleRun} className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-semibold transition ${running ? 'bg-white text-black' : 'bg-[#36d6c3]/90 text-black hover:bg-[#36d6c3]'}`}>
+                  {running ? <><Square className="w-4 h-4" fill="currentColor" /> Stop LFOs</> : <><Play className="w-4 h-4" fill="currentColor" /> Play LFOs</>}
+                </button>
+              )}
+              {connected && (
+                <button onClick={handleWave} disabled={busy} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm transition disabled:opacity-50 ${waving ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80 hover:bg-white/15'}`}>
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {waving ? 'Stop wave' : 'Wave'}
+                </button>
+              )}
             </div>
-          </motion.button>
-          <p className="text-sm text-white/50 h-5">
-            {!connected ? 'Tap to connect to your flowers' : waving ? 'Wave running — tap to stop' : 'Tap to send a colored wave'}
-          </p>
-        </div>
-
-        {/* Color picker */}
-        <div className="w-full max-w-sm flex flex-col items-center gap-4">
-          <span className="text-xs uppercase tracking-widest text-white/40">Wave color</span>
-          <div className="flex flex-wrap items-center justify-center gap-3">
-            {SWATCHES.map((c) => (
+            {reconnecting && (
+              <span className="flex items-center gap-2 text-xs text-amber-300/70">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reconnecting to flowers…
+              </span>
+            )}
+            {connected && (
               <button
-                key={c}
-                onClick={() => setColor(c)}
-                aria-label={`Color ${c}`}
-                className="w-9 h-9 rounded-full transition-transform"
-                style={{
-                  background: c,
-                  transform: color.toLowerCase() === c.toLowerCase() ? 'scale(1.18)' : 'scale(1)',
-                  boxShadow: color.toLowerCase() === c.toLowerCase()
-                    ? `0 0 0 2px #000, 0 0 0 4px ${c}, 0 0 14px ${c}` : 'inset 0 0 0 1px rgba(255,255,255,0.15)',
-                }}
-              />
-            ))}
-            {/* Full custom picker */}
-            <label
-              className="w-9 h-9 rounded-full cursor-pointer relative overflow-hidden"
-              style={{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.25)' }}
-              title="Custom color"
-            >
-              <input
-                type="color"
-                value={color}
-                onChange={(e) => setColor(e.target.value)}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-            </label>
-          </div>
-        </div>
-
-        {/* Brightness dial */}
-        <div className="w-full max-w-sm flex flex-col items-center gap-3">
-          <div className="flex items-center justify-between w-full px-1">
-            <span className="text-xs uppercase tracking-widest text-white/40">Brightness</span>
-            <span className="text-xs tabular-nums text-white/60">{brightness}%</span>
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={brightness}
-            onChange={(e) => setBrightness(Number(e.target.value))}
-            aria-label="Brightness"
-            className="w-full h-2 rounded-full appearance-none cursor-pointer"
-            style={{
-              accentColor: color,
-              background: `linear-gradient(to right, ${color} ${brightness}%, rgba(255,255,255,0.12) ${brightness}%)`,
-            }}
-          />
-        </div>
-
-        {/* Music sync */}
-        <div className="w-full max-w-sm flex flex-col items-center gap-4 pt-2 border-t border-white/5">
-          <span className="text-xs uppercase tracking-widest text-white/40">Sync to music</span>
-
-          {/* Audio source selector */}
-          <div className="flex items-center gap-2 p-1 rounded-full bg-white/5">
-            {[
-              { id: 'mic', label: 'Microphone', Icon: Mic },
-              { id: 'tab', label: 'Browser tab', Icon: MonitorSpeaker },
-            ].map(({ id, label, Icon }) => (
-              <button
-                key={id}
-                onClick={() => !syncing && setAudioSource(id)}
-                disabled={syncing}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition disabled:opacity-50 ${
-                  audioSource === id ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'
-                }`}
+                onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); if (modEngine.running) { modEngine.stop(); setRunning(false); } await disconnect(); setConnected(false); setWaving(false); }}
+                className="flex items-center gap-2 text-xs text-white/45 hover:text-white/70 transition"
               >
-                <Icon className="w-3.5 h-3.5" /> {label}
+                <Bluetooth className="w-3.5 h-3.5" /> Disconnect
               </button>
-            ))}
+            )}
+            {!supported && <p className="text-xs text-amber-400/80 text-center max-w-xs">This browser doesn&apos;t support Web Bluetooth. Use Chrome on desktop or Android.</p>}
+            {error && <p className="text-xs text-red-400/80 text-center max-w-xs">{error}</p>}
           </div>
 
-          {/* Sync button */}
-          <button
-            onClick={handleSyncToggle}
-            disabled={!connected}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold transition disabled:opacity-40 ${
-              syncing ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'
-            }`}
-          >
-            <Music className="w-4 h-4" /> {syncing ? 'Stop sync' : 'Sync to music'}
-          </button>
+          {/* Right — parameters going down */}
+          <div className="lg:w-64 flex flex-col gap-3">
+            <ParamCard title="Brightness">
+              <input
+                type="range" min="0" max="100" value={brightness}
+                onChange={(e) => setBrightness(Number(e.target.value))}
+                aria-label="Brightness"
+                className="w-full h-2 rounded-full appearance-none cursor-pointer"
+                style={{ accentColor: color, background: `linear-gradient(to right, ${color} ${brightness}%, rgba(255,255,255,0.12) ${brightness}%)` }}
+              />
+              <SourceSelect paramKey="brightness" bump={bump} />
+            </ParamCard>
 
-          {/* Live level meter */}
-          <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-[width] duration-75"
-              style={{
-                width: `${Math.min(100, Math.round(level * 140))}%`,
-                background: autoColor ? `hsl(${hueRef.current}, 90%, 60%)` : color,
-              }}
-            />
+            <ParamCard title="Color">
+              <div className="flex flex-wrap items-center gap-2">
+                {SWATCHES.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setColor(c)}
+                    aria-label={`Color ${c}`}
+                    className="w-6 h-6 rounded-full transition-transform"
+                    style={{
+                      background: c,
+                      transform: color.toLowerCase() === c.toLowerCase() ? 'scale(1.18)' : 'scale(1)',
+                      boxShadow: color.toLowerCase() === c.toLowerCase() ? `0 0 0 2px #000, 0 0 0 3px ${c}` : 'inset 0 0 0 1px rgba(255,255,255,0.15)',
+                    }}
+                  />
+                ))}
+                <label className="w-6 h-6 rounded-full cursor-pointer relative overflow-hidden" style={{ background: 'conic-gradient(red, yellow, lime, aqua, blue, magenta, red)' }} title="Custom color">
+                  <input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+                </label>
+              </div>
+              <SourceSelect paramKey="color" bump={bump} />
+            </ParamCard>
+
+            <ParamCard title="Wave speed">
+              <SourceSelect paramKey="speed" bump={bump} />
+            </ParamCard>
+
+            <ParamCard title="Sync to music">
+              <div className="flex items-center gap-1 p-1 rounded-full bg-white/5 self-start">
+                {[{ id: 'mic', label: 'Mic', Icon: Mic }, { id: 'tab', label: 'Tab', Icon: MonitorSpeaker }].map(({ id, label, Icon }) => (
+                  <button
+                    key={id}
+                    onClick={() => !syncing && setAudioSource(id)}
+                    disabled={syncing}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs transition disabled:opacity-50 ${audioSource === id ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                  >
+                    <Icon className="w-3.5 h-3.5" /> {label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleSyncToggle}
+                disabled={!connected}
+                className={`flex items-center justify-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition disabled:opacity-40 ${syncing ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+              >
+                <Music className="w-4 h-4" /> {syncing ? 'Stop sync' : 'Sync to music'}
+              </button>
+              <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: autoColor ? `hsl(${hueRef.current}, 90%, 60%)` : color }} />
+              </div>
+              <label className="flex items-center gap-2 text-[11px] text-white/50 cursor-pointer select-none">
+                <input type="checkbox" checked={autoColor} onChange={(e) => setAutoColor(e.target.checked)} style={{ accentColor: color }} />
+                Auto-cycle color
+              </label>
+              {audioSource === 'tab' && (
+                <p className="text-[10px] text-amber-300/60 leading-relaxed">Tab mode pauses Bluetooth when hidden — keep this window visible, or use Mic.</p>
+              )}
+            </ParamCard>
           </div>
-
-          {/* Auto-color toggle */}
-          <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={autoColor}
-              onChange={(e) => setAutoColor(e.target.checked)}
-              className="accent-current"
-              style={{ accentColor: color }}
-            />
-            Auto-cycle color with the music
-          </label>
-          {syncing && audioSource === 'mic' && (
-            <p className="text-[11px] text-white/35 text-center max-w-xs">Turn your music up so the mic can hear it.</p>
-          )}
-          {audioSource === 'tab' && (
-            <p className="text-[11px] text-amber-300/60 text-center max-w-xs leading-relaxed">
-              Tab mode: Chrome may pause Bluetooth when this tab is hidden. Keep the Music App
-              <b className="text-amber-200/80"> visible in its own window</b> (drag this tab out, side-by-side with your music), or just use
-              <b className="text-amber-200/80"> Microphone</b> — it needs no tab switching.
-            </p>
-          )}
         </div>
 
-        {/* Status / connection control */}
-        <div className="flex flex-col items-center gap-2 min-h-[44px]">
-          {reconnecting && (
-            <span className="flex items-center gap-2 text-xs text-amber-300/70">
-              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reconnecting to flowers…
-            </span>
-          )}
-          {connected && (
-            <button
-              onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); await disconnect(); setConnected(false); setWaving(false); }}
-              className="flex items-center gap-2 text-xs text-white/45 hover:text-white/70 transition"
-            >
-              <Bluetooth className="w-3.5 h-3.5" /> Disconnect
-            </button>
-          )}
-          {!supported && (
-            <p className="text-xs text-amber-400/80 text-center max-w-xs">
-              This browser doesn't support Web Bluetooth. Open the Music App in Chrome on desktop or Android.
-            </p>
-          )}
-          {error && <p className="text-xs text-red-400/80 text-center max-w-xs">{error}</p>}
-        </div>
+        {/* Bottom — LFO modulation module */}
+        <LfoModule />
       </div>
     </div>
   );
