@@ -1,8 +1,8 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 
 // A Vital-style rotary knob: a 270° track with a teal value arc and a pointer.
-// Drag vertically (or scroll) to change. Value is 0..1; the parent formats the
-// readout via `format`. Double-click resets to `defaultValue`.
+// Drag vertically (or scroll) to change. Value is 0..1. Shows a value tooltip while
+// dragging or hovering; `format` controls how it's displayed. Double-click resets.
 
 const START = -135; // degrees, 0 = up
 const SWEEP = 270;
@@ -20,8 +20,12 @@ function arcPath(cx, cy, r, a0, a1) {
   return `M ${p0.x.toFixed(2)} ${p0.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${p1.x.toFixed(2)} ${p1.y.toFixed(2)}`;
 }
 
-export default function Knob({ value, onChange, size = 46, defaultValue = 0 }) {
+const defaultFormat = (v) => `${Math.round(v * 100)}%`;
+
+export default function Knob({ value, onChange, size = 46, defaultValue = 0, format = defaultFormat }) {
   const drag = useRef(null);
+  const [dragging, setDragging] = useState(false);
+  const [hover, setHover] = useState(false);
   const cx = size / 2;
   const cy = size / 2;
   const r = size / 2 - 5;
@@ -36,7 +40,7 @@ export default function Knob({ value, onChange, size = 46, defaultValue = 0 }) {
     onChange(v);
   }, [onChange]);
 
-  const onUp = useCallback(() => { drag.current = null; }, []);
+  const onUp = useCallback(() => { drag.current = null; setDragging(false); }, []);
 
   useEffect(() => {
     window.addEventListener('pointermove', onMove);
@@ -44,29 +48,44 @@ export default function Knob({ value, onChange, size = 46, defaultValue = 0 }) {
     return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
   }, [onMove, onUp]);
 
-  const onDown = (e) => { e.preventDefault(); drag.current = { y: e.clientY, v: value }; };
+  const onDown = (e) => { e.preventDefault(); drag.current = { y: e.clientY, v: value }; setDragging(true); };
   const onWheel = (e) => { onChange(Math.max(0, Math.min(1, value - Math.sign(e.deltaY) * 0.03))); };
 
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox={`0 0 ${size} ${size}`}
-      className="cursor-ns-resize touch-none select-none"
-      onPointerDown={onDown}
-      onDoubleClick={() => onChange(defaultValue)}
-      onWheel={onWheel}
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: size, height: size }}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
     >
-      {/* Track */}
-      <path d={arcPath(cx, cy, r, START, START + SWEEP)} fill="none" stroke="#000" strokeOpacity="0.55" strokeWidth="3.5" strokeLinecap="round" />
-      {/* Value arc */}
-      {value > 0.001 && (
-        <path d={arcPath(cx, cy, r, START, angle)} fill="none" stroke={TEAL} strokeWidth="3.5" strokeLinecap="round" />
+      {(dragging || hover) && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 px-1.5 py-0.5 rounded text-[10px] font-medium tabular-nums whitespace-nowrap pointer-events-none z-20"
+          style={{ top: -20, background: '#0b0d11', color: TEAL, border: '1px solid rgba(54,214,195,0.4)' }}
+        >
+          {format(value)}
+        </div>
       )}
-      {/* Body */}
-      <circle cx={cx} cy={cy} r={r * 0.74} fill="#2b2f37" stroke="#000" strokeOpacity="0.4" />
-      {/* Pointer */}
-      <line x1={ptrIn.x} y1={ptrIn.y} x2={ptr.x} y2={ptr.y} stroke="#e8eef0" strokeWidth="2.2" strokeLinecap="round" />
-    </svg>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="cursor-ns-resize touch-none select-none"
+        onPointerDown={onDown}
+        onDoubleClick={() => onChange(defaultValue)}
+        onWheel={onWheel}
+      >
+        {/* Track */}
+        <path d={arcPath(cx, cy, r, START, START + SWEEP)} fill="none" stroke="#000" strokeOpacity="0.55" strokeWidth="3.5" strokeLinecap="round" />
+        {/* Value arc */}
+        {value > 0.001 && (
+          <path d={arcPath(cx, cy, r, START, angle)} fill="none" stroke={TEAL} strokeWidth="3.5" strokeLinecap="round" />
+        )}
+        {/* Body */}
+        <circle cx={cx} cy={cy} r={r * 0.74} fill="#2b2f37" stroke="#000" strokeOpacity="0.4" />
+        {/* Pointer */}
+        <line x1={ptrIn.x} y1={ptrIn.y} x2={ptr.x} y2={ptr.y} stroke="#e8eef0" strokeWidth="2.2" strokeLinecap="round" />
+      </svg>
+    </div>
   );
 }

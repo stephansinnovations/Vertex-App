@@ -186,7 +186,7 @@ export default function Modulation() {
                 </button>
               </Cell>
               <Cell label="SMOOTH"><Knob value={lfo.smooth} onChange={(v) => setLfo({ smooth: v })} size={40} /></Cell>
-              <Cell label="DELAY"><Knob value={lfo.delay} onChange={(v) => setLfo({ delay: v })} size={40} /></Cell>
+              <Cell label="DELAY"><Knob value={lfo.delay} onChange={(v) => setLfo({ delay: v })} size={40} format={(v) => `${(v * 4).toFixed(2)} s`} /></Cell>
               <Cell label="STEREO"><Knob value={lfo.stereo} onChange={(v) => setLfo({ stereo: v })} size={40} /></Cell>
             </div>
           </div>
