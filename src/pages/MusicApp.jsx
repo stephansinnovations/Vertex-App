@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Settings2 } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Settings2, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   isBluetoothSupported,
@@ -235,13 +235,22 @@ export default function MusicApp() {
           <ArrowLeft className="w-6 h-6 text-white/80" />
         </button>
         <h1 className="text-lg font-semibold tracking-[0.25em] uppercase text-white/90">Music App</h1>
-        <button
-          onClick={() => navigate('/FlowerSetup')}
-          className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-white/10 transition"
-          aria-label="Flower setup"
-        >
-          <Settings2 className="w-5 h-5 text-white/70" />
-        </button>
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+          <button
+            onClick={() => navigate('/Modulation')}
+            className="p-2 rounded-full hover:bg-white/10 transition"
+            aria-label="Modulation / LFOs"
+          >
+            <Activity className="w-5 h-5 text-white/70" />
+          </button>
+          <button
+            onClick={() => navigate('/FlowerSetup')}
+            className="p-2 rounded-full hover:bg-white/10 transition"
+            aria-label="Flower setup"
+          >
+            <Settings2 className="w-5 h-5 text-white/70" />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col items-center justify-center gap-10 px-6 pb-16">
