@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Edit2, ArrowLeft, Sparkles, Settings, Trash2 } from 'lucide-react';
+import { Plus, X, ArrowLeft, Sparkles, Settings, Trash2 } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -354,6 +354,8 @@ Return ONLY the prompt text, nothing else.`
             const appId = getRoomApp(roomInfo);
             if (!appId) return null;
             const isVertex = appId === 'vertex';
+            // The Music App (LED-flower controller) opens its own page.
+            const isMusic = typeof appId === 'string' && appId.trim().toLowerCase().includes('music');
             return (
               <motion.div
                 initial={{ scale: 0, opacity: 0 }}
@@ -365,7 +367,7 @@ Return ONLY the prompt text, nothing else.`
                 <motion.div
                   animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
                   transition={tappedId === 'default' ? {} : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  onClick={() => { if (isVertex) navigate('/'); }}
+                  onClick={() => { if (isVertex) navigate('/'); else if (isMusic) navigate('/MusicApp'); }}
                   className="relative cursor-pointer select-none"
                   style={{ touchAction: 'none' }}
                 >

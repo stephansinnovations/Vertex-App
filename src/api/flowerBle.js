@@ -1,0 +1,122 @@
+// Web Bluetooth control for the "Bouquet 1" ESP32 LED flowers (Pollinator firmware).
+//
+// The board advertises a single Nordic-UART-style service. Each flower exposes its
+// own command characteristic (prefix 6e400002…) differing only in the last 5 hex
+// digits (00000 / 00001 / 00002). We connect once, grab every command characteristic
+// under the service, and fan each command out to all of them so the whole bouquet
+// reacts together.
+//
+// Commands are JSON objects ({ co, mo, sp, br }) matching the firmware's `pollinate`
+// protocol — JSON-stringified, chunked into ≤20-byte BLE packets, the stream
+// terminated with ';' (MSG_TERMINATOR). See ~/Pollinator for the firmware side.
+//
+// Web Bluetooth only works in a secure context (the deployed HTTPS site or
+// localhost) on Chromium browsers — notably NOT iOS Safari. Calls must originate
+// from a user gesture (button click) the first time, or requestDevice() throws.
+
+const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+const CMD_CHAR_PREFIX = '6e400002-b5a3-f393-e0a9-e50e24d';
+const MSG_TERMINATOR = ';';
+const MAX_PACKET_BYTES = 20;
+
+let device = null;
+let cmdChars = [];
+
+export function isBluetoothSupported() {
+  return typeof navigator !== 'undefined' && !!navigator.bluetooth;
+}
+
+export function isConnected() {
+  return !!(device && device.gatt && device.gatt.connected && cmdChars.length);
+}
+
+// Split a string into ≤maxBytes UTF-8 packets, appending the terminator to the
+// stream first (mirrors the controller app's splitIntoPackets).
+function splitIntoPackets(message, maxBytes = MAX_PACKET_BYTES) {
+  const full = message + MSG_TERMINATOR;
+  const bytes = new TextEncoder().encode(full);
+  const packets = [];
+  for (let i = 0; i < bytes.length; i += maxBytes) {
+    packets.push(bytes.slice(i, i + maxBytes));
+  }
+  return packets;
+}
+
+// Prompt the browser device picker, connect GATT, and cache every flower command
+// characteristic. Returns the flower count discovered.
+export async function connectFlowers() {
+  if (!isBluetoothSupported()) {
+    throw new Error('Web Bluetooth is not available in this browser. Use Chrome on desktop or Android (iOS is unsupported).');
+  }
+
+  device = await navigator.bluetooth.requestDevice({
+    filters: [{ services: [SERVICE_UUID] }],
+    optionalServices: [SERVICE_UUID],
+  });
+
+  device.addEventListener('gattserverdisconnected', () => {
+    cmdChars = [];
+  });
+
+  const server = await device.gatt.connect();
+  const service = await server.getPrimaryService(SERVICE_UUID);
+  const chars = await service.getCharacteristics();
+
+  cmdChars = chars
+    .filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX))
+    .sort((a, b) => a.uuid.localeCompare(b.uuid));
+
+  if (!cmdChars.length) {
+    throw new Error('Connected, but found no flower command characteristics.');
+  }
+  return cmdChars.length;
+}
+
+export async function disconnect() {
+  try {
+    if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
+  } finally {
+    cmdChars = [];
+  }
+}
+
+// Write a single packet, preferring writeValueWithoutResponse for snappier control
+// and falling back to writeValue where that isn't available.
+async function writePacket(char, packet) {
+  if (char.writeValueWithoutResponse) {
+    try {
+      await char.writeValueWithoutResponse(packet);
+      return;
+    } catch {
+      // fall through to with-response write
+    }
+  }
+  await char.writeValue(packet);
+}
+
+// Send one command object to every flower. e.g. sendCommand({ co: '#FF0000' }).
+export async function sendCommand(command) {
+  if (!isConnected()) throw new Error('Not connected to the flowers.');
+  const packets = splitIntoPackets(JSON.stringify(command));
+  for (const char of cmdChars) {
+    for (const packet of packets) {
+      // eslint-disable-next-line no-await-in-loop
+      await writePacket(char, packet);
+    }
+  }
+}
+
+// Convenience: start a coloured wave across the bouquet.
+//   color: '#RRGGBB', speed: 1-100 (firmware update rate), brightness: 0-100.
+export async function startWave(color, { speed = 20, brightness = 100 } = {}) {
+  await sendCommand({ co: color });
+  await sendCommand({ br: String(brightness) });
+  await sendCommand({ sp: String(speed) });
+  await sendCommand({ mo: ['wave'] });
+}
+
+// Stop motion and clear the flowers.
+export async function stop() {
+  await sendCommand({ mo: [] });
+  await sendCommand({ co: '#000000' });
+}
