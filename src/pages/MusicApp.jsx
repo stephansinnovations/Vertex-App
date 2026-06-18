@@ -12,6 +12,7 @@ import {
   setBrightness as setFlowerBrightness,
   sendCommand,
   sendReactive,
+  onStatus,
 } from '@/api/flowerBle';
 import { AudioReactor, hsvToHex } from '@/api/audioReactive';
 
@@ -25,6 +26,7 @@ export default function MusicApp() {
   const [brightness, setBrightness] = useState(100);
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
   const [waving, setWaving] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,6 +40,7 @@ export default function MusicApp() {
   const peakRef = useRef(0);
   const hueRef = useRef(270);
   const lastMeterRef = useRef(0);
+  const wakeLockRef = useRef(null);
   // Keep the latest color/autoColor in refs so the audio callback isn't stale.
   const colorRef = useRef(color);
   const autoColorRef = useRef(autoColor);
@@ -172,6 +175,51 @@ export default function MusicApp() {
       setSyncing(false);
     }
   }, [syncing, connected, audioSource, handleAudioFrame]);
+
+  // Reflect BLE status (including auto-reconnect after Chrome drops the link when
+  // the tab is backgrounded).
+  useEffect(() => {
+    const off = onStatus((s) => {
+      if (s === 'connected') { setConnected(true); setReconnecting(false); }
+      else if (s === 'reconnecting') { setReconnecting(true); }
+      else if (s === 'disconnected' || s === 'failed') {
+        setConnected(false);
+        setReconnecting(false);
+        if (s === 'failed') {
+          setError('Lost the flowers and couldn’t reconnect. Tap Connect again.');
+          reactorRef.current?.stop();
+          reactorRef.current = null;
+          setSyncing(false);
+          setLevel(0);
+        }
+      }
+    });
+    return off;
+  }, []);
+
+  // Hold a screen wake lock while syncing so the OS/browser is less likely to
+  // throttle or freeze us mid-show. (Auto-releases when the tab is hidden, so we
+  // re-acquire on visibility change.)
+  useEffect(() => {
+    if (!syncing) return undefined;
+    let released = false;
+    const acquire = async () => {
+      try {
+        if (navigator.wakeLock && document.visibilityState === 'visible') {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+        }
+      } catch { /* not critical */ }
+    };
+    const onVis = () => { if (document.visibilityState === 'visible' && !released) acquire(); };
+    acquire();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      released = true;
+      document.removeEventListener('visibilitychange', onVis);
+      try { wakeLockRef.current?.release(); } catch { /* ignore */ }
+      wakeLockRef.current = null;
+    };
+  }, [syncing]);
 
   useEffect(() => () => { reactorRef.current?.stop(); disconnect(); }, []);
 
@@ -347,13 +395,22 @@ export default function MusicApp() {
           {syncing && audioSource === 'mic' && (
             <p className="text-[11px] text-white/35 text-center max-w-xs">Turn your music up so the mic can hear it.</p>
           )}
-          {syncing && audioSource === 'tab' && (
-            <p className="text-[11px] text-white/35 text-center max-w-xs">Sharing a tab&apos;s audio — keep that tab playing.</p>
+          {audioSource === 'tab' && (
+            <p className="text-[11px] text-amber-300/60 text-center max-w-xs leading-relaxed">
+              Tab mode: Chrome may pause Bluetooth when this tab is hidden. Keep the Music App
+              <b className="text-amber-200/80"> visible in its own window</b> (drag this tab out, side-by-side with your music), or just use
+              <b className="text-amber-200/80"> Microphone</b> — it needs no tab switching.
+            </p>
           )}
         </div>
 
         {/* Status / connection control */}
         <div className="flex flex-col items-center gap-2 min-h-[44px]">
+          {reconnecting && (
+            <span className="flex items-center gap-2 text-xs text-amber-300/70">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" /> Reconnecting to flowers…
+            </span>
+          )}
           {connected && (
             <button
               onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); await disconnect(); setConnected(false); setWaving(false); }}

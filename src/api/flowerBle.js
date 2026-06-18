@@ -21,9 +21,56 @@ const MAX_PACKET_BYTES = 20;
 
 let device = null;
 let cmdChars = [];
+let autoReconnect = false;
+let statusListeners = [];
 
 export function isBluetoothSupported() {
   return typeof navigator !== 'undefined' && !!navigator.bluetooth;
+}
+
+// Subscribe to connection status: 'connected' | 'reconnecting' | 'disconnected' |
+// 'failed'. Returns an unsubscribe function.
+export function onStatus(cb) {
+  statusListeners.push(cb);
+  return () => { statusListeners = statusListeners.filter((x) => x !== cb); };
+}
+function emitStatus(s) {
+  statusListeners.forEach((cb) => { try { cb(s); } catch { /* ignore */ } });
+}
+
+// Discover and cache the flower command characteristics from a connected server.
+async function discoverChars(server) {
+  const service = await server.getPrimaryService(SERVICE_UUID);
+  const chars = await service.getCharacteristics();
+  const writable = chars.filter(
+    (c) => c.properties && (c.properties.write || c.properties.writeWithoutResponse),
+  );
+  cmdChars = (writable.length
+    ? writable
+    : chars.filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX))
+  ).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  return cmdChars.length;
+}
+
+// Fired when the GATT link drops (board reset, out of range, or — most commonly —
+// Chrome freezing a backgrounded tab). If the user didn't ask to disconnect, try
+// to reconnect to the same device (no user gesture needed for a known device).
+async function handleDisconnect() {
+  cmdChars = [];
+  if (!autoReconnect || !device) { emitStatus('disconnected'); return; }
+  for (let attempt = 1; attempt <= 6 && autoReconnect; attempt++) {
+    emitStatus('reconnecting');
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const server = await device.gatt.connect();
+      // eslint-disable-next-line no-await-in-loop
+      await discoverChars(server);
+      if (cmdChars.length) { emitStatus('connected'); return; }
+    } catch { /* retry */ }
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 500 * attempt));
+  }
+  if (autoReconnect) emitStatus('failed');
 }
 
 export function isConnected() {
@@ -54,41 +101,31 @@ export async function connectFlowers() {
     optionalServices: [SERVICE_UUID],
   });
 
-  device.addEventListener('gattserverdisconnected', () => {
-    cmdChars = [];
-  });
+  // Only attach the disconnect handler once per device object.
+  device.removeEventListener('gattserverdisconnected', handleDisconnect);
+  device.addEventListener('gattserverdisconnected', handleDisconnect);
+  autoReconnect = true;
 
   const server = await device.gatt.connect();
-  const service = await server.getPrimaryService(SERVICE_UUID);
-  const chars = await service.getCharacteristics();
-
-  // Prefer any writable characteristic (the per-flower command chars are the only
-  // writable ones — state chars are read/notify). Fall back to the UUID prefix if
-  // the properties aren't exposed for some reason.
-  const writable = chars.filter(
-    (c) => c.properties && (c.properties.write || c.properties.writeWithoutResponse),
-  );
-  cmdChars = (writable.length
-    ? writable
-    : chars.filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX))
-  ).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  await discoverChars(server);
 
   // eslint-disable-next-line no-console
-  console.log('[flowerBle] connected to', device.name,
-    '| all chars:', chars.map((c) => c.uuid),
-    '| using cmd chars:', cmdChars.map((c) => c.uuid));
+  console.log('[flowerBle] connected to', device.name, '| using cmd chars:', cmdChars.map((c) => c.uuid));
 
   if (!cmdChars.length) {
     throw new Error('Connected, but found no writable flower characteristics.');
   }
+  emitStatus('connected');
   return cmdChars.length;
 }
 
 export async function disconnect() {
+  autoReconnect = false; // user asked to disconnect — don't fight it
   try {
     if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
   } finally {
     cmdChars = [];
+    emitStatus('disconnected');
   }
 }
 
