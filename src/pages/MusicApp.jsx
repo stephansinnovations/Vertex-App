@@ -8,6 +8,8 @@ import {
   disconnect,
   startWave,
   stop as stopFlowers,
+  setSolid,
+  setBrightness as setFlowerBrightness,
 } from '@/api/flowerBle';
 
 // A small palette of quick colors plus a full picker. Whatever is chosen is the
@@ -17,6 +19,7 @@ const SWATCHES = ['#8b5cf6', '#ff0040', '#ff7a00', '#ffd400', '#00e676', '#00b8f
 export default function MusicApp() {
   const navigate = useNavigate();
   const [color, setColor] = useState('#8b5cf6');
+  const [brightness, setBrightness] = useState(100);
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
   const [waving, setWaving] = useState(false);
@@ -31,7 +34,9 @@ export default function MusicApp() {
     try {
       const count = await connectFlowers();
       setConnected(true);
-      // Surface how many flowers answered.
+      // Instant feedback: light the flowers solid in the chosen color so it's
+      // obvious the connection works (and confirms commands are landing).
+      try { await setSolid(color, brightness); } catch { /* surfaced on Wave */ }
       setError(count ? '' : 'Connected, but no flowers responded.');
     } catch (e) {
       // The user dismissing the chooser shows as "cancelled" — keep that quiet.
@@ -50,7 +55,7 @@ export default function MusicApp() {
     setBusy(true);
     try {
       if (!waving) {
-        await startWave(color, { speed: 20, brightness: 100 });
+        await startWave(color, { speed: 20, brightness });
         setWaving(true);
       } else {
         await stopFlowers();
@@ -71,13 +76,22 @@ export default function MusicApp() {
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        await startWave(color, { speed: 20, brightness: 100 });
+        await startWave(color, { speed: 20, brightness });
       } catch {
         if (!cancelled) setWaving(false);
       }
     }, 40);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [color, waving]);
+  }, [color, waving, brightness]);
+
+  // Push brightness live whenever it changes while connected (debounced). When a
+  // wave is running the color effect above already includes brightness, so only
+  // send the standalone brightness command when steady.
+  useEffect(() => {
+    if (!connected || waving) return;
+    const t = setTimeout(() => { setFlowerBrightness(brightness).catch(() => {}); }, 60);
+    return () => clearTimeout(t);
+  }, [brightness, connected, waving]);
 
   useEffect(() => () => { disconnect(); }, []);
 
@@ -171,6 +185,27 @@ export default function MusicApp() {
               />
             </label>
           </div>
+        </div>
+
+        {/* Brightness dial */}
+        <div className="w-full max-w-sm flex flex-col items-center gap-3">
+          <div className="flex items-center justify-between w-full px-1">
+            <span className="text-xs uppercase tracking-widest text-white/40">Brightness</span>
+            <span className="text-xs tabular-nums text-white/60">{brightness}%</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={brightness}
+            onChange={(e) => setBrightness(Number(e.target.value))}
+            aria-label="Brightness"
+            className="w-full h-2 rounded-full appearance-none cursor-pointer"
+            style={{
+              accentColor: color,
+              background: `linear-gradient(to right, ${color} ${brightness}%, rgba(255,255,255,0.12) ${brightness}%)`,
+            }}
+          />
         </div>
 
         {/* Status / connection control */}

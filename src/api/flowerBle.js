@@ -62,12 +62,24 @@ export async function connectFlowers() {
   const service = await server.getPrimaryService(SERVICE_UUID);
   const chars = await service.getCharacteristics();
 
-  cmdChars = chars
-    .filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX))
-    .sort((a, b) => a.uuid.localeCompare(b.uuid));
+  // Prefer any writable characteristic (the per-flower command chars are the only
+  // writable ones — state chars are read/notify). Fall back to the UUID prefix if
+  // the properties aren't exposed for some reason.
+  const writable = chars.filter(
+    (c) => c.properties && (c.properties.write || c.properties.writeWithoutResponse),
+  );
+  cmdChars = (writable.length
+    ? writable
+    : chars.filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX))
+  ).sort((a, b) => a.uuid.localeCompare(b.uuid));
+
+  // eslint-disable-next-line no-console
+  console.log('[flowerBle] connected to', device.name,
+    '| all chars:', chars.map((c) => c.uuid),
+    '| using cmd chars:', cmdChars.map((c) => c.uuid));
 
   if (!cmdChars.length) {
-    throw new Error('Connected, but found no flower command characteristics.');
+    throw new Error('Connected, but found no writable flower characteristics.');
   }
   return cmdChars.length;
 }
@@ -80,30 +92,47 @@ export async function disconnect() {
   }
 }
 
-// Write a single packet, preferring writeValueWithoutResponse for snappier control
-// and falling back to writeValue where that isn't available.
+// Write a single packet. The firmware command characteristic is write-WITH-response
+// (aioble write=True), so prefer writeValue; only use the no-response variant when
+// that's the only property the characteristic advertises.
 async function writePacket(char, packet) {
-  if (char.writeValueWithoutResponse) {
-    try {
-      await char.writeValueWithoutResponse(packet);
-      return;
-    } catch {
-      // fall through to with-response write
-    }
+  const p = char.properties || {};
+  if (p.write) {
+    await char.writeValue(packet);
+  } else if (p.writeWithoutResponse) {
+    await char.writeValueWithoutResponse(packet);
+  } else if (char.writeValue) {
+    await char.writeValue(packet);
+  } else {
+    await char.writeValueWithoutResponse(packet);
   }
-  await char.writeValue(packet);
 }
 
 // Send one command object to every flower. e.g. sendCommand({ co: '#FF0000' }).
 export async function sendCommand(command) {
   if (!isConnected()) throw new Error('Not connected to the flowers.');
   const packets = splitIntoPackets(JSON.stringify(command));
+  // eslint-disable-next-line no-console
+  console.log('[flowerBle] send', JSON.stringify(command), '→', cmdChars.length, 'flowers,', packets.length, 'packet(s)');
   for (const char of cmdChars) {
     for (const packet of packets) {
       // eslint-disable-next-line no-await-in-loop
       await writePacket(char, packet);
     }
   }
+}
+
+// Light the flowers a solid color (no motion). Used for instant feedback on connect
+// and when the user just wants steady color.
+export async function setSolid(color, brightness = 100) {
+  await sendCommand({ br: String(brightness) });
+  await sendCommand({ mo: [] });
+  await sendCommand({ co: color });
+}
+
+// Push just brightness (0-100) live.
+export async function setBrightness(brightness) {
+  await sendCommand({ br: String(brightness) });
 }
 
 // Convenience: start a coloured wave across the bouquet.
