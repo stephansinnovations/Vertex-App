@@ -44,7 +44,6 @@ import PhaseDetail from './pages/PhaseDetail.jsx';
 import AIRoom from './pages/AIRoom.jsx';
 import RoomsView from './pages/RoomsView.jsx';
 import MusicApp from './pages/MusicApp.jsx';
-import FlowerSetup from './pages/FlowerSetup.jsx';
 import Modulation from './pages/Modulation.jsx';
 import Settings from './pages/Settings.jsx';
 import Bugs from './pages/Bugs.jsx';
@@ -130,7 +129,6 @@ const AuthenticatedApp = () => {
       <Route path="/AIRoom" element={<AdminRoute><AIRoom /></AdminRoute>} />
       <Route path="/Rooms" element={<AdminRoute><RoomsView /></AdminRoute>} />
       <Route path="/MusicApp" element={<AdminRoute><MusicApp /></AdminRoute>} />
-      <Route path="/FlowerSetup" element={<AdminRoute><FlowerSetup /></AdminRoute>} />
       <Route path="/Modulation" element={<AdminRoute><Modulation /></AdminRoute>} />
       <Route path="/Settings" element={<AdminRoute><Settings /></AdminRoute>} />
       <Route path="/Bugs" element={<AdminRoute><Bugs /></AdminRoute>} />
