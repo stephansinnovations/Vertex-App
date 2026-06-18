@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Settings2, Play, Square } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Settings2, Play, Square, RefreshCw } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -11,6 +11,7 @@ import {
   setBrightness as setFlowerBrightness,
   sendCommand,
   sendReactive,
+  refreshFlowers,
   onStatus,
 } from '@/api/flowerBle';
 import { AudioReactor, hsvToHex } from '@/api/audioReactive';
@@ -59,6 +60,7 @@ export default function MusicApp() {
   const [running, setRunning] = useState(modEngine.running);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // --- Music-sync state ---
   const [syncing, setSyncing] = useState(false);
@@ -99,6 +101,21 @@ export default function MusicApp() {
     if (modEngine.running) { modEngine.stop(); setRunning(false); }
     else { modEngine.start(); setRunning(true); }
   };
+
+  // Re-initialize all strips to recover a stuck/dark flower without USB.
+  const handleRefresh = useCallback(async () => {
+    setError('');
+    setRefreshing(true);
+    try {
+      await refreshFlowers();
+      // Re-poke the current color/brightness so a recovered strip shows it again.
+      try { await sendCommand({ co: color, br: String(brightness) }); } catch { /* ignore */ }
+    } catch (e) {
+      setError(e?.message || 'Refresh failed.');
+    } finally {
+      setRefreshing(false);
+    }
+  }, [color, brightness]);
 
   const handleWave = useCallback(async () => {
     if (busy) return;
@@ -277,6 +294,11 @@ export default function MusicApp() {
               {connected && (
                 <button onClick={handleWave} disabled={busy} className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-sm transition disabled:opacity-50 ${waving ? 'bg-white/20 text-white' : 'bg-white/10 text-white/80 hover:bg-white/15'}`}>
                   {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : null} {waving ? 'Stop wave' : 'Wave'}
+                </button>
+              )}
+              {connected && (
+                <button onClick={handleRefresh} disabled={refreshing} title="Re-initialize the strips to recover a stuck flower" className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm bg-white/10 text-white/80 hover:bg-white/15 transition disabled:opacity-50">
+                  <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
                 </button>
               )}
             </div>

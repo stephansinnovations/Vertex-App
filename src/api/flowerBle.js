@@ -210,6 +210,14 @@ export function sendReactivePerFlower(cmds) {
   return true;
 }
 
+// Re-initialize every strip (firmware re-creates its NeoPixel driver and pushes a
+// fresh frame), recovering a flower stuck in a dark/glitched state — the BLE
+// equivalent of the USB diagnostic. Colors are preserved by the firmware.
+export async function refreshFlowers() {
+  if (!isConnected()) throw new Error('Not connected to the flowers.');
+  await writeCommand({ ri: '1' });
+}
+
 // Light the flowers a solid color (no motion). Used for instant feedback on connect
 // and when the user just wants steady color.
 export async function setSolid(color, brightness = 100) {
