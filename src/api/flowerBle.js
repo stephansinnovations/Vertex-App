@@ -108,18 +108,37 @@ async function writePacket(char, packet) {
   }
 }
 
-// Send one command object to every flower. e.g. sendCommand({ co: '#FF0000' }).
-export async function sendCommand(command) {
-  if (!isConnected()) throw new Error('Not connected to the flowers.');
+// Low-level: write a command object to every flower characteristic.
+async function writeCommand(command) {
   const packets = splitIntoPackets(JSON.stringify(command));
-  // eslint-disable-next-line no-console
-  console.log('[flowerBle] send', JSON.stringify(command), '→', cmdChars.length, 'flowers,', packets.length, 'packet(s)');
   for (const char of cmdChars) {
     for (const packet of packets) {
       // eslint-disable-next-line no-await-in-loop
       await writePacket(char, packet);
     }
   }
+}
+
+// Send one command object to every flower. e.g. sendCommand({ co: '#FF0000' }).
+export async function sendCommand(command) {
+  if (!isConnected()) throw new Error('Not connected to the flowers.');
+  // eslint-disable-next-line no-console
+  console.log('[flowerBle] send', JSON.stringify(command), '→', cmdChars.length, 'flowers');
+  await writeCommand(command);
+}
+
+// Fire-and-forget command for the audio loop. If a write is already in flight (BLE
+// is slower than the animation frame rate), the frame is dropped rather than queued,
+// so we always send the freshest value and never lag behind the music. Returns true
+// if the write was started, false if dropped.
+let _reactiveBusy = false;
+export function sendReactive(command) {
+  if (_reactiveBusy || !isConnected()) return false;
+  _reactiveBusy = true;
+  writeCommand(command)
+    .catch(() => {})
+    .finally(() => { _reactiveBusy = false; });
+  return true;
 }
 
 // Light the flowers a solid color (no motion). Used for instant feedback on connect

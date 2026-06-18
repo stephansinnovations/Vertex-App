@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2 } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music } from 'lucide-react';
 import { motion } from 'framer-motion';
 import {
   isBluetoothSupported,
@@ -10,7 +10,10 @@ import {
   stop as stopFlowers,
   setSolid,
   setBrightness as setFlowerBrightness,
+  sendCommand,
+  sendReactive,
 } from '@/api/flowerBle';
+import { AudioReactor, hsvToHex } from '@/api/audioReactive';
 
 // A small palette of quick colors plus a full picker. Whatever is chosen is the
 // color of the wave sent to the flowers.
@@ -25,6 +28,21 @@ export default function MusicApp() {
   const [waving, setWaving] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // --- Music-sync state ---
+  const [syncing, setSyncing] = useState(false);
+  const [audioSource, setAudioSource] = useState('mic'); // 'mic' | 'tab'
+  const [autoColor, setAutoColor] = useState(true);
+  const [level, setLevel] = useState(0); // smoothed meter value 0..1
+  const reactorRef = useRef(null);
+  const peakRef = useRef(0);
+  const hueRef = useRef(270);
+  const lastMeterRef = useRef(0);
+  // Keep the latest color/autoColor in refs so the audio callback isn't stale.
+  const colorRef = useRef(color);
+  const autoColorRef = useRef(autoColor);
+  useEffect(() => { colorRef.current = color; }, [color]);
+  useEffect(() => { autoColorRef.current = autoColor; }, [autoColor]);
 
   const supported = isBluetoothSupported();
 
@@ -93,7 +111,69 @@ export default function MusicApp() {
     return () => clearTimeout(t);
   }, [brightness, connected, waving]);
 
-  useEffect(() => () => { disconnect(); }, []);
+  // Map each audio frame onto a flower command. Brightness follows an envelope of
+  // the music's energy (fast attack, slow release) and snaps to 100 on beats; the
+  // colour either stays the chosen swatch or drifts through the spectrum.
+  const handleAudioFrame = useCallback(({ level: lvl, beat }) => {
+    const peak = Math.max(lvl, peakRef.current * 0.9);
+    peakRef.current = peak;
+    let bri = Math.round(Math.min(1, 0.18 + peak * 2.4) * 100);
+    if (beat) bri = 100;
+    bri = Math.max(6, Math.min(100, bri));
+
+    const cmd = { br: String(bri) };
+    if (autoColorRef.current) {
+      hueRef.current = (hueRef.current + 0.6 + peak * 6 + (beat ? 35 : 0)) % 360;
+      cmd.co = hsvToHex(hueRef.current, 1, 1);
+    } else {
+      cmd.co = colorRef.current;
+    }
+    sendReactive(cmd);
+
+    // Update the on-screen meter at ~15fps so we don't re-render every frame.
+    const now = performance.now();
+    if (now - lastMeterRef.current > 66) {
+      lastMeterRef.current = now;
+      setLevel(peak);
+    }
+  }, []);
+
+  const handleSyncToggle = useCallback(async () => {
+    setError('');
+    if (syncing) {
+      reactorRef.current?.stop();
+      reactorRef.current = null;
+      setSyncing(false);
+      setLevel(0);
+      try { await stopFlowers(); } catch { /* ignore */ }
+      return;
+    }
+    if (!connected) { setError('Connect to your flowers first.'); return; }
+    try {
+      const reactor = new AudioReactor();
+      reactor.onFrame = handleAudioFrame;
+      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; };
+      await reactor.start(audioSource);
+      reactorRef.current = reactor;
+      setSyncing(true);
+      setWaving(false);
+      peakRef.current = 0;
+      // Base look: a continuous wave that the live brightness/colour ride on.
+      try {
+        await sendCommand({ mo: ['wave'] });
+        await sendCommand({ sp: '30' });
+      } catch { /* surfaced via reactive sends */ }
+    } catch (e) {
+      reactorRef.current?.stop();
+      reactorRef.current = null;
+      setError(/denied|NotAllowed/i.test(e?.message || '')
+        ? 'Audio permission denied — allow microphone/tab audio and try again.'
+        : (e?.message || 'Could not start audio.'));
+      setSyncing(false);
+    }
+  }, [syncing, connected, audioSource, handleAudioFrame]);
+
+  useEffect(() => () => { reactorRef.current?.stop(); disconnect(); }, []);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#0a0a12] via-[#0d0a1a] to-black text-white flex flex-col">
@@ -208,11 +288,75 @@ export default function MusicApp() {
           />
         </div>
 
+        {/* Music sync */}
+        <div className="w-full max-w-sm flex flex-col items-center gap-4 pt-2 border-t border-white/5">
+          <span className="text-xs uppercase tracking-widest text-white/40">Sync to music</span>
+
+          {/* Audio source selector */}
+          <div className="flex items-center gap-2 p-1 rounded-full bg-white/5">
+            {[
+              { id: 'mic', label: 'Microphone', Icon: Mic },
+              { id: 'tab', label: 'Browser tab', Icon: MonitorSpeaker },
+            ].map(({ id, label, Icon }) => (
+              <button
+                key={id}
+                onClick={() => !syncing && setAudioSource(id)}
+                disabled={syncing}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs transition disabled:opacity-50 ${
+                  audioSource === id ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" /> {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Sync button */}
+          <button
+            onClick={handleSyncToggle}
+            disabled={!connected}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-full text-sm font-semibold transition disabled:opacity-40 ${
+              syncing ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'
+            }`}
+          >
+            <Music className="w-4 h-4" /> {syncing ? 'Stop sync' : 'Sync to music'}
+          </button>
+
+          {/* Live level meter */}
+          <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-[width] duration-75"
+              style={{
+                width: `${Math.min(100, Math.round(level * 140))}%`,
+                background: autoColor ? `hsl(${hueRef.current}, 90%, 60%)` : color,
+              }}
+            />
+          </div>
+
+          {/* Auto-color toggle */}
+          <label className="flex items-center gap-2 text-xs text-white/50 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={autoColor}
+              onChange={(e) => setAutoColor(e.target.checked)}
+              className="accent-current"
+              style={{ accentColor: color }}
+            />
+            Auto-cycle color with the music
+          </label>
+          {syncing && audioSource === 'mic' && (
+            <p className="text-[11px] text-white/35 text-center max-w-xs">Turn your music up so the mic can hear it.</p>
+          )}
+          {syncing && audioSource === 'tab' && (
+            <p className="text-[11px] text-white/35 text-center max-w-xs">Sharing a tab&apos;s audio — keep that tab playing.</p>
+          )}
+        </div>
+
         {/* Status / connection control */}
         <div className="flex flex-col items-center gap-2 min-h-[44px]">
           {connected && (
             <button
-              onClick={async () => { await disconnect(); setConnected(false); setWaving(false); }}
+              onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); await disconnect(); setConnected(false); setWaving(false); }}
               className="flex items-center gap-2 text-xs text-white/45 hover:text-white/70 transition"
             >
               <Bluetooth className="w-3.5 h-3.5" /> Disconnect
