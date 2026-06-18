@@ -195,8 +195,8 @@ export default function Modulation() {
               <span className="text-sm font-medium text-white/85 flex-1">{label}</span>
               <span className="text-[10px] uppercase tracking-wide text-white/35">Source</span>
               <Select
-                value={modEngine.params[key].source}
-                onChange={(v) => { modEngine.params[key].source = v; bump(); }}
+                value={modEngine.getTarget('all')[key].source}
+                onChange={(v) => { modEngine.getTarget('all')[key].source = v; modEngine.applyOnce(); bump(); }}
                 options={[...macroOptions, ...lfoOptions]}
               />
             </div>

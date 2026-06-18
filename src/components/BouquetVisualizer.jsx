@@ -9,7 +9,7 @@ const hueFor = (i) => `hsl(${HUES[i % HUES.length]}, 85%, 62%)`;
 
 // One flower rendered as its LED layout. When connected it shows the REAL live
 // output. Clickable to edit.
-function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave, size, onClick }) {
+function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave, size, selected, onSelect, onEdit }) {
   const n = Math.max(1, flower.ledCount);
   const color = connected ? (liveColor || hueFor(gi)) : hueFor(gi);
   const briF = connected ? Math.max(0, Math.min(1, (brightness ?? 100) / 100)) : 1;
@@ -46,25 +46,25 @@ function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave
     );
   }
 
-  const dim = size === 'lg' ? 'w-36 h-36' : 'w-24 h-24';
+  const dim = size === 'lg' ? 'w-32 h-32' : 'w-24 h-24';
   return (
-    <button type="button" onClick={onClick} className="flex flex-col items-center gap-1.5 group rounded-2xl p-1 transition hover:bg-white/5" title="Edit this flower">
-      <div className="relative">
-        <svg viewBox="0 0 140 140" className={`${dim} transition-transform group-hover:scale-[1.03]`}>{dots}</svg>
-        <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
-          style={{ background: connected ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.06)', border: `1px solid ${connected ? 'rgba(16,185,129,0.6)' : 'rgba(255,255,255,0.15)'}` }}>
-          {connected ? <Zap className="w-2.5 h-2.5 text-emerald-400" fill="currentColor" /> : <ZapOff className="w-2.5 h-2.5 text-white/40" />}
-        </div>
-      </div>
-      <div className="text-center leading-tight">
-        <div className="text-[11px] font-medium text-white/85">{flower.name}</div>
-        <div className="text-[10px] text-white/40">GPIO {flower.pin} · {flower.ledCount}</div>
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onSelect?.(); }}
+      onDoubleClick={(e) => { e.stopPropagation(); onEdit?.(); }}
+      title="Click to select · double-click to edit wiring"
+      className={`relative rounded-2xl p-1 transition group ${selected ? 'ring-2 ring-white/70 bg-white/5' : 'hover:bg-white/5'}`}
+    >
+      <svg viewBox="0 0 140 140" className={`${dim} transition-transform group-hover:scale-[1.03]`}>{dots}</svg>
+      <div className="absolute top-0 right-0 w-5 h-5 rounded-full flex items-center justify-center"
+        style={{ background: connected ? 'rgba(16,185,129,0.18)' : 'rgba(255,255,255,0.06)', border: `1px solid ${connected ? 'rgba(16,185,129,0.6)' : 'rgba(255,255,255,0.15)'}` }}>
+        {connected ? <Zap className="w-2.5 h-2.5 text-emerald-400" fill="currentColor" /> : <ZapOff className="w-2.5 h-2.5 text-white/40" />}
       </div>
     </button>
   );
 }
 
-export default function BouquetVisualizer({ size = 'md', editable = true }) {
+export default function BouquetVisualizer({ size = 'md', editable = true, selected = 'all', onSelect, onLayout }) {
   const [layout, setLayout] = useState(null);
   const [live, setLive] = useState(getFlowerState());
   const [connected, setConnected] = useState(isConnected());
@@ -73,7 +73,7 @@ export default function BouquetVisualizer({ size = 'md', editable = true }) {
   const [editing, setEditing] = useState(null); // { bi, fi }
   const [draft, setDraft] = useState(null);
 
-  useEffect(() => { loadLayout().then((l) => { setLayout(l); setTestFlowerCount(totalFlowers(l)); setFlowerCount(getFlowerCount()); }); }, []);
+  useEffect(() => { loadLayout().then((l) => { setLayout(l); setTestFlowerCount(totalFlowers(l)); setFlowerCount(getFlowerCount()); onLayout?.(l); }); }, [onLayout]);
   useEffect(() => onFlowerState(setLive), []);
   useEffect(() => {
     const sync = () => { setConnected(isConnected()); setFlowerCount(getFlowerCount()); };
@@ -91,7 +91,7 @@ export default function BouquetVisualizer({ size = 'md', editable = true }) {
   let acc = 0;
   for (const b of layout.bouquets) { starts.push(acc); acc += b.flowers.length; }
 
-  const persist = (next) => { setLayout(next); saveLayout(next); setTestFlowerCount(totalFlowers(next)); setFlowerCount(getFlowerCount()); };
+  const persist = (next) => { setLayout(next); saveLayout(next); setTestFlowerCount(totalFlowers(next)); setFlowerCount(getFlowerCount()); onLayout?.(next); };
   const openEdit = (bi, fi) => { setDraft({ ...layout.bouquets[bi].flowers[fi] }); setEditing({ bi, fi }); };
   const closeEdit = () => { setEditing(null); setDraft(null); };
   const saveEdit = () => {
@@ -115,8 +115,13 @@ export default function BouquetVisualizer({ size = 'md', editable = true }) {
     <div className="w-full flex flex-wrap items-stretch justify-center gap-4">
       {layout.bouquets.map((b, bi) => {
         const bConnected = connected && starts[bi] < flowerCount;
+        const bSelected = selected === `b${bi}`;
         return (
-          <div key={bi} className="flex flex-col items-center gap-1.5 rounded-2xl p-2 border border-white/5">
+          <div
+            key={bi}
+            onClick={() => onSelect?.(`b${bi}`)}
+            className={`flex flex-col items-center gap-1.5 rounded-2xl p-2 border transition cursor-pointer ${bSelected ? 'border-white/40 bg-white/[0.03]' : 'border-white/5 hover:border-white/15'}`}
+          >
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-white/75">{b.name}</span>
               <span className="flex items-center justify-center w-5 h-5 rounded-full"
@@ -143,7 +148,9 @@ export default function BouquetVisualizer({ size = 'md', editable = true }) {
                     liveColor={pf?.color ?? live.color}
                     brightness={pf?.brightness ?? live.brightness}
                     isWave={isWave}
-                    onClick={editable ? () => openEdit(bi, fi) : undefined}
+                    selected={selected === `f${gi}`}
+                    onSelect={() => onSelect?.(`f${gi}`)}
+                    onEdit={editable ? () => openEdit(bi, fi) : undefined}
                   />
                 );
               })}

@@ -10,11 +10,14 @@
 // rate-limited, frame-dropping command to the flowers.
 
 import { setFlowerState, stateFromCommand } from './flowerState';
-import { sendReactive, sendReactivePerFlower, getFlowerCount } from './flowerBle';
+import { sendReactivePerFlower, getFlowerCount } from './flowerBle';
 import { hsvToHex } from './audioReactive';
 
 export const MODES = ['Trigger', 'Loop', 'Sync'];
 const MAX_DELAY_SEC = 4;
+
+// Output ranges for the three modulatable parameters.
+const RANGES = { brightness: [0, 100], color: [0, 360], speed: [6, 60] };
 
 // --- Curve sampling -------------------------------------------------------------
 
@@ -94,11 +97,16 @@ class ModEngine {
     this.bpm = 120;
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
-    this.params = {
-      brightness: { source: NONE, min: 0, max: 100 },
-      color: { source: NONE, min: 0, max: 360 },
-      speed: { source: NONE, min: 6, max: 60 },
+    // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.
+    // 'all' holds defaults; child targets are sparse (source '' / manual null = inherit).
+    this.targets = {
+      all: {
+        brightness: { source: NONE, manual: 100 },
+        color: { source: NONE, manual: '#8b5cf6' },
+        speed: { source: NONE, manual: 30 },
+      },
     };
+    this.flowerBouquet = []; // global flower index -> bouquet index
     this.running = false;
     this.listeners = [];
     this._raf = null;
@@ -110,13 +118,31 @@ class ModEngine {
   subscribe(cb) { this.listeners.push(cb); return () => { this.listeners = this.listeners.filter((x) => x !== cb); }; }
   emit() { this.listeners.forEach((l) => { try { l(this); } catch { /* ignore */ } }); }
 
-  _resolve(source) {
-    if (!source) return null;
-    const [kind, idxStr] = source.split(':');
-    const idx = Number(idxStr);
-    if (kind === 'lfo') return this.lfos[idx]?.value ?? null;
-    if (kind === 'macro') return this.macros[idx]?.value ?? null;
-    return null;
+  getTarget(id) {
+    if (!this.targets[id]) {
+      this.targets[id] = {
+        brightness: { source: NONE, manual: null },
+        color: { source: NONE, manual: null },
+        speed: { source: NONE, manual: null },
+      };
+    }
+    return this.targets[id];
+  }
+
+  // global flower index -> bouquet index (reported by the visualization).
+  setFlowerMap(map) { this.flowerBouquet = Array.isArray(map) ? map : []; }
+
+  // Resolve a param's effective { source, manual } for flower gi via the target
+  // hierarchy: flower override → bouquet override → 'all'.
+  _resolveParam(name, gi) {
+    const bi = this.flowerBouquet[gi] ?? 0;
+    const chain = [this.targets[`f${gi}`], this.targets[`b${bi}`], this.targets.all];
+    let source = NONE;
+    let manual = null;
+    for (const t of chain) { if (t && !source && t[name].source) source = t[name].source; }
+    for (const t of chain) { if (t && manual == null && t[name].manual != null) manual = t[name].manual; }
+    if (manual == null) manual = this.targets.all[name].manual;
+    return { source, manual };
   }
 
   start() {
@@ -133,6 +159,7 @@ class ModEngine {
     this.running = false;
     if (this._raf) cancelAnimationFrame(this._raf);
     this._raf = null;
+    this._emitOutput(true); // hold the current static (manual) state
     this.emit();
   }
 
@@ -144,33 +171,64 @@ class ModEngine {
     }
   }
 
-  // Build a flower command from an array of per-LFO values (so stereo can recompute
-  // with phase-offset LFO values per flower).
-  _commandFrom(lfoValues) {
-    const macroVals = this.macros.map((m) => {
+  _macroVals(lvals) {
+    return this.macros.map((m) => {
       let v = m.base;
-      if (m.source) {
-        const [kind, i] = m.source.split(':');
-        if (kind === 'lfo') v += (lfoValues[Number(i)] ?? 0) * m.amount;
-      }
+      if (m.source) { const [k, i] = m.source.split(':'); if (k === 'lfo') v += (lvals[Number(i)] ?? 0) * m.amount; }
       return Math.max(0, Math.min(1, v));
     });
-    const resolve = (src) => {
+  }
+
+  // Full command for one flower (gi), resolving each param from its target chain.
+  _flowerCmd(gi, lvals, mvals) {
+    const resolveSrc = (src) => {
       if (!src) return null;
-      const [kind, i] = src.split(':');
-      if (kind === 'lfo') return lfoValues[Number(i)] ?? null;
-      if (kind === 'macro') return macroVals[Number(i)] ?? null;
+      const [k, i] = src.split(':');
+      if (k === 'lfo') return lvals[Number(i)] ?? null;
+      if (k === 'macro') return mvals[Number(i)] ?? null;
       return null;
     };
     const cmd = {};
-    const b = resolve(this.params.brightness.source);
-    if (b != null) { const { min, max } = this.params.brightness; cmd.br = String(Math.round(min + (max - min) * b)); }
-    const c = resolve(this.params.color.source);
-    if (c != null) { const { min, max } = this.params.color; cmd.co = hsvToHex(min + (max - min) * c, 1, 1); }
-    const s = resolve(this.params.speed.source);
-    if (s != null) { const { min, max } = this.params.speed; cmd.sp = String(Math.round(min + (max - min) * s)); }
+    {
+      const { source, manual } = this._resolveParam('brightness', gi);
+      const v = resolveSrc(source); const [min, max] = RANGES.brightness;
+      cmd.br = String(Math.round(v != null ? min + (max - min) * v : manual));
+    }
+    {
+      const { source, manual } = this._resolveParam('color', gi);
+      const v = resolveSrc(source); const [min, max] = RANGES.color;
+      cmd.co = v != null ? hsvToHex(min + (max - min) * v, 1, 1) : manual;
+    }
+    {
+      const { source, manual } = this._resolveParam('speed', gi);
+      const v = resolveSrc(source); const [min, max] = RANGES.speed;
+      cmd.sp = String(Math.round(v != null ? min + (max - min) * v : manual));
+    }
     return cmd;
   }
+
+  // Compute every flower's output, update the live state (viz), and optionally send.
+  _emitOutput(doSend) {
+    const F = Math.max(getFlowerCount() || this.flowerBouquet.length || 3, 1);
+    const cmds = [];
+    const perFlower = [];
+    for (let gi = 0; gi < F; gi += 1) {
+      const lvals = this.lfos.map((l) => (l.stereo > 0.001
+        ? sampleCurve(l.points, (l.phase + l.stereo * (gi / F)) % 1)
+        : l.value));
+      const mvals = this._macroVals(lvals);
+      const cmd = this._flowerCmd(gi, lvals, mvals);
+      cmds.push(cmd);
+      const st = stateFromCommand(cmd);
+      perFlower.push({ color: st.color, brightness: st.brightness });
+    }
+    const first = stateFromCommand(cmds[0] || {});
+    setFlowerState({ ...first, perFlower });
+    if (doSend) sendReactivePerFlower(cmds);
+  }
+
+  // Apply the current (static) settings once — for manual changes while stopped.
+  applyOnce() { this._emitOutput(true); }
 
   _tick = () => {
     if (!this.running) return;
@@ -207,41 +265,11 @@ class ModEngine {
     }
 
     // Macros (for the live meters).
-    for (const m of this.macros) {
-      let v = m.base;
-      const s = this._resolve(m.source);
-      if (s != null) v += s * m.amount;
-      m.value = Math.max(0, Math.min(1, v));
-    }
+    const mv = this._macroVals(this.lfos.map((l) => l.value));
+    this.macros.forEach((m, i) => { m.value = mv[i]; });
 
-    const baseVals = this.lfos.map((l) => l.value);
-    const anyStereo = this.lfos.some((l) => l.stereo > 0.001);
-    const send = now - this._lastSend > 70;
-
-    if (!anyStereo) {
-      const cmd = this._commandFrom(baseVals);
-      if (Object.keys(cmd).length) {
-        setFlowerState({ ...stateFromCommand(cmd), perFlower: null });
-        if (send) { this._lastSend = now; sendReactive(cmd); }
-      }
-    } else {
-      // Per-flower: offset each LFO's phase across the bouquet for a stereo spread.
-      const F = Math.max(getFlowerCount() || 3, 1);
-      const cmds = [];
-      const perFlower = [];
-      for (let k = 0; k < F; k += 1) {
-        const vals = this.lfos.map((l) => (l.stereo > 0.001
-          ? sampleCurve(l.points, (l.phase + l.stereo * (k / F)) % 1)
-          : l.value));
-        const cmd = this._commandFrom(vals);
-        cmds.push(cmd);
-        const st = stateFromCommand(cmd);
-        perFlower.push({ color: st.color, brightness: st.brightness });
-      }
-      const first = stateFromCommand(cmds[0] || {});
-      setFlowerState({ ...first, perFlower });
-      if (send && Object.keys(cmds[0] || {}).length) { this._lastSend = now; sendReactivePerFlower(cmds); }
-    }
+    // Compute + send every flower's output (throttled to ~16fps).
+    if (now - this._lastSend > 60) { this._lastSend = now; this._emitOutput(true); }
 
     // Throttle UI notifications to ~20fps.
     this._emitCounter += 1;
