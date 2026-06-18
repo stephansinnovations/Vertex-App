@@ -77,6 +77,12 @@ export function isConnected() {
   return !!(device && device.gatt && device.gatt.connected && cmdChars.length);
 }
 
+// Number of flower command channels on the connected device (0 when disconnected).
+// Each channel maps, in order, to a flower in the app's layout.
+export function getFlowerCount() {
+  return isConnected() ? cmdChars.length : 0;
+}
+
 // Split a string into ≤maxBytes UTF-8 packets, appending the terminator to the
 // stream first (mirrors the controller app's splitIntoPackets).
 function splitIntoPackets(message, maxBytes = MAX_PACKET_BYTES) {
