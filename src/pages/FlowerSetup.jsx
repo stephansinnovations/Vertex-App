@@ -10,17 +10,21 @@ import {
   onStatus,
 } from '@/api/flowerBle';
 import { loadLayout, saveLayout, newFlower, SHAPES } from '@/api/flowerLayout';
+import { onFlowerState, getFlowerState } from '@/api/flowerState';
 
-// Distinct hue per flower so each ring is easy to tell apart in the visualization.
+// Distinct hue per flower, used only for identification when idle/offline.
 const HUES = [270, 190, 330, 45, 150, 0, 210, 300];
 const hueFor = (i) => `hsl(${HUES[i % HUES.length]}, 85%, 62%)`;
 
 // One flower rendered as its LED layout (a ring of dots for 'circle', a row for
-// 'line'). A travelling "comet" head animates the wave; a badge shows whether the
-// flower is currently connected over Bluetooth.
-function FlowerView({ flower, index, connected, head }) {
+// 'line'). When connected it shows the REAL live output: the current color at the
+// current brightness, animating the wave if one is running. A badge shows whether
+// the flower is connected over Bluetooth.
+function FlowerView({ flower, index, connected, head, liveColor, brightness, isWave }) {
   const n = Math.max(1, flower.ledCount);
-  const color = hueFor(index);
+  // Live color when connected; otherwise the per-flower identity hue.
+  const color = connected ? (liveColor || hueFor(index)) : hueFor(index);
+  const briF = connected ? Math.max(0, Math.min(1, (brightness ?? 100) / 100)) : 1;
   const cx = 70;
   const cy = 70;
   const R = 52;
@@ -42,9 +46,19 @@ function FlowerView({ flower, index, connected, head }) {
       y = cy + R * Math.sin(a);
     }
     const d = (headIdx - i + n) % n;
-    const f = d < tail ? 1 - d / tail : 0;
-    const op = connected ? 0.18 + 0.82 * f : 0.1 + 0.12 * f;
-    const r = 3.1 + 2.3 * f;
+    const comet = d < tail ? 1 - d / tail : 0;
+    let op;
+    let r;
+    if (!connected) {
+      op = 0.1 + 0.1 * comet; // dim shimmer so the shape reads while offline
+      r = 3.1 + 1.8 * comet;
+    } else if (isWave) {
+      op = Math.max(0.08, (0.12 + 0.88 * comet) * briF);
+      r = 3.1 + 2.3 * comet;
+    } else {
+      op = Math.max(0.08, briF); // solid color at current brightness
+      r = 4.2;
+    }
     dots.push(
       <circle
         key={i}
@@ -53,7 +67,7 @@ function FlowerView({ flower, index, connected, head }) {
         r={r}
         fill={color}
         opacity={op}
-        style={f > 0.45 ? { filter: `drop-shadow(0 0 5px ${color})` } : undefined}
+        style={(connected && (isWave ? comet > 0.45 : briF > 0.5)) ? { filter: `drop-shadow(0 0 5px ${color})` } : undefined}
       />,
     );
   }
@@ -94,9 +108,12 @@ export default function FlowerSetup() {
   const [connecting, setConnecting] = useState(false);
   const [saved, setSaved] = useState(false);
   const [head, setHead] = useState(0);
+  const [live, setLive] = useState(getFlowerState());
   const [error, setError] = useState('');
 
   const supported = isBluetoothSupported();
+
+  useEffect(() => onFlowerState(setLive), []);
 
   useEffect(() => { loadLayout().then(setLayout); }, []);
 
@@ -172,7 +189,16 @@ export default function FlowerSetup() {
           </div>
           <div className="flex flex-wrap items-start justify-center gap-5 py-2">
             {layout.flowers.map((f, i) => (
-              <FlowerView key={i} flower={f} index={i} head={head} connected={connected && i < flowerCount} />
+              <FlowerView
+                key={i}
+                flower={f}
+                index={i}
+                head={head}
+                connected={connected && i < flowerCount}
+                liveColor={live.color}
+                brightness={live.brightness}
+                isWave={Array.isArray(live.motion) && live.motion.includes('wave')}
+              />
             ))}
           </div>
           {!connected && (

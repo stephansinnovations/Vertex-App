@@ -14,8 +14,11 @@
 // localhost) on Chromium browsers — notably NOT iOS Safari. Calls must originate
 // from a user gesture (button click) the first time, or requestDevice() throws.
 
+import { setFlowerState, stateFromCommand } from './flowerState';
+
 const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const CMD_CHAR_PREFIX = '6e400002-b5a3-f393-e0a9-e50e24d';
+
 const MSG_TERMINATOR = ';';
 const MAX_PACKET_BYTES = 20;
 
@@ -151,8 +154,11 @@ async function writePacket(char, packet) {
   }
 }
 
-// Low-level: write a command object to every flower characteristic.
+// Low-level: write a command object to every flower characteristic, and mirror it
+// into the shared live state so the visualization tracks what's actually playing.
 async function writeCommand(command) {
+  const patch = stateFromCommand(command);
+  if (Object.keys(patch).length) setFlowerState(patch);
   const packets = splitIntoPackets(JSON.stringify(command));
   for (const char of cmdChars) {
     for (const packet of packets) {
