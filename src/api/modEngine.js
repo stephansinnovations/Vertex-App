@@ -57,18 +57,33 @@ const clonePoints = (pts) => pts.map((p) => ({ x: p.x, y: p.y, curve: p.curve ||
 // Source ids used by macros/params: '' = none, 'lfo:<i>', 'macro:<i>'.
 export const NONE = '';
 
+// Tempo-sync divisions → length of one LFO cycle in quarter-note beats.
+export const SYNC_DIVISIONS = {
+  '4 bars': 16, '2 bars': 8, '1 bar': 4, '1/2': 2, '1/4': 1, '1/8': 0.5, '1/16': 0.25,
+};
+export const SYNC_NAMES = Object.keys(SYNC_DIVISIONS);
+
+// Effective LFO frequency (Hz): free uses its own rate; synced derives from BPM.
+export function effectiveRate(lfo, bpm) {
+  if (!lfo.sync || lfo.sync === 'free') return lfo.rate;
+  const beats = SYNC_DIVISIONS[lfo.sync] || 1;
+  return (bpm / 60) / beats;
+}
+
 class ModEngine {
   constructor() {
     this.lfos = [0, 1, 2, 3].map((i) => ({
       name: `LFO ${i + 1}`,
       points: clonePoints(PRESETS.Triangle),
       preset: 'Triangle',
-      rate: 0.5, // Hz
+      rate: 0.5, // Hz (used when sync === 'free')
+      sync: 'free', // 'free' or a SYNC_DIVISIONS key
       smooth: 0, // 0..1
       phase: 0,
       value: 0,
       _smoothed: 0,
     }));
+    this.bpm = 120;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     this.params = {
       brightness: { source: NONE, min: 0, max: 100 },
@@ -117,9 +132,9 @@ class ModEngine {
     this._last = now;
     if (dt > 0.1) dt = 0.1;
 
-    // Advance + sample LFOs.
+    // Advance + sample LFOs (synced LFOs derive their frequency from the BPM).
     for (const lfo of this.lfos) {
-      lfo.phase = (lfo.phase + dt * lfo.rate) % 1;
+      lfo.phase = (lfo.phase + dt * effectiveRate(lfo, this.bpm)) % 1;
       const raw = sampleCurve(lfo.points, lfo.phase);
       if (lfo.smooth > 0) {
         const coeff = Math.exp(-dt / (0.015 + lfo.smooth * 0.6));

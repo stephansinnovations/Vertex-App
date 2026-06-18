@@ -1,9 +1,10 @@
-import React, { useReducer, useEffect, useState, useCallback } from 'react';
+import React, { useReducer, useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Play, Square, Bluetooth, Loader2 } from 'lucide-react';
-import { modEngine, PRESETS, PRESET_NAMES } from '@/api/modEngine';
+import { ArrowLeft, Play, Square, Bluetooth, Loader2, Mic, MonitorSpeaker } from 'lucide-react';
+import { modEngine, PRESETS, PRESET_NAMES, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
 import { onFlowerState, getFlowerState } from '@/api/flowerState';
 import { isConnected, connectFlowers, onStatus, isBluetoothSupported } from '@/api/flowerBle';
+import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import LfoEditor from '@/components/LfoEditor';
 
 const clonePoints = (pts) => pts.map((p) => ({ x: p.x, y: p.y, curve: p.curve || 0 }));
@@ -49,6 +50,10 @@ export default function Modulation() {
   const [connected, setConnected] = useState(isConnected());
   const [connecting, setConnecting] = useState(false);
   const [live, setLive] = useState(getFlowerState());
+  const [detecting, setDetecting] = useState(false);
+  const [detectSource, setDetectSource] = useState('mic');
+  const [detectErr, setDetectErr] = useState('');
+  const reactorRef = useRef(null);
 
   // Re-render on engine ticks (live playhead + macro/param meters) and flower state.
   useEffect(() => modEngine.subscribe(bump), []);
@@ -71,6 +76,29 @@ export default function Modulation() {
     setConnecting(true);
     try { await connectFlowers(); setConnected(true); } catch { /* ignore */ } finally { setConnecting(false); }
   }, []);
+
+  const toggleDetect = useCallback(async () => {
+    setDetectErr('');
+    if (detecting) {
+      reactorRef.current?.stop();
+      reactorRef.current = null;
+      setDetecting(false);
+      return;
+    }
+    try {
+      const tracker = new BpmTracker();
+      const reactor = new AudioReactor();
+      reactor.onFrame = ({ beat }) => { if (beat) { modEngine.bpm = tracker.push(performance.now()); bump(); } };
+      reactor.onEnded = () => { setDetecting(false); reactorRef.current = null; };
+      await reactor.start(detectSource);
+      reactorRef.current = reactor;
+      setDetecting(true);
+    } catch (e) {
+      setDetectErr(/denied|NotAllowed/i.test(e?.message || '') ? 'Audio permission denied.' : (e?.message || 'Could not listen.'));
+    }
+  }, [detecting, detectSource]);
+
+  useEffect(() => () => { reactorRef.current?.stop(); }, []);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#0a0a12] via-[#0d0a1a] to-black text-white flex flex-col">
@@ -106,8 +134,26 @@ export default function Modulation() {
               <span className="text-[10px] text-white/30">drag points · double-click to add/remove · drag ◇ to bend</span>
             </div>
             <LfoEditor points={lfo.points} onChange={setPoints} playhead={running ? lfo.phase : null} />
-            <div className="flex gap-4">
-              <Slider label="Rate" value={Number(lfo.rate.toFixed(2))} min={0.05} max={5} step={0.05} onChange={(v) => setLfo({ rate: v })} suffix=" Hz" />
+            <div className="flex items-end gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[10px] uppercase tracking-wide text-white/40">Sync</span>
+                <select
+                  value={lfo.sync}
+                  onChange={(e) => setLfo({ sync: e.target.value })}
+                  className="bg-black/40 rounded-lg px-2 py-1.5 text-xs text-white outline-none border border-white/10 focus:border-white/30"
+                >
+                  <option value="free" className="bg-zinc-900">Free</option>
+                  {SYNC_NAMES.map((n) => <option key={n} value={n} className="bg-zinc-900">{n}</option>)}
+                </select>
+              </label>
+              {lfo.sync === 'free' ? (
+                <Slider label="Rate" value={Number(lfo.rate.toFixed(2))} min={0.05} max={5} step={0.05} onChange={(v) => setLfo({ rate: v })} suffix=" Hz" />
+              ) : (
+                <div className="flex flex-col gap-1 flex-1">
+                  <span className="text-[10px] uppercase tracking-wide text-white/40">Rate</span>
+                  <span className="text-xs text-white/70 py-1.5">{effectiveRate(lfo, modEngine.bpm).toFixed(2)} Hz · {lfo.sync} @ {modEngine.bpm} BPM</span>
+                </div>
+              )}
               <Slider label="Smooth" value={Number(lfo.smooth.toFixed(2))} min={0} max={1} step={0.01} onChange={(v) => setLfo({ smooth: v })} />
             </div>
           </div>
@@ -125,6 +171,44 @@ export default function Modulation() {
           <button onClick={toggleRun} className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold transition ${running ? 'bg-white text-black' : 'bg-[#36d6c3]/90 text-black hover:bg-[#36d6c3]'}`}>
             {running ? <><Square className="w-4 h-4" fill="currentColor" /> Stop</> : <><Play className="w-4 h-4" fill="currentColor" /> Play</>}
           </button>
+        </div>
+
+        {/* Tempo */}
+        <div className="rounded-2xl bg-white/[0.04] border border-white/8 p-3 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-widest text-white/40">Tempo</span>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                value={modEngine.bpm}
+                onChange={(e) => { modEngine.bpm = Math.max(20, Math.min(300, Number(e.target.value) || 120)); bump(); }}
+                className="w-16 bg-black/40 rounded-lg px-2 py-1 text-sm text-white text-center outline-none border border-white/10 focus:border-white/30"
+              />
+              <span className="text-xs text-white/50">BPM</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-1 p-1 rounded-full bg-white/5">
+              {[{ id: 'mic', Icon: Mic }, { id: 'tab', Icon: MonitorSpeaker }].map(({ id, Icon }) => (
+                <button
+                  key={id}
+                  onClick={() => !detecting && setDetectSource(id)}
+                  disabled={detecting}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-full text-xs transition disabled:opacity-50 ${detectSource === id ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}
+                >
+                  <Icon className="w-3.5 h-3.5" /> {id === 'mic' ? 'Mic' : 'Tab'}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={toggleDetect}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition ${detecting ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+            >
+              {detecting ? `Listening… ${modEngine.bpm} BPM` : 'Detect from music'}
+            </button>
+            {detectErr && <span className="text-[11px] text-red-400/80">{detectErr}</span>}
+          </div>
+          <p className="text-[11px] text-white/35">Set an LFO&apos;s Sync to 1 bar / 1&frasl;2 / 1&frasl;4… and it locks to this tempo.</p>
         </div>
 
         {/* Macros */}

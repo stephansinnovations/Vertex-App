@@ -14,6 +14,39 @@
 //    playing inside a browser tab. We request video (required for the picker) then
 //    immediately drop the video track.
 
+// Estimate BPM from a stream of detected beat timestamps. Uses the median of recent
+// inter-beat intervals (robust to the odd missed/extra beat) and octave-folds the
+// result into a musical range so half/double-time detections settle sensibly.
+export class BpmTracker {
+  constructor() {
+    this.intervals = [];
+    this.lastBeat = 0;
+    this.bpm = 120;
+    this.confident = false;
+  }
+
+  push(tMs) {
+    if (this.lastBeat) {
+      const dt = tMs - this.lastBeat;
+      if (dt > 250 && dt < 2000) { // 30–240 BPM window
+        this.intervals.push(dt);
+        if (this.intervals.length > 16) this.intervals.shift();
+      }
+    }
+    this.lastBeat = tMs;
+    if (this.intervals.length >= 4) {
+      const sorted = [...this.intervals].sort((a, b) => a - b);
+      const med = sorted[Math.floor(sorted.length / 2)];
+      let bpm = 60000 / med;
+      while (bpm < 70) bpm *= 2;
+      while (bpm > 170) bpm /= 2;
+      this.bpm = Math.round(bpm);
+      this.confident = this.intervals.length >= 8;
+    }
+    return this.bpm;
+  }
+}
+
 export function hsvToHex(h, s, v) {
   // h in [0,360), s,v in [0,1] → '#rrggbb'
   const c = v * s;
