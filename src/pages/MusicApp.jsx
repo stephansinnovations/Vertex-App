@@ -192,6 +192,7 @@ export default function MusicApp() {
       setLevel(0);
       modEngine.detecting = false;
       modEngine.audioLevel = 0;
+      modEngine.bands = { bass: 0, drums: 0, melody: 0 };
       modEngine.emit();
       return;
     }
@@ -199,13 +200,14 @@ export default function MusicApp() {
       trackerRef.current = new BpmTracker();
       const reactor = new AudioReactor();
       let lastEmit = 0;
-      reactor.onFrame = ({ level: lvl, beat }) => {
+      reactor.onFrame = ({ level: lvl, beat, bands }) => {
         modEngine.audioLevel = lvl;
+        if (bands) modEngine.bands = bands;
         if (beat) { modEngine.bpm = trackerRef.current.push(performance.now()); modEngine.onBeat(); }
         const now = performance.now();
         if (now - lastEmit > 60) { lastEmit = now; setLevel(lvl); modEngine.emit(); }
       };
-      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; modEngine.detecting = false; modEngine.audioLevel = 0; modEngine.emit(); };
+      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; modEngine.detecting = false; modEngine.audioLevel = 0; modEngine.bands = { bass: 0, drums: 0, melody: 0 }; modEngine.emit(); };
       await reactor.start(audioSource);
       reactorRef.current = reactor;
       modEngine.detecting = true;

@@ -138,7 +138,39 @@ export class AudioReactor {
       this.lastBeat = now;
     }
 
-    if (this.onFrame) this.onFrame({ level, bass: bassNorm, beat });
+    // --- Frequency bands (proxies for stems) ---
+    // bass = low end, melody = mids (vocals/lead), drums = transients (spectral
+    // flux) plus high-band energy (hats/snare). Each is auto-gained to its recent
+    // peak so it spans 0..1 and feels responsive across tracks.
+    const sr = this.ctx ? this.ctx.sampleRate : 44100;
+    const binHz = (sr / 2) / n;
+    const bandEnergy = (loHz, hiHz) => {
+      const lo = Math.max(0, Math.floor(loHz / binHz));
+      const hi = Math.min(n - 1, Math.ceil(hiHz / binHz));
+      let s = 0;
+      let c = 0;
+      for (let i = lo; i <= hi; i += 1) { s += bins[i]; c += 1; }
+      return c ? s / (c * 255) : 0;
+    };
+    const bassRaw = bandEnergy(30, 150);
+    const midRaw = bandEnergy(300, 2500);
+    const highRaw = bandEnergy(4000, 12000);
+    let flux = 0;
+    if (this._prev) {
+      for (let i = 0; i < n; i += 1) { const d = bins[i] - this._prev[i]; if (d > 0) flux += d; }
+    }
+    this._prev = bins.slice();
+    const fluxNorm = Math.min(1, flux / (n * 40));
+    const drumsRaw = Math.min(1, fluxNorm * 1.5 + highRaw * 0.4);
+
+    if (!this._peaks) this._peaks = { bass: 0.2, drums: 0.2, melody: 0.2 };
+    const norm = (key, v) => {
+      this._peaks[key] = Math.max(v, this._peaks[key] * 0.995);
+      return Math.min(1, v / Math.max(0.08, this._peaks[key]));
+    };
+    const bands = { bass: norm('bass', bassRaw), drums: norm('drums', drumsRaw), melody: norm('melody', midRaw) };
+
+    if (this.onFrame) this.onFrame({ level, bass: bassNorm, beat, bands });
   };
 
   stop() {

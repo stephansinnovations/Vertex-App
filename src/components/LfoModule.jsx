@@ -69,6 +69,17 @@ export default function LfoModule() {
           <span className="p-1 rounded text-white/35" aria-hidden>
             <svg width="14" height="14" viewBox="0 0 14 14"><path d="M1 9 Q4 3 7 7 T13 5" stroke="currentColor" strokeWidth="1.4" fill="none" /></svg>
           </span>
+          <select
+            value={lfo.band}
+            onChange={(e) => setLfo({ band: e.target.value })}
+            title="Drive this LFO from a band of the music"
+            className={`rounded px-1.5 py-0.5 text-[11px] outline-none border ${lfo.band === 'none' ? 'bg-black/30 text-white/60 border-white/10' : 'bg-[#36d6c3]/20 text-[#36d6c3] border-[#36d6c3]/40'}`}
+          >
+            <option value="none" className="bg-zinc-900 text-white">Free</option>
+            <option value="bass" className="bg-zinc-900 text-white">Bass</option>
+            <option value="drums" className="bg-zinc-900 text-white">Drums</option>
+            <option value="melody" className="bg-zinc-900 text-white">Melody</option>
+          </select>
           <div className="flex-1 flex items-center justify-center gap-2">
             <button onClick={() => { const i = PRESET_NAMES.indexOf(lfo.preset); setPreset(PRESET_NAMES[(i - 1 + PRESET_NAMES.length) % PRESET_NAMES.length]); }} className="text-white/50 hover:text-white" aria-label="Previous shape"><ChevronLeft className="w-4 h-4" /></button>
             <span className="text-xs text-white/85 min-w-[56px] text-center truncate">{lfo.preset}</span>
@@ -77,7 +88,18 @@ export default function LfoModule() {
         </div>
 
         {/* Graph */}
-        <LfoEditor points={lfo.points} onChange={setPoints} playhead={modEngine.running ? lfo.phase : null} gridX={lfo.gridX} />
+        <div className="relative">
+          <LfoEditor points={lfo.points} onChange={setPoints} playhead={modEngine.running ? lfo.phase : null} gridX={lfo.gridX} />
+          {lfo.band !== 'none' && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none" style={{ background: 'rgba(11,13,17,0.55)' }}>
+              <span className="text-xs uppercase tracking-[0.2em] text-[#36d6c3]">Following {lfo.band}</span>
+              <div className="w-40 h-2.5 rounded-full bg-white/10 overflow-hidden">
+                <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.round((modEngine.bands[lfo.band] || 0) * 100)}%` }} />
+              </div>
+              <span className="text-[10px] text-white/40">live envelope · curve bypassed</span>
+            </div>
+          )}
+        </div>
 
         {/* Bottom control bar */}
         <div className="flex divide-x divide-black/40" style={{ background: '#1b1f26' }}>

@@ -85,6 +85,7 @@ class ModEngine {
       rate: 0.5, // Hz (used when sync === 'free')
       sync: '1/2', // 'free' or a SYNC_DIVISIONS key
       mode: 'Loop', // Trigger | Loop | Sync
+      band: 'none', // 'none' | 'bass' | 'drums' | 'melody' — follow a live band envelope
       smooth: 0, // 0..1
       delay: 0, // 0..1 → onset delay after (re)trigger
       stereo: 0, // 0..1 → phase spread across flowers
@@ -97,6 +98,7 @@ class ModEngine {
     this.bpm = 120;
     this.audioLevel = 0; // 0..1 live music level while detecting tempo
     this.detecting = false; // listening for BPM
+    this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.
@@ -215,7 +217,7 @@ class ModEngine {
     const cmds = [];
     const perFlower = [];
     for (let gi = 0; gi < F; gi += 1) {
-      const lvals = this.lfos.map((l) => (l.stereo > 0.001
+      const lvals = this.lfos.map((l) => ((l.stereo > 0.001 && (!l.band || l.band === 'none'))
         ? sampleCurve(l.points, (l.phase + l.stereo * (gi / F)) % 1)
         : l.value));
       const mvals = this._macroVals(lvals);
@@ -246,7 +248,10 @@ class ModEngine {
       const since = (now - (lfo._trigTime || now)) / 1000;
       const delaySec = (lfo.delay || 0) * MAX_DELAY_SEC;
       let raw;
-      if (since < delaySec) {
+      if (lfo.band && lfo.band !== 'none') {
+        // Follow the live band envelope (bass / drums / melody) instead of the curve.
+        raw = this.bands[lfo.band] ?? 0;
+      } else if (since < delaySec) {
         lfo.phase = 0; // hold at start during the delay
         raw = sampleCurve(lfo.points, 0);
       } else if (lfo.mode === 'Sync') {
