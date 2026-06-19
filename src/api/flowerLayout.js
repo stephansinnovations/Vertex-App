@@ -18,11 +18,21 @@ function sanFlower(f, i) {
   };
 }
 
-// A fresh bouquet = 3 flowers on the standard pins.
+// Default canvas position (0..1) for the nth bouquet, laid out in a loose grid.
+export function defaultPos(i) {
+  const col = i % 3;
+  const row = Math.floor(i / 3);
+  return { x: Math.min(0.85, 0.2 + col * 0.3), y: Math.min(0.8, 0.3 + row * 0.34) };
+}
+
+// A fresh bouquet = 3 flowers on the standard pins, placed on the canvas.
 export function newBouquet(index) {
   const n = index + 1;
+  const p = defaultPos(index);
   return {
     name: `Bouquet ${n}`,
+    x: p.x,
+    y: p.y,
     flowers: [
       { name: `Flower ${n}.1`, pin: 2, ledCount: 15, shape: 'circle' },
       { name: `Flower ${n}.2`, pin: 3, ledCount: 15, shape: 'circle' },
@@ -41,10 +51,15 @@ function sanitize(layout) {
   if (Array.isArray(layout.bouquets)) bouquets = layout.bouquets;
   else if (Array.isArray(layout.flowers)) bouquets = [{ name: 'Bouquet 1', flowers: layout.flowers }];
   else return null;
-  bouquets = bouquets.slice(0, 8).map((b, bi) => ({
-    name: String(b?.name ?? `Bouquet ${bi + 1}`).slice(0, 40),
-    flowers: (Array.isArray(b?.flowers) ? b.flowers : []).slice(0, 12).map(sanFlower),
-  })).filter((b) => b.flowers.length);
+  bouquets = bouquets.slice(0, 8).map((b, bi) => {
+    const p = defaultPos(bi);
+    return {
+      name: String(b?.name ?? `Bouquet ${bi + 1}`).slice(0, 40),
+      x: Number.isFinite(+b?.x) ? Math.max(0, Math.min(1, +b.x)) : p.x,
+      y: Number.isFinite(+b?.y) ? Math.max(0, Math.min(1, +b.y)) : p.y,
+      flowers: (Array.isArray(b?.flowers) ? b.flowers : []).slice(0, 12).map(sanFlower),
+    };
+  }).filter((b) => b.flowers.length);
   if (!bouquets.length) return null;
   return { bouquets };
 }

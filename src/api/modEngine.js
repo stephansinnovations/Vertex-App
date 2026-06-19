@@ -19,6 +19,41 @@ const MAX_DELAY_SEC = 4;
 // Output ranges for the three modulatable parameters.
 const RANGES = { brightness: [0, 100], color: [0, 360], speed: [6, 60] };
 
+export const PATTERN_TYPES = ['sweep', 'ripple', 'bounce', 'radiate', 'scatter'];
+
+// Map a spatial pattern onto a set of 0..1 canvas positions → a phase offset (in
+// cycles) per position. Direction (degrees) sets the sweep axis. Pure + exported so
+// the pattern-preview screen and the engine compute the same thing.
+export function computePatternOffsets(pattern, positions) {
+  const n = positions.length;
+  const out = new Array(n).fill(0);
+  const { type, direction = 0, amount = 0 } = pattern || {};
+  if (!amount || n === 0) return out;
+  if (type === 'scatter') {
+    for (let i = 0; i < n; i += 1) out[i] = amount * (Math.abs(Math.sin((i + 1) * 12.9898) * 43758.5453) % 1);
+    return out;
+  }
+  if (type === 'radiate') {
+    let maxD = 1e-6;
+    const ds = positions.map((p) => { const d = Math.hypot(p.x - 0.5, p.y - 0.5); if (d > maxD) maxD = d; return d; });
+    for (let i = 0; i < n; i += 1) out[i] = amount * (ds[i] / maxD);
+    return out;
+  }
+  // Projection onto the direction axis, normalized across the flowers.
+  const rad = (direction * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  let mn = Infinity;
+  let mx = -Infinity;
+  const projs = positions.map((p) => { const pr = p.x * cos + p.y * sin; if (pr < mn) mn = pr; if (pr > mx) mx = pr; return pr; });
+  const span = Math.max(1e-6, mx - mn);
+  for (let i = 0; i < n; i += 1) {
+    const t = (projs[i] - mn) / span;
+    out[i] = type === 'bounce' ? amount * (1 - Math.abs(2 * t - 1)) : amount * t;
+  }
+  return out;
+}
+
 // --- Curve sampling -------------------------------------------------------------
 
 // Bend a 0..1 segment fraction. curve in [-1,1]: 0 = linear, >0 = ease-in (slow
@@ -99,9 +134,10 @@ class ModEngine {
     this.audioLevel = 0; // 0..1 live music level while detecting tempo
     this.detecting = false; // listening for BPM
     this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
-    // Spatial flow: offsets each flower's LFO phase by position so a pattern travels
-    // across the whole bouquet (left → right) as one design. amount = cycles across.
-    this.flow = { mode: 'sweep', amount: 0 };
+    // Spatial pattern: maps a design onto the flowers by their canvas position, so a
+    // pattern flows across them in a direction. Move the flowers, the pattern stays.
+    this.pattern = { type: 'sweep', direction: 0, amount: 0 }; // direction in degrees
+    this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.
@@ -214,27 +250,19 @@ class ModEngine {
     return cmd;
   }
 
-  // Per-flower phase offset (in cycles) so a pattern flows across the bouquet.
-  _flowOffset(gi, F) {
-    const { mode, amount } = this.flow;
-    if (!amount || mode === 'off' || F <= 1) return 0;
-    const p = gi / (F - 1); // 0..1, left → right
-    switch (mode) {
-      case 'bounce': return amount * (1 - Math.abs(2 * p - 1));
-      case 'center': return amount * Math.abs(2 * p - 1);
-      case 'random': return amount * (Math.abs(Math.sin((gi + 1) * 12.9898) * 43758.5453) % 1);
-      case 'sweep':
-      default: return amount * p;
-    }
-  }
+  // global flower index -> { x, y } canvas position (reported by the visualization).
+  setFlowerPositions(positions) { this.flowerPos = Array.isArray(positions) ? positions : []; }
 
   // Compute every flower's output, update the live state (viz), and optionally send.
   _emitOutput(doSend) {
     const F = Math.max(getFlowerCount() || this.flowerBouquet.length || 3, 1);
+    const positions = [];
+    for (let gi = 0; gi < F; gi += 1) positions.push(this.flowerPos[gi] || { x: gi / Math.max(1, F - 1), y: 0.5 });
+    const patternOffsets = computePatternOffsets(this.pattern, positions);
     const cmds = [];
     const perFlower = [];
     for (let gi = 0; gi < F; gi += 1) {
-      const flowOff = this._flowOffset(gi, F);
+      const flowOff = patternOffsets[gi] || 0;
       const lvals = this.lfos.map((l) => {
         if (l.band && l.band !== 'none') return l.value;
         const off = l.stereo * (gi / F) + flowOff;

@@ -14,10 +14,12 @@ import {
   onStatus,
   setTestMode,
   isTestMode,
+  setTestFlowerCount,
 } from '@/api/flowerBle';
 import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import { modEngine } from '@/api/modEngine';
 import BouquetVisualizer from '@/components/BouquetVisualizer';
+import PatternScreen from '@/components/PatternScreen';
 import LfoModule from '@/components/LfoModule';
 import Knob from '@/components/Knob';
 
@@ -81,12 +83,20 @@ export default function MusicApp() {
   const [syncOpen, setSyncOpen] = useState(false);
 
   // When the layout loads/changes, tell the engine each flower's bouquet (for
-  // per-bouquet/per-flower parameter resolution).
+  // per-bouquet/per-flower params) and its canvas position (for the spatial pattern).
   const handleLayout = useCallback((l) => {
     setLayout(l);
     const map = [];
-    l.bouquets.forEach((b, bi) => b.flowers.forEach(() => map.push(bi)));
+    const positions = [];
+    const triOff = [{ x: 0, y: -0.045 }, { x: 0.05, y: 0.03 }, { x: -0.05, y: 0.03 }];
+    l.bouquets.forEach((b, bi) => b.flowers.forEach((f, fi) => {
+      map.push(bi);
+      const o = triOff[fi % 3];
+      positions.push({ x: Math.max(0, Math.min(1, (b.x ?? 0.5) + o.x)), y: Math.max(0, Math.min(1, (b.y ?? 0.5) + o.y)) });
+    }));
     modEngine.setFlowerMap(map);
+    modEngine.setFlowerPositions(positions);
+    setTestFlowerCount(positions.length); // so test mode lights every flower
     modEngine.applyOnce();
   }, []);
 
@@ -298,7 +308,7 @@ export default function MusicApp() {
 
         {/* Visualization + transport */}
         <div className="flex flex-col items-center gap-4">
-          <BouquetVisualizer size="lg" selected={selected} onSelect={setSelected} onLayout={handleLayout} />
+          <BouquetVisualizer selected={selected} onSelect={setSelected} onLayout={handleLayout} />
           <div className="flex items-center gap-3 flex-wrap justify-center">
             {!connected ? (
               <button onClick={handleConnect} disabled={connecting || !supported} className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-sm font-medium transition disabled:opacity-50">
@@ -335,38 +345,8 @@ export default function MusicApp() {
         {/* Bottom: macros + contextual params (left) · LFO module (right) */}
         <div className="flex flex-col lg:flex-row gap-5 items-start">
           <div className="w-full lg:w-80 flex flex-col gap-4">
-            {/* Flow across the whole bouquet */}
-            <div className="flex flex-col gap-2">
-              <span className="text-[10px] uppercase tracking-widest text-white/40">Flow across bouquet</span>
-              <div className="flex flex-wrap gap-1.5">
-                {[
-                  { label: 'Off', mode: 'off', amount: 0 },
-                  { label: 'Sweep', mode: 'sweep', amount: 1 },
-                  { label: 'Ripple', mode: 'sweep', amount: 2 },
-                  { label: 'Bounce', mode: 'bounce', amount: 1 },
-                  { label: 'Radiate', mode: 'center', amount: 1 },
-                  { label: 'Scatter', mode: 'random', amount: 1 },
-                ].map((p) => {
-                  const f = modEngine.flow;
-                  const active = p.amount === 0 ? f.amount === 0 : (f.mode === p.mode && Math.abs(f.amount - p.amount) < 0.05);
-                  return (
-                    <button key={p.label}
-                      onClick={() => { modEngine.flow.mode = p.mode; modEngine.flow.amount = p.amount; modEngine.applyOnce(); bump(); }}
-                      className={`px-2.5 py-1 rounded-full text-xs transition ${active ? 'bg-white text-black' : 'bg-white/5 text-white/60 hover:text-white'}`}>
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </div>
-              <label className="flex flex-col gap-1">
-                <span className="flex justify-between text-[10px] uppercase tracking-wide text-white/40"><span>Spread</span><span className="text-white/60">{modEngine.flow.amount.toFixed(1)}</span></span>
-                <input type="range" min="0" max="3" step="0.1" value={modEngine.flow.amount}
-                  onChange={(e) => { modEngine.flow.amount = Number(e.target.value); modEngine.applyOnce(); bump(); }}
-                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
-                  style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${(modEngine.flow.amount / 3) * 100}%, rgba(255,255,255,0.12) ${(modEngine.flow.amount / 3) * 100}%)` }} />
-              </label>
-              <span className="text-[10px] text-white/30">One pattern travels through every flower, left → right. Map a param to an LFO and Play.</span>
-            </div>
+            {/* Pattern screen — type + direction, mapped onto the flowers by position */}
+            <PatternScreen />
 
             {/* Macros */}
             <div className="flex flex-col gap-2">
