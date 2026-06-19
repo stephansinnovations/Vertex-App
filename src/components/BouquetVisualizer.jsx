@@ -30,9 +30,9 @@ function computePositions(lay, canvasEl) {
 }
 
 // One flower as a compact LED ring showing its live output. No labels.
-function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave, selected }) {
+function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave, selected, flashing }) {
   const n = Math.max(1, flower.ledCount);
-  const color = connected ? (liveColor || hueFor(gi)) : hueFor(gi);
+  const color = flashing ? '#ffffff' : (connected ? (liveColor || hueFor(gi)) : hueFor(gi));
   const briF = connected ? Math.max(0, Math.min(1, (brightness ?? 100) / 100)) : 1;
   const cx = 70;
   const cy = 70;
@@ -57,14 +57,15 @@ function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave
     const comet = d < tail ? 1 - d / tail : 0;
     let op;
     let r;
-    if (!connected) { op = 0.1 + 0.1 * comet; r = 3.1 + 1.8 * comet; }
+    if (flashing) { op = 1; r = 5.5; }
+    else if (!connected) { op = 0.1 + 0.1 * comet; r = 3.1 + 1.8 * comet; }
     else if (isWave) { op = Math.max(0.08, (0.12 + 0.88 * comet) * briF); r = 3.1 + 2.3 * comet; }
     else { op = Math.max(0.08, briF); r = 4.2; }
     dots.push(<circle key={i} cx={x} cy={y} r={r} fill={color} opacity={op}
-      style={(connected && (isWave ? comet > 0.45 : briF > 0.5)) ? { filter: `drop-shadow(0 0 5px ${color})` } : undefined} />);
+      style={(flashing || (connected && (isWave ? comet > 0.45 : briF > 0.5))) ? { filter: `drop-shadow(0 0 6px ${color})` } : undefined} />);
   }
   return (
-    <div className={`relative rounded-full ${selected ? 'ring-2 ring-white/80' : ''}`}>
+    <div className={`relative rounded-full transition-shadow ${flashing ? 'ring-4 ring-white' : (selected ? 'ring-2 ring-white/80' : '')}`}>
       <svg viewBox="0 0 140 140" className="w-12 h-12">{dots}</svg>
     </div>
   );
@@ -81,10 +82,21 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   const [head, setHead] = useState(0);
   const [editing, setEditing] = useState(null); // { bi, fi }
   const [draft, setDraft] = useState(null);
+  const [flashGi, setFlashGi] = useState(null);
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
   const layoutRef = useRef(null);
+  const flashTimer = useRef(null);
   layoutRef.current = layout;
+
+  // Briefly flash a flower white (visual click feedback / identify).
+  const flashRef = useRef(() => {});
+  flashRef.current = (gi) => {
+    setFlashGi(gi);
+    clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashGi(null), 450);
+  };
+  useEffect(() => () => clearTimeout(flashTimer.current), []);
 
   // Report the layout + each flower's canvas position to the parent (engine wiring).
   const report = useCallback((lay) => { onLayout?.(lay, computePositions(lay, canvasRef.current)); }, [onLayout]);
@@ -143,7 +155,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
       if (!d) return;
       dragRef.current = null;
       if (d.moved) { saveLayout(layoutRef.current); }
-      else if (d.fi != null) { onSelect?.(`f${startsRef.current[d.bi] + d.fi}`); }
+      else if (d.fi != null) { const gi = startsRef.current[d.bi] + d.fi; onSelect?.(`f${gi}`); flashRef.current(gi); }
       else { onSelect?.(`b${d.bi}`); }
     };
     window.addEventListener('pointermove', onMove);
@@ -215,7 +227,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
                     <FlowerView flower={f} gi={gi} head={head} isWave={isWave}
                       connected={connected && gi < flowerCount}
                       liveColor={pf?.color ?? live.color} brightness={pf?.brightness ?? live.brightness}
-                      selected={selected === `f${gi}`} />
+                      selected={selected === `f${gi}`} flashing={flashGi === gi} />
                   </div>
                 );
               })}
