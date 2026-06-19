@@ -21,6 +21,16 @@ const RANGES = { brightness: [0, 100], color: [0, 360], speed: [6, 60] };
 
 export const PATTERN_TYPES = ['sweep', 'ripple', 'bounce', 'radiate', 'scatter'];
 
+// Mix two hex colors. t=0 → a, t=1 → b.
+export function mixHex(a, b, t) {
+  const pa = parseInt((a || '#000000').slice(1), 16);
+  const pb = parseInt((b || '#000000').slice(1), 16);
+  const ar = (pa >> 16) & 255; const ag = (pa >> 8) & 255; const ab = pa & 255;
+  const br = (pb >> 16) & 255; const bg = (pb >> 8) & 255; const bb = pb & 255;
+  const to = (n) => Math.round(n).toString(16).padStart(2, '0');
+  return `#${to(ar + (br - ar) * t)}${to(ag + (bg - ag) * t)}${to(ab + (bb - ab) * t)}`;
+}
+
 // Map a spatial pattern onto a set of 0..1 canvas positions → a phase offset (in
 // cycles) per position. Direction (degrees) sets the sweep axis. Pure + exported so
 // the pattern-preview screen and the engine compute the same thing.
@@ -136,7 +146,8 @@ class ModEngine {
     this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
     // Spatial pattern: maps a design onto the flowers by their canvas position, so a
     // pattern flows across them in a direction. Move the flowers, the pattern stays.
-    this.pattern = { type: 'sweep', direction: 0, amount: 1 }; // direction in degrees
+    // direction in degrees; colorA/colorB + gradient drive the pattern's colors.
+    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false };
     this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
     this.patternDrive = false; // when on, the pattern itself drives flower brightness
     this._patternPhase = 0;
@@ -265,11 +276,14 @@ class ModEngine {
     const perFlower = [];
     if (this.patternDrive) {
       // The pattern itself drives brightness: a wave fades in/out across the flowers
-      // by their position (exactly like the pattern preview).
-      const baseColor = this.targets.all.color.manual || '#8b5cf6';
+      // by their position. With a gradient, the color blends between the two as it
+      // flows (bright = colorB, dim = colorA).
+      const A = this.pattern.colorA || '#8b5cf6';
+      const B = this.pattern.colorB || A;
+      const grad = !!(this.pattern.gradient && this.pattern.colorB);
       for (let gi = 0; gi < F; gi += 1) {
         const v = 0.5 + 0.5 * Math.sin(2 * Math.PI * (this._patternPhase - patternOffsets[gi]));
-        const cmd = { br: String(Math.round(8 + v * 92)), co: baseColor };
+        const cmd = { br: String(Math.round(8 + v * 92)), co: grad ? mixHex(A, B, v) : A };
         cmds.push(cmd);
         const st = stateFromCommand(cmd);
         perFlower.push({ color: st.color, brightness: st.brightness });

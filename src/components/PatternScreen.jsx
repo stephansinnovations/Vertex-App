@@ -1,6 +1,16 @@
 import React, { useEffect, useRef, useReducer } from 'react';
 import { Play, Square } from 'lucide-react';
-import { modEngine, PATTERN_TYPES, computePatternOffsets } from '@/api/modEngine';
+import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex } from '@/api/modEngine';
+
+// Two-color pairs that blend nicely.
+const COLOR_PAIRS = [
+  ['#8b5cf6', '#22d3ee'],
+  ['#ec4899', '#fb923c'],
+  ['#3b82f6', '#2dd4bf'],
+  ['#d946ef', '#fbbf24'],
+  ['#22c55e', '#3b82f6'],
+  ['#ef4444', '#a855f7'],
+];
 
 // Preview grid (5×3 dots in 0..1 space).
 const GRID = [];
@@ -40,6 +50,10 @@ export default function PatternScreen() {
   const setAmount = (a) => { modEngine.pattern.amount = a; modEngine.applyOnce(); bump(); };
   const togglePlay = () => { modEngine.setPatternDrive(!modEngine.patternDrive); bump(); };
   const playing = modEngine.patternDrive;
+  const setColorA = (c) => { modEngine.pattern.colorA = c; modEngine.applyOnce(); bump(); };
+  const setColorB = (c) => { modEngine.pattern.colorB = c; modEngine.applyOnce(); bump(); };
+  const setGradient = (on) => { modEngine.pattern.gradient = on; modEngine.applyOnce(); bump(); };
+  const setPair = (a, b) => { modEngine.pattern.colorA = a; modEngine.pattern.colorB = b; modEngine.pattern.gradient = true; modEngine.applyOnce(); bump(); };
 
   const dirFromEvent = (e) => {
     if (!dialRef.current) return;
@@ -82,8 +96,9 @@ export default function PatternScreen() {
           {GRID.map((g, i) => {
             const x = 16 + g.x * 168;
             const y = 16 + g.y * 88;
-            const v = 0.12 + 0.88 * (0.5 + 0.5 * Math.sin(2 * Math.PI * (phase - offsets[i])));
-            return <circle key={i} cx={x} cy={y} r={6} fill="#36d6c3" opacity={v} />;
+            const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * (phase - offsets[i]));
+            const fill = (p.gradient && p.colorB) ? mixHex(p.colorA, p.colorB, w) : p.colorA;
+            return <circle key={i} cx={x} cy={y} r={6} fill={fill} opacity={0.12 + 0.88 * w} />;
           })}
         </svg>
 
@@ -119,6 +134,42 @@ export default function PatternScreen() {
           className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
           style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${((p.amount || 0) / 3) * 100}%, rgba(255,255,255,0.12) ${((p.amount || 0) / 3) * 100}%)` }} />
       </label>
+
+      {/* Colors */}
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-white/40">Colors</span>
+          <label className="flex items-center gap-1.5 text-[11px] text-white/60 cursor-pointer select-none">
+            <input type="checkbox" checked={!!p.gradient} onChange={(e) => setGradient(e.target.checked)} style={{ accentColor: '#36d6c3' }} /> Blend two
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {COLOR_PAIRS.map(([a, b]) => {
+            const active = p.gradient && (p.colorA || '').toLowerCase() === a && (p.colorB || '').toLowerCase() === b;
+            return (
+              <button key={a + b} onClick={() => setPair(a, b)} title="Use this blend"
+                className={`w-9 h-6 rounded-md transition ${active ? 'ring-2 ring-white/80' : 'ring-1 ring-white/10'}`}
+                style={{ background: `linear-gradient(90deg, ${a}, ${b})` }} />
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-4">
+          <label className="flex items-center gap-1.5 text-[11px] text-white/50 cursor-pointer">
+            <span className="w-6 h-6 rounded-full overflow-hidden relative border border-white/15 block" style={{ background: p.colorA }}>
+              <input type="color" value={p.colorA} onChange={(e) => setColorA(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+            </span>
+            {p.gradient ? 'Color A' : 'Color'}
+          </label>
+          {p.gradient && (
+            <label className="flex items-center gap-1.5 text-[11px] text-white/50 cursor-pointer">
+              <span className="w-6 h-6 rounded-full overflow-hidden relative border border-white/15 block" style={{ background: p.colorB }}>
+                <input type="color" value={p.colorB} onChange={(e) => setColorB(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
+              </span>
+              Color B
+            </label>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
