@@ -335,6 +335,39 @@ export default function MusicApp() {
         {/* Bottom: macros + contextual params (left) · LFO module (right) */}
         <div className="flex flex-col lg:flex-row gap-5 items-start">
           <div className="w-full lg:w-80 flex flex-col gap-4">
+            {/* Flow across the whole bouquet */}
+            <div className="flex flex-col gap-2">
+              <span className="text-[10px] uppercase tracking-widest text-white/40">Flow across bouquet</span>
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  { label: 'Off', mode: 'off', amount: 0 },
+                  { label: 'Sweep', mode: 'sweep', amount: 1 },
+                  { label: 'Ripple', mode: 'sweep', amount: 2 },
+                  { label: 'Bounce', mode: 'bounce', amount: 1 },
+                  { label: 'Radiate', mode: 'center', amount: 1 },
+                  { label: 'Scatter', mode: 'random', amount: 1 },
+                ].map((p) => {
+                  const f = modEngine.flow;
+                  const active = p.amount === 0 ? f.amount === 0 : (f.mode === p.mode && Math.abs(f.amount - p.amount) < 0.05);
+                  return (
+                    <button key={p.label}
+                      onClick={() => { modEngine.flow.mode = p.mode; modEngine.flow.amount = p.amount; modEngine.applyOnce(); bump(); }}
+                      className={`px-2.5 py-1 rounded-full text-xs transition ${active ? 'bg-white text-black' : 'bg-white/5 text-white/60 hover:text-white'}`}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="flex justify-between text-[10px] uppercase tracking-wide text-white/40"><span>Spread</span><span className="text-white/60">{modEngine.flow.amount.toFixed(1)}</span></span>
+                <input type="range" min="0" max="3" step="0.1" value={modEngine.flow.amount}
+                  onChange={(e) => { modEngine.flow.amount = Number(e.target.value); modEngine.applyOnce(); bump(); }}
+                  className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                  style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${(modEngine.flow.amount / 3) * 100}%, rgba(255,255,255,0.12) ${(modEngine.flow.amount / 3) * 100}%)` }} />
+              </label>
+              <span className="text-[10px] text-white/30">One pattern travels through every flower, left → right. Map a param to an LFO and Play.</span>
+            </div>
+
             {/* Macros */}
             <div className="flex flex-col gap-2">
               <span className="text-[10px] uppercase tracking-widest text-white/40">Macros</span>

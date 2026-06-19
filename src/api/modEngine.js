@@ -99,6 +99,9 @@ class ModEngine {
     this.audioLevel = 0; // 0..1 live music level while detecting tempo
     this.detecting = false; // listening for BPM
     this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
+    // Spatial flow: offsets each flower's LFO phase by position so a pattern travels
+    // across the whole bouquet (left → right) as one design. amount = cycles across.
+    this.flow = { mode: 'sweep', amount: 0 };
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.
@@ -211,15 +214,32 @@ class ModEngine {
     return cmd;
   }
 
+  // Per-flower phase offset (in cycles) so a pattern flows across the bouquet.
+  _flowOffset(gi, F) {
+    const { mode, amount } = this.flow;
+    if (!amount || mode === 'off' || F <= 1) return 0;
+    const p = gi / (F - 1); // 0..1, left → right
+    switch (mode) {
+      case 'bounce': return amount * (1 - Math.abs(2 * p - 1));
+      case 'center': return amount * Math.abs(2 * p - 1);
+      case 'random': return amount * (Math.abs(Math.sin((gi + 1) * 12.9898) * 43758.5453) % 1);
+      case 'sweep':
+      default: return amount * p;
+    }
+  }
+
   // Compute every flower's output, update the live state (viz), and optionally send.
   _emitOutput(doSend) {
     const F = Math.max(getFlowerCount() || this.flowerBouquet.length || 3, 1);
     const cmds = [];
     const perFlower = [];
     for (let gi = 0; gi < F; gi += 1) {
-      const lvals = this.lfos.map((l) => ((l.stereo > 0.001 && (!l.band || l.band === 'none'))
-        ? sampleCurve(l.points, (l.phase + l.stereo * (gi / F)) % 1)
-        : l.value));
+      const flowOff = this._flowOffset(gi, F);
+      const lvals = this.lfos.map((l) => {
+        if (l.band && l.band !== 'none') return l.value;
+        const off = l.stereo * (gi / F) + flowOff;
+        return off > 0.0001 ? sampleCurve(l.points, (l.phase + off) % 1) : l.value;
+      });
       const mvals = this._macroVals(lvals);
       const cmd = this._flowerCmd(gi, lvals, mvals);
       cmds.push(cmd);
