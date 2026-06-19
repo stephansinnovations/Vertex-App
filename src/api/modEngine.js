@@ -114,9 +114,20 @@ export const SYNC_DIVISIONS = {
 };
 export const SYNC_NAMES = Object.keys(SYNC_DIVISIONS);
 
-// Effective LFO frequency (Hz): free uses its own rate; synced derives from BPM.
-export function effectiveRate(lfo, bpm) {
+// Live "Sync to music" signals that can drive an LFO's rate: the kick or a band
+// envelope (0..1) scales the speed — slow at silence, fast at the envelope's peak.
+// Keys match modEngine.kick / modEngine.bands.*.
+export const AUDIO_RATE_SOURCES = { kick: 'Kick', bass: 'Bass', drums: 'Drums', melody: 'Melody' };
+
+// Effective LFO frequency (Hz): 'free' uses its own rate; a tempo division derives from
+// the detected BPM; an audio source scales the rate by that live envelope (0.1 Hz at
+// silence → 0.1 + lfo.rate Hz at the peak). Audio sources need `live` = { kick, bands }.
+export function effectiveRate(lfo, bpm, live) {
   if (!lfo.sync || lfo.sync === 'free') return lfo.rate;
+  if (AUDIO_RATE_SOURCES[lfo.sync]) {
+    const env = lfo.sync === 'kick' ? (live?.kick ?? 0) : (live?.bands?.[lfo.sync] ?? 0);
+    return 0.1 + env * lfo.rate;
+  }
   const beats = SYNC_DIVISIONS[lfo.sync] || 1;
   return (bpm / 60) / beats;
 }
@@ -376,8 +387,9 @@ class ModEngine {
     }
 
     // Advance + sample each LFO per its mode, with onset delay.
+    const live = { kick: this.kick, bands: this.bands };
     for (const lfo of this.lfos) {
-      const freq = effectiveRate(lfo, this.bpm);
+      const freq = effectiveRate(lfo, this.bpm, live);
       const since = (now - (lfo._trigTime || now)) / 1000;
       const delaySec = (lfo.delay || 0) * MAX_DELAY_SEC;
       let raw;

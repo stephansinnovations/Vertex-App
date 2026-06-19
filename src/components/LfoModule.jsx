@@ -1,10 +1,11 @@
 import React, { useReducer, useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Pencil, Minus } from 'lucide-react';
-import { modEngine, PRESETS, PRESET_NAMES, SYNC_NAMES, MODES, effectiveRate } from '@/api/modEngine';
+import { modEngine, PRESETS, PRESET_NAMES, SYNC_NAMES, MODES, effectiveRate, AUDIO_RATE_SOURCES } from '@/api/modEngine';
 import LfoEditor from '@/components/LfoEditor';
 import Knob from '@/components/Knob';
 
-const TEMPO_OPTIONS = ['free', ...SYNC_NAMES];
+const AUDIO_RATE_KEYS = Object.keys(AUDIO_RATE_SOURCES);
+const TEMPO_OPTIONS = ['free', ...SYNC_NAMES, ...AUDIO_RATE_KEYS];
 const clonePoints = (pts) => pts.map((p) => ({ x: p.x, y: p.y, curve: p.curve || 0 }));
 
 // A labelled cell in the bottom control bar (content on top, caption below).
@@ -109,15 +110,21 @@ export default function LfoModule() {
             </button>
           </Cell>
           <Cell label="TEMPO">
-            <button
-              onClick={() => { const i = TEMPO_OPTIONS.indexOf(lfo.sync); setLfo({ sync: TEMPO_OPTIONS[(i + 1) % TEMPO_OPTIONS.length] }); }}
-              onWheel={(e) => { if (lfo.sync === 'free') setLfo({ rate: Math.max(0.05, Math.min(5, lfo.rate - Math.sign(e.deltaY) * 0.05)) }); }}
-              title={`${effectiveRate(lfo, modEngine.bpm).toFixed(2)} Hz`}
-              className="px-1.5 py-1.5 rounded bg-black/30 text-[11px] text-white/85 flex items-center gap-1 w-full justify-center truncate"
-            >
-              {lfo.sync === 'free' ? `${lfo.rate.toFixed(2)}Hz` : lfo.sync}
-              <span className="text-white/50">&#9834;</span>
-            </button>
+            {(() => {
+              const audio = !!AUDIO_RATE_SOURCES[lfo.sync];
+              const adjustable = lfo.sync === 'free' || audio; // wheel sets Hz / max-Hz
+              return (
+                <button
+                  onClick={() => { const i = TEMPO_OPTIONS.indexOf(lfo.sync); setLfo({ sync: TEMPO_OPTIONS[(i + 1) % TEMPO_OPTIONS.length] }); }}
+                  onWheel={(e) => { if (adjustable) setLfo({ rate: Math.max(0.05, Math.min(5, lfo.rate - Math.sign(e.deltaY) * 0.05)) }); }}
+                  title={audio ? `${AUDIO_RATE_SOURCES[lfo.sync]} → rate · now ${effectiveRate(lfo, modEngine.bpm, { kick: modEngine.kick, bands: modEngine.bands }).toFixed(2)} Hz (max ${(0.1 + lfo.rate).toFixed(2)})` : `${effectiveRate(lfo, modEngine.bpm).toFixed(2)} Hz`}
+                  className={`px-1.5 py-1.5 rounded text-[11px] flex items-center gap-1 w-full justify-center truncate border ${audio ? 'bg-[#36d6c3]/20 text-[#36d6c3] border-[#36d6c3]/40' : 'bg-black/30 text-white/85 border-transparent'}`}
+                >
+                  {lfo.sync === 'free' ? `${lfo.rate.toFixed(2)}Hz` : (audio ? AUDIO_RATE_SOURCES[lfo.sync] : lfo.sync)}
+                  <span className={audio ? 'text-[#36d6c3]/70' : 'text-white/50'}>&#9834;</span>
+                </button>
+              );
+            })()}
           </Cell>
           <Cell label="SMOOTH"><Knob value={lfo.smooth} onChange={(v) => setLfo({ smooth: v })} size={40} /></Cell>
           <Cell label="DELAY"><Knob value={lfo.delay} onChange={(v) => setLfo({ delay: v })} size={40} format={(v) => `${(v * 4).toFixed(2)} s`} /></Cell>
