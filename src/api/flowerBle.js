@@ -14,7 +14,7 @@
 // localhost) on Chromium browsers — notably NOT iOS Safari. Calls must originate
 // from a user gesture (button click) the first time, or requestDevice() throws.
 
-import { setFlowerState, stateFromCommand } from './flowerState';
+import { setFlowerState, stateFromCommand, getFlowerState } from './flowerState';
 
 const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const CMD_CHAR_PREFIX = '6e400002-b5a3-f393-e0a9-e50e24d';
@@ -273,6 +273,31 @@ export function sendFrame(frames) {
     : frameChar.writeValue(bytes);
   Promise.resolve(write).catch(() => {}).finally(() => { _reactiveBusy = false; });
   return true;
+}
+
+async function writeCmdToChar(char, cmd, withResponse = false) {
+  const packets = splitIntoPackets(JSON.stringify(cmd));
+  for (const p of packets) {
+    // eslint-disable-next-line no-await-in-loop
+    if (withResponse && char.writeValue) await char.writeValue(p);
+    // eslint-disable-next-line no-await-in-loop
+    else await writePacket(char, p);
+  }
+}
+
+// Flash one flower white, then restore it. The white write is sent WITH response,
+// so the returned promise resolves roughly when the board has acked it — i.e. ~one
+// BLE round-trip. Returns null if that flower has no real channel (e.g. test mode).
+export function flashFlower(index, ms = 280) {
+  if (!isConnected() || !cmdChars[index]) return null;
+  const char = cmdChars[index];
+  const p = writeCmdToChar(char, { co: '#ffffff', br: '100' }, true);
+  setTimeout(() => {
+    const s = getFlowerState();
+    const pf = (Array.isArray(s.perFlower) && s.perFlower[index]) || s;
+    writeCmdToChar(char, { co: pf.color || '#000000', br: String(Math.round(pf.brightness ?? 0)) }).catch(() => {});
+  }, ms);
+  return p;
 }
 
 // Re-initialize every strip (firmware re-creates its NeoPixel driver and pushes a

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Zap, ZapOff, Plus, Trash2, X, Check } from 'lucide-react';
-import { isConnected, getFlowerCount, onStatus } from '@/api/flowerBle';
+import { isConnected, getFlowerCount, onStatus, flashFlower } from '@/api/flowerBle';
 import { loadLayout, saveLayout, newBouquet, SHAPES } from '@/api/flowerLayout';
 import { onFlowerState, getFlowerState } from '@/api/flowerState';
 
@@ -83,6 +83,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   const [editing, setEditing] = useState(null); // { bi, fi }
   const [draft, setDraft] = useState(null);
   const [flashGi, setFlashGi] = useState(null);
+  const [latency, setLatency] = useState(null);
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
   const layoutRef = useRef(null);
@@ -95,6 +96,10 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
     setFlashGi(gi);
     clearTimeout(flashTimer.current);
     flashTimer.current = setTimeout(() => setFlashGi(null), 450);
+    // Flash the real flower too, and time the Bluetooth round-trip.
+    const t0 = performance.now();
+    const p = flashFlower(gi);
+    if (p && p.then) p.then(() => setLatency(Math.round(performance.now() - t0))).catch(() => {});
   };
   useEffect(() => () => clearTimeout(flashTimer.current), []);
 
@@ -240,7 +245,10 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
       <button onClick={addBouquet} className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs text-white/80 transition">
         <Plus className="w-3.5 h-3.5" /> Bouquet
       </button>
-      <span className="absolute top-2 left-3 text-[10px] uppercase tracking-widest text-white/25 pointer-events-none">Drag bouquets to arrange</span>
+      <span className="absolute top-2 left-3 text-[10px] uppercase tracking-widest text-white/25 pointer-events-none">Drag bouquets to arrange · click a flower to flash it</span>
+      {latency != null && (
+        <span className="absolute top-2 right-3 text-[11px] font-medium tabular-nums text-[#36d6c3] pointer-events-none">⚡ {latency} ms round-trip</span>
+      )}
 
       {/* Edit popup */}
       {editing != null && draft && (
