@@ -7,7 +7,7 @@ import { getSheetsAccessToken, isGoogleOAuthConfigured } from '@/api/googleAuth'
 import { extractPartFromUrl, identifyPartFromImage, scanPartFromImage, fillPartField, guessPartCategory } from '@/api/geminiParts';
 import { getSetting } from '@/api/appSettings';
 import { useAuth } from '@/lib/AuthContext';
-import { addToQueue, getQueue, updateQueueItem, deleteQueueItem, clearFinishedQueue } from '@/api/partQueue';
+import { getQueue, updateQueueItem, deleteQueueItem, clearFinishedQueue } from '@/api/partQueue';
 import { loadShared, saveShared } from '@/api/sharedState';
 
 function extractSpreadsheetId(url) {
@@ -600,29 +600,6 @@ function SheetFolder({ tab, spreadsheetId, onRenamed, onAddPart, onEditPart }) {
   );
 }
 
-function QuickCreateRow({ placeholder, value, onChange, onSubmit, onCancel, saving, err }) {
-  return (
-    <div className="mb-4">
-      <div className="flex items-center gap-2">
-        <input
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') onSubmit(); }}
-          placeholder={placeholder}
-          autoFocus
-          className="flex-1 bg-white border border-gray-300 rounded-xl px-4 py-2.5 text-gray-900 placeholder:text-gray-400 text-sm focus:outline-none focus:border-[#146EB4]"
-        />
-        <button onClick={onSubmit} disabled={!value.trim() || saving}
-          className="bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] text-sm font-semibold px-4 py-2.5 rounded-full disabled:opacity-40">
-          {saving ? '…' : 'Add'}
-        </button>
-        <button onClick={onCancel} className="text-gray-400 hover:text-gray-900"><X className="w-4 h-4" /></button>
-      </div>
-      {err && <p className="text-red-600 text-xs mt-1.5">{err}</p>}
-    </div>
-  );
-}
-
 // Parse a price string like "$24.99" → 24.99 (best effort).
 function parsePrice(p) {
   const n = parseFloat(String(p || '').replace(/[^0-9.]/g, ''));
@@ -792,8 +769,6 @@ export default function PartsLibrary() {
   const [showAdd, setShowAdd] = useState(false);
   const [addStarted, setAddStarted] = useState(false); // revealed after "Done" on the link step
   const [addTab, setAddTab] = useState('');
-  const [addCats, setAddCats] = useState([]);
-  const [loadingCats, setLoadingCats] = useState(false);
   const [addCategory, setAddCategory] = useState('');
   const pendingSubcatRef = useRef(null); // AI-guessed subcategory, applied once its tab's cats load
   // Latest user selection, readable inside the async AI fill (whose closure is stale)
@@ -802,7 +777,6 @@ export default function PartsLibrary() {
   useEffect(() => { addTabRef.current = addTab; }, [addTab]);
   const [pForm, setPForm] = useState({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
   const [saving, setSaving] = useState(false);
-  const [submitTried, setSubmitTried] = useState(false); // flags missing category/subcategory red
   const [addErr, setAddErr] = useState(null);
   const [dupInfo, setDupInfo] = useState(null); // { fields, where } when a possible duplicate is detected
   const [aiFilling, setAiFilling] = useState(false);
@@ -1001,12 +975,6 @@ export default function PartsLibrary() {
     }
   };
 
-  // Inline "create from the dropdown" for the Add Part modal.
-  const [quickAdd, setQuickAdd] = useState(null); // 'tab' | 'cat' | null
-  const [quickName, setQuickName] = useState('');
-  const [quickSaving, setQuickSaving] = useState(false);
-  const [quickErr, setQuickErr] = useState(null);
-
   // When set, the Add Part modal is in "edit" mode for this existing part
   // ({ tab, category, part }); saving updates it (or moves it if its category /
   // subcategory changed) instead of inserting a new row.
@@ -1016,14 +984,11 @@ export default function PartsLibrary() {
   const openAdd = () => {
     setAddErr(null);
     setAiErr(null);
-    setQuickAdd(null);
     setAddStarted(false);
-    setSubmitTried(false);
     setEditingOriginal(null);
     setConfirmDel(false);
     setAddTab('');
     setAddCategory('');
-    setAddCats([]);
     pendingSubcatRef.current = null;
     setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
     setDupInfo(null);
@@ -1045,14 +1010,11 @@ export default function PartsLibrary() {
   const openEditFor = (srcTab, srcCat, part) => {
     setAddErr(null);
     setAiErr(null);
-    setQuickAdd(null);
-    setSubmitTried(false);
     setConfirmDel(false);
     setEditingOriginal({ tab: srcTab, category: srcCat, part });
     setAddStarted(true);
     setAddTab(srcTab);
     setAddCategory('');
-    setAddCats([]);
     pendingSubcatRef.current = srcCat || null; // applied when the tab's cats load
     setPForm({
       partName: part.partName || '', supplier: part.supplier || '', supplierLink: part.supplierLink || '',
@@ -1081,82 +1043,21 @@ export default function PartsLibrary() {
     }
   };
 
-  // AI-pick the category/subcategory. If the user already chose a category, only
-  // fill the subcategory within it; otherwise guess both.
-  const aiGuessCategory = async () => {
-    if (aiField || !spreadsheetId || sheetTabs.length === 0) return;
-    setAiField('category');
-    setAiErr(null);
-    try {
-      const taxonomy = {};
-      const results = await Promise.all(sheetTabs.map(t =>
-        getSheetCategories(spreadsheetId, t)
-          .then(r => ({ t, cats: r.data.categories || [] }))
-          .catch(() => ({ t, cats: [] }))
-      ));
-      results.forEach(({ t, cats }) => { taxonomy[t] = cats.map(c => c.name); });
-      const scope = addTab ? { [addTab]: taxonomy[addTab] || [] } : taxonomy;
-      const g = await guessPartCategory(pForm, scope);
-      if (!addTab) {
-        const matchTab = sheetTabs.find(t => t.toLowerCase() === (g.category || '').toLowerCase());
-        if (matchTab) { pendingSubcatRef.current = g.subcategory || null; setAddTab(matchTab); }
-        else setAiErr('AI couldn’t pick a category — paste a part link or a part name first.');
-      } else {
-        const m = addCats.find(c => c.name.toLowerCase() === (g.subcategory || '').toLowerCase());
-        if (m) setAddCategory(m.name);
-        else setAiErr('AI couldn’t pick a subcategory here — paste a part link or a part name first.');
-      }
-    } catch (e) {
-      setAiErr(e?.message || 'AI fill failed.');
-    } finally {
-      setAiField(null);
-    }
-  };
-
-  const submitQuick = async () => {
-    const name = quickName.trim();
-    if (!name || quickSaving) return;
-    setQuickSaving(true);
-    setQuickErr(null);
-    try {
-      const token = await getSheetsAccessToken();
-      if (quickAdd === 'tab') {
-        await addSheetTab(spreadsheetId, name, token);
-        const res = await getSheetTabs(spreadsheetId);
-        setSheetTabs(res.data.tabs || []);
-        setAddTab(name);
-      } else {
-        await addCategoryToSheet(spreadsheetId, addTab, name, token);
-        const res = await getSheetCategories(spreadsheetId, addTab);
-        setAddCats(res.data.categories || []);
-        setAddCategory(name);
-      }
-      setQuickAdd(null);
-      setQuickName('');
-    } catch (e) {
-      setQuickErr(e.message || 'Failed');
-    } finally {
-      setQuickSaving(false);
-    }
-  };
-
-  // Load categories for the chosen tab so the user can pick where the part goes.
+  // When the AI picks a category (sheet tab), resolve its guessed subcategory against
+  // that tab's real subcategories so the part files into the right place.
   useEffect(() => {
     if (!showAdd || !addTab || !spreadsheetId) return;
-    setLoadingCats(true);
     setAddCategory('');
     getSheetCategories(spreadsheetId, addTab)
       .then(res => {
         const cats = res.data.categories || [];
-        setAddCats(cats);
         if (pendingSubcatRef.current) {
           const m = cats.find(c => c.name.toLowerCase() === pendingSubcatRef.current.toLowerCase());
           if (m) setAddCategory(m.name);
           pendingSubcatRef.current = null;
         }
       })
-      .catch(() => setAddCats([]))
-      .finally(() => setLoadingCats(false));
+      .catch(() => {});
   }, [showAdd, addTab, spreadsheetId]);
 
   // Scan the whole library for a part that looks like the same item — matched by
@@ -1184,9 +1085,27 @@ export default function PartsLibrary() {
     return null;
   };
 
+  // Ask the AI to pick an existing category (sheet tab) + subcategory for a part.
+  // Returns { tab, category } when it lands on a real tab, else null. (addPartToCategory
+  // creates the subcategory header if it doesn't exist yet, so a new subcategory is fine.)
+  const resolveCategory = async (fields) => {
+    try {
+      const taxonomy = {};
+      const results = await Promise.all(sheetTabs.map(t =>
+        getSheetCategories(spreadsheetId, t)
+          .then(r => ({ t, cats: (r.data.categories || []).map(c => c.name) }))
+          .catch(() => ({ t, cats: [] }))
+      ));
+      results.forEach(({ t, cats }) => { taxonomy[t] = cats; });
+      const g = await guessPartCategory(fields, taxonomy);
+      const tab = sheetTabs.find(t => t.toLowerCase() === (g.category || '').toLowerCase());
+      if (tab && g.subcategory) return { tab, category: g.subcategory };
+    } catch { /* fall through to "couldn't categorize" */ }
+    return null;
+  };
+
   const submitPart = async (force = false) => {
     if (saving) return;
-    if (!addTab || !addCategory) { setSubmitTried(true); return; } // turn the empty select(s) red
     if (!pForm.partName.trim()) return;
     setSaving(true);
     setAddErr(null);
@@ -1200,6 +1119,18 @@ export default function PartsLibrary() {
         imageUrl: pForm.imageUrl.trim(),
         contactEmail: pForm.contactEmail.trim(),
       };
+      // Where the part goes: editing keeps its place; a new add uses whatever the AI
+      // link-fill already picked, otherwise auto-categorizes now so it "just loads".
+      let destTab = addTab, destCat = addCategory;
+      if (!editingOriginal && (!destTab || !destCat)) {
+        const resolved = await resolveCategory(fields);
+        if (!resolved) {
+          setAddErr('Couldn’t figure out a category for this part — paste a clearer product link and tap “Fill with AI”.');
+          setSaving(false);
+          return;
+        }
+        destTab = resolved.tab; destCat = resolved.category;
+      }
       // On a fresh add (not edit, not already confirmed), warn about duplicates first.
       if (!editingOriginal && !force) {
         const dup = await findDuplicate(fields);
@@ -1207,16 +1138,16 @@ export default function PartsLibrary() {
       }
       const token = await getSheetsAccessToken();
       if (editingOriginal) {
-        const samePlace = addTab === editingOriginal.tab && addCategory === editingOriginal.category;
+        const samePlace = destTab === editingOriginal.tab && destCat === editingOriginal.category;
         if (samePlace) {
-          await updatePartRow(spreadsheetId, addTab, addCategory, editingOriginal.part, fields, token);
+          await updatePartRow(spreadsheetId, destTab, destCat, editingOriginal.part, fields, token);
         } else {
           // Category/subcategory changed → move: add to the new spot, then remove the old.
-          await addPartToCategory(spreadsheetId, addTab, addCategory, fields, token);
+          await addPartToCategory(spreadsheetId, destTab, destCat, fields, token);
           await deletePartRow(spreadsheetId, editingOriginal.tab, editingOriginal.category, editingOriginal.part, token);
         }
       } else {
-        await addPartToCategory(spreadsheetId, addTab, addCategory, fields, token);
+        await addPartToCategory(spreadsheetId, destTab, destCat, fields, token);
       }
       setShowAdd(false);
       setPForm({ partName: '', supplier: '', supplierLink: '', partNum: '', price: '', imageUrl: '', contactEmail: '' });
@@ -1372,25 +1303,6 @@ export default function PartsLibrary() {
   };
 
   const pendingQueueCount = queueItems.filter(i => i.status === 'pending' || i.status === 'processing').length;
-
-  // "Add another": queue the current part's link and reset the form so you can
-  // paste the next one. The queue (Inbox icon in the modal) AI-fills + adds them.
-  const [addingAnother, setAddingAnother] = useState(false);
-  const addAnotherToQueue = async () => {
-    const link = pForm.supplierLink.trim();
-    if (!link || addingAnother) { if (!link) setAddErr('Paste a part link first to queue it.'); return; }
-    setAddingAnother(true);
-    setAddErr(null);
-    try {
-      await addToQueue(link);
-      refreshQueue();
-      openAdd(); // fresh link step for the next part (modal stays open)
-    } catch (e) {
-      setAddErr(e.message || 'Could not add to queue');
-    } finally {
-      setAddingAnother(false);
-    }
-  };
 
   const handleOrder = () => {
     // Open each part that has a real link; parts without one are skipped.
@@ -1783,7 +1695,7 @@ export default function PartsLibrary() {
                 {aiFilling && (
                   <div className="mb-4 flex items-center gap-2 bg-violet-50 border border-violet-200 rounded-xl px-3 py-2.5">
                     <Sparkles className="w-4 h-4 text-violet-600 flex-shrink-0 animate-pulse" />
-                    <p className="text-violet-700 text-xs">Reading the link and filling in the details… pick a category meanwhile.</p>
+                    <p className="text-violet-700 text-xs">Reading the link and filling in the details…</p>
                   </div>
                 )}
 
@@ -1799,52 +1711,14 @@ export default function PartsLibrary() {
                   className="w-full bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white font-semibold py-2.5 rounded-full transition-colors flex items-center justify-center gap-2 mb-1">
                   <Sparkles className="w-4 h-4" /> {aiFilling ? 'Filling…' : 'Fill with AI'}
                 </button>
-                <p className="text-gray-400 text-[11px] text-center mb-2">Fills every field from the link — or tap ✨ next to any field to fill just that one.</p>
-                {!editingOriginal && (
-                  <button onClick={addAnotherToQueue} disabled={addingAnother || !pForm.supplierLink.trim()}
-                    className="w-full mb-4 flex items-center justify-center gap-2 text-violet-700 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50 text-sm font-semibold py-2.5 rounded-full transition-colors">
-                    <Inbox className="w-4 h-4" /> {addingAnother ? 'Queuing…' : `Add another (queue this link)${pendingQueueCount > 0 ? ` · ${pendingQueueCount} queued` : ''}`}
-                  </button>
+                <p className="text-gray-400 text-[11px] text-center mb-3">Fills every field from the link — or tap ✨ next to any field to fill just that one.</p>
+
+                {(addTab || addCategory) && (
+                  <p className="text-gray-500 text-xs mb-3">
+                    Filing under{' '}
+                    <span className="font-semibold text-gray-700">{addTab || '…'}{addCategory ? ` › ${addCategory}` : ''}</span>
+                  </p>
                 )}
-
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs text-gray-500">Category</label>
-                  <AiFillButton onClick={aiGuessCategory} busy={aiField === 'category'} title="AI pick category" />
-                </div>
-                <select value={addTab} onChange={e => {
-                    if (e.target.value === '__add_tab__') { setQuickAdd('tab'); setQuickName(''); setQuickErr(null); return; }
-                    setQuickAdd(null); setAddTab(e.target.value);
-                  }}
-                  className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 text-sm mb-2 focus:outline-none ${submitTried && !addTab ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#146EB4]'}`}>
-                  <option value="__add_tab__">＋ Add new category</option>
-                  <option value="">Select a category</option>
-                  {sheetTabs.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                {quickAdd === 'tab'
-                  ? <QuickCreateRow placeholder="New category name…" value={quickName} onChange={setQuickName}
-                      onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
-                      saving={quickSaving} err={quickErr} />
-                  : <div className="mb-2" />}
-
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs text-gray-500">Subcategory</label>
-                  <AiFillButton onClick={aiGuessCategory} busy={aiField === 'category'} disabled={!addTab} title="AI pick subcategory" />
-                </div>
-                <select value={addCategory} onChange={e => {
-                    if (e.target.value === '__add_cat__') { setQuickAdd('cat'); setQuickName(''); setQuickErr(null); return; }
-                    setQuickAdd(null); setAddCategory(e.target.value);
-                  }}
-                  disabled={loadingCats || !addTab}
-                  className={`w-full bg-white border rounded-xl px-4 py-3 text-gray-900 text-sm mb-2 focus:outline-none disabled:opacity-50 ${submitTried && !addCategory ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#146EB4]'}`}>
-                  <option value="__add_cat__">＋ Add subcategory</option>
-                  <option value="">{loadingCats ? 'Loading subcategories…' : 'Select a subcategory'}</option>
-                  {addCats.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
-                </select>
-                {quickAdd === 'cat'
-                  ? <QuickCreateRow placeholder="New subcategory name…" value={quickName} onChange={setQuickName}
-                      onSubmit={submitQuick} onCancel={() => { setQuickAdd(null); setQuickName(''); setQuickErr(null); }}
-                      saving={quickSaving} err={quickErr} />
-                  : <div className="mb-3" />}
 
                 {aiErr && <p className="text-red-600 text-xs mb-3">{aiErr}</p>}
 
@@ -1916,9 +1790,6 @@ export default function PartsLibrary() {
                     </div>
 
                     {addErr && <p className="text-red-600 text-xs mb-3">{addErr}</p>}
-                    {submitTried && (!addTab || !addCategory) && (
-                      <p className="text-red-600 text-xs mb-3">Pick a category and subcategory before adding to the sheet.</p>
-                    )}
 
                     <button onClick={() => submitPart()} disabled={!pForm.partName.trim() || saving}
                       className="w-full bg-[#FFD814] hover:bg-[#F7CA00] text-[#0F1111] font-bold py-3.5 rounded-full transition-colors disabled:opacity-40 flex items-center justify-center gap-2">
