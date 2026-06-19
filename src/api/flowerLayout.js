@@ -15,6 +15,9 @@ function sanFlower(f, i) {
     pin: Number.isFinite(+f?.pin) ? Math.max(0, Math.min(48, Math.round(+f.pin))) : 0,
     ledCount: Number.isFinite(+f?.ledCount) ? Math.max(1, Math.min(300, Math.round(+f.ledCount))) : 15,
     shape: SHAPES.includes(f?.shape) ? f.shape : 'circle',
+    // Optional manual position within the bouquet cluster (px in the 124×108 box).
+    ...(Number.isFinite(+f?.fx) ? { fx: +f.fx } : {}),
+    ...(Number.isFinite(+f?.fy) ? { fy: +f.fy } : {}),
   };
 }
 

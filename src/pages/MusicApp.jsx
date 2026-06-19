@@ -84,19 +84,15 @@ export default function MusicApp() {
 
   // When the layout loads/changes, tell the engine each flower's bouquet (for
   // per-bouquet/per-flower params) and its canvas position (for the spatial pattern).
-  const handleLayout = useCallback((l) => {
+  const handleLayout = useCallback((l, positions) => {
     setLayout(l);
     const map = [];
-    const positions = [];
-    const triOff = [{ x: 0, y: -0.045 }, { x: 0.05, y: 0.03 }, { x: -0.05, y: 0.03 }];
-    l.bouquets.forEach((b, bi) => b.flowers.forEach((f, fi) => {
-      map.push(bi);
-      const o = triOff[fi % 3];
-      positions.push({ x: Math.max(0, Math.min(1, (b.x ?? 0.5) + o.x)), y: Math.max(0, Math.min(1, (b.y ?? 0.5) + o.y)) });
-    }));
+    l.bouquets.forEach((b, bi) => b.flowers.forEach(() => map.push(bi)));
     modEngine.setFlowerMap(map);
-    modEngine.setFlowerPositions(positions);
-    setTestFlowerCount(positions.length); // so test mode lights every flower
+    // BouquetVisualizer reports accurate canvas positions; fall back to the bouquet
+    // centers if it didn't (e.g. before the canvas is measured).
+    modEngine.setFlowerPositions(positions || l.bouquets.flatMap((b) => b.flowers.map(() => ({ x: b.x ?? 0.5, y: b.y ?? 0.5 }))));
+    setTestFlowerCount(map.length); // so test mode lights every flower
     modEngine.applyOnce();
   }, []);
 

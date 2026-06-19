@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Zap, ZapOff, Plus, Trash2, X, Check } from 'lucide-react';
 import { isConnected, getFlowerCount, onStatus } from '@/api/flowerBle';
 import { loadLayout, saveLayout, newBouquet, SHAPES } from '@/api/flowerLayout';
@@ -7,6 +7,27 @@ import { onFlowerState, getFlowerState } from '@/api/flowerState';
 const HUES = [270, 190, 330, 45, 150, 0, 210, 300];
 const hueFor = (i) => `hsl(${HUES[i % HUES.length]}, 85%, 62%)`;
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+// Each flower's canvas position (0..1) = bouquet position + its offset within the
+// 124×108 cluster box, scaled by the canvas size. Drives the spatial pattern.
+function computePositions(lay, canvasEl) {
+  const rect = canvasEl ? canvasEl.getBoundingClientRect() : null;
+  const W = (rect && rect.width) || 900;
+  const H = (rect && rect.height) || 360;
+  const positions = [];
+  for (const b of lay.bouquets) {
+    const n = b.flowers.length;
+    b.flowers.forEach((f, fi) => {
+      const ang = (-90 + (fi * 360) / n) * (Math.PI / 180);
+      const fx = f.fx ?? (62 + 30 * Math.cos(ang));
+      const fy = f.fy ?? (56 + 28 * Math.sin(ang));
+      const px = (b.x ?? 0.5) * W + (fx - 62);
+      const py = (b.y ?? 0.5) * H + (fy - 54);
+      positions.push({ x: clamp01(px / W), y: clamp01(py / H) });
+    });
+  }
+  return positions;
+}
 
 // One flower as a compact LED ring showing its live output. No labels.
 function FlowerView({ flower, gi, connected, head, liveColor, brightness, isWave, selected }) {
@@ -65,7 +86,10 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   const layoutRef = useRef(null);
   layoutRef.current = layout;
 
-  useEffect(() => { loadLayout().then((l) => { setLayout(l); setFlowerCount(getFlowerCount()); onLayout?.(l); }); }, [onLayout]);
+  // Report the layout + each flower's canvas position to the parent (engine wiring).
+  const report = useCallback((lay) => { onLayout?.(lay, computePositions(lay, canvasRef.current)); }, [onLayout]);
+
+  useEffect(() => { loadLayout().then((l) => { setLayout(l); setFlowerCount(getFlowerCount()); report(l); }); }, [report]);
   useEffect(() => onFlowerState(setLive), []);
   useEffect(() => {
     const sync = () => { setConnected(isConnected()); setFlowerCount(getFlowerCount()); };
@@ -86,13 +110,30 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
       const d = dragRef.current;
       if (!d) return;
       if (!d.moved && (Math.abs(e.clientX - d.startX) > 4 || Math.abs(e.clientY - d.startY) > 4)) d.moved = true;
-      if (d.moved && canvasRef.current) {
+      if (!d.moved) return;
+      if (d.fi != null && d.clusterEl) {
+        // Drag a single flower within its bouquet cluster.
+        const cr = d.clusterEl.getBoundingClientRect();
+        const fx = Math.max(10, Math.min(114, e.clientX - cr.left));
+        const fy = Math.max(10, Math.min(98, e.clientY - cr.top));
+        setLayout((prev) => {
+          const next = {
+            ...prev,
+            bouquets: prev.bouquets.map((bb, i) => (i !== d.bi ? bb : {
+              ...bb, flowers: bb.flowers.map((f, j) => (j === d.fi ? { ...f, fx, fy } : f)),
+            })),
+          };
+          report(next);
+          return next;
+        });
+      } else if (canvasRef.current) {
+        // Drag the whole bouquet around the canvas.
         const rect = canvasRef.current.getBoundingClientRect();
         const x = clamp01((e.clientX - rect.left) / rect.width);
         const y = clamp01((e.clientY - rect.top) / rect.height);
         setLayout((prev) => {
           const next = { ...prev, bouquets: prev.bouquets.map((bb, i) => (i === d.bi ? { ...bb, x, y } : bb)) };
-          onLayout?.(next);
+          report(next);
           return next;
         });
       }
@@ -108,12 +149,12 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     return () => { window.removeEventListener('pointermove', onMove); window.removeEventListener('pointerup', onUp); };
-  }, [onLayout, onSelect]);
+  }, [report, onSelect]);
 
   if (!layout) return null;
   const isWave = Array.isArray(live.motion) && live.motion.includes('wave');
 
-  const persist = (next) => { setLayout(next); saveLayout(next); onLayout?.(next); };
+  const persist = (next) => { setLayout(next); saveLayout(next); report(next); };
   const openEdit = (bi, fi) => { setDraft({ ...layout.bouquets[bi].flowers[fi] }); setEditing({ bi, fi }); };
   const closeEdit = () => { setEditing(null); setDraft(null); };
   const saveEdit = () => {
@@ -131,7 +172,9 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
 
   const startDrag = (e, bi) => {
     const fiEl = e.target.closest('[data-fi]');
-    dragRef.current = { bi, fi: fiEl ? Number(fiEl.dataset.fi) : null, startX: e.clientX, startY: e.clientY, moved: false };
+    const fi = fiEl ? Number(fiEl.dataset.fi) : null;
+    const clusterEl = fiEl ? fiEl.closest('[data-cluster]') : null;
+    dragRef.current = { bi, fi, clusterEl, startX: e.clientX, startY: e.clientY, moved: false };
   };
 
   return (
@@ -147,7 +190,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
             className="absolute cursor-grab active:cursor-grabbing select-none"
             style={{ left: `${(b.x ?? 0.5) * 100}%`, top: `${(b.y ?? 0.5) * 100}%`, transform: 'translate(-50%, -50%)' }}
           >
-            <div className={`relative w-[124px] h-[108px] rounded-xl ${bSelected ? 'ring-1 ring-white/40 bg-white/[0.03]' : ''}`}>
+            <div data-cluster={bi} className={`relative w-[124px] h-[108px] rounded-xl ${bSelected ? 'ring-1 ring-white/40 bg-white/[0.03]' : ''}`}>
               {/* header */}
               <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 flex items-center gap-1 z-10">
                 <span className="text-[10px] font-medium text-white/55 whitespace-nowrap">{b.name}</span>
@@ -164,11 +207,11 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
                 const gi = starts[bi] + fi;
                 const pf = Array.isArray(live.perFlower) ? live.perFlower[gi] : null;
                 const ang = (-90 + (fi * 360) / n) * (Math.PI / 180);
-                const fx = 62 + 30 * Math.cos(ang);
-                const fy = 56 + 28 * Math.sin(ang);
+                const fx = f.fx ?? (62 + 30 * Math.cos(ang));
+                const fy = f.fy ?? (56 + 28 * Math.sin(ang));
                 return (
                   <div key={fi} data-fi={fi} onDoubleClick={(e) => { e.stopPropagation(); openEdit(bi, fi); }}
-                    className="absolute" style={{ left: fx, top: fy, transform: 'translate(-50%, -50%)' }}>
+                    className="absolute cursor-grab active:cursor-grabbing" style={{ left: fx, top: fy, transform: 'translate(-50%, -50%)' }}>
                     <FlowerView flower={f} gi={gi} head={head} isWave={isWave}
                       connected={connected && gi < flowerCount}
                       liveColor={pf?.color ?? live.color} brightness={pf?.brightness ?? live.brightness}
