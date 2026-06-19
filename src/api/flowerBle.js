@@ -108,7 +108,12 @@ export function setTestMode(on) {
 // The visualization reports the total flower count so test mode lights them all and
 // the engine spreads stereo across the right number.
 export function setTestFlowerCount(n) {
-  testFlowerCount = Math.max(1, Number(n) || 1);
+  const next = Math.max(1, Number(n) || 1);
+  if (next === testFlowerCount) return;
+  testFlowerCount = next;
+  // Notify subscribers so the visualization re-reads the count (test mode lights
+  // every flower; without this it keeps a stale count and only some connect).
+  emitStatus(isConnected() ? 'connected' : 'disconnected');
 }
 
 // Split a string into ≤maxBytes UTF-8 packets, appending the terminator to the
