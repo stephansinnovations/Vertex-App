@@ -147,7 +147,10 @@ class ModEngine {
     // Spatial pattern: maps a design onto the flowers by their canvas position, so a
     // pattern flows across them in a direction. Move the flowers, the pattern stays.
     // direction in degrees; colorA/colorB + gradient drive the pattern's colors.
-    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false };
+    // sync: 'free' (uses rate, cycles/sec) or a SYNC_DIVISIONS key (locks to BPM).
+    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35 };
+    this._patternOnce = false;
+    this._onceLeft = 0;
     this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
     this.patternDrive = false; // when on, the pattern itself drives flower brightness
     this._patternPhase = 0;
@@ -314,6 +317,7 @@ class ModEngine {
   // Toggle the pattern driving the flowers directly. Keeps the loop alive on its own.
   setPatternDrive(on) {
     this.patternDrive = !!on;
+    this._patternOnce = false;
     if (this.patternDrive && !this._raf) {
       this._last = performance.now();
       this._tick();
@@ -325,6 +329,25 @@ class ModEngine {
     }
   }
 
+  // Play the pattern through once (one full pass across the flowers), then go dark.
+  triggerOnce() {
+    this._patternPhase = 0;
+    this._onceLeft = 1 + (this.pattern.amount || 0) + 0.6;
+    this._patternOnce = true;
+    this.patternDrive = true;
+    if (!this._raf) { this._last = performance.now(); this._tick(); }
+  }
+
+  // Turn every flower off (used at the end of a one-shot trigger).
+  _allOff() {
+    const F = Math.max(getFlowerCount() || this.flowerBouquet.length || 3, 1);
+    const cmds = [];
+    const perFlower = [];
+    for (let gi = 0; gi < F; gi += 1) { cmds.push({ br: '0' }); perFlower.push({ color: this.pattern.colorA, brightness: 0 }); }
+    setFlowerState({ brightness: 0, color: this.pattern.colorA, perFlower });
+    sendReactivePerFlower(cmds);
+  }
+
   _tick = () => {
     if (!this.running && !this.patternDrive) return;
     this._raf = requestAnimationFrame(this._tick);
@@ -332,7 +355,18 @@ class ModEngine {
     let dt = (now - this._last) / 1000;
     this._last = now;
     if (dt > 0.1) dt = 0.1;
-    this._patternPhase = (this._patternPhase + dt * 0.35) % 1;
+    const prate = effectiveRate(this.pattern, this.bpm);
+    this._patternPhase = (this._patternPhase + dt * prate) % 1;
+    if (this._patternOnce) {
+      this._onceLeft -= dt * prate;
+      if (this._onceLeft <= 0) {
+        this._patternOnce = false;
+        this.patternDrive = false;
+        this._allOff();
+        if (!this.running && this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+        this.emit();
+      }
+    }
 
     // Advance + sample each LFO per its mode, with onset delay.
     for (const lfo of this.lfos) {

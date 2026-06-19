@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useReducer } from 'react';
-import { Play, Square } from 'lucide-react';
-import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex } from '@/api/modEngine';
+import { Play, Square, Zap } from 'lucide-react';
+import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, SYNC_NAMES } from '@/api/modEngine';
 
 // Two-color pairs that blend nicely.
 const COLOR_PAIRS = [
@@ -54,6 +54,11 @@ export default function PatternScreen() {
   const setColorB = (c) => { modEngine.pattern.colorB = c; modEngine.applyOnce(); bump(); };
   const setGradient = (on) => { modEngine.pattern.gradient = on; modEngine.applyOnce(); bump(); };
   const setPair = (a, b) => { modEngine.pattern.colorA = a; modEngine.pattern.colorB = b; modEngine.pattern.gradient = true; modEngine.applyOnce(); bump(); };
+  const triggerOnce = () => { modEngine.triggerOnce(); bump(); };
+  const synced = p.sync !== 'free';
+  const toggleBpmSync = () => { modEngine.pattern.sync = synced ? 'free' : '1 bar'; bump(); };
+  const cycleDivision = () => { const i = SYNC_NAMES.indexOf(p.sync); modEngine.pattern.sync = SYNC_NAMES[(i + 1) % SYNC_NAMES.length]; bump(); };
+  const setRate = (r) => { modEngine.pattern.rate = r; bump(); };
 
   const dirFromEvent = (e) => {
     if (!dialRef.current) return;
@@ -81,13 +86,18 @@ export default function PatternScreen() {
           <span className="text-[10px] uppercase tracking-widest text-white/40">Pattern</span>
           <span className="text-[11px] text-[#36d6c3] capitalize">{p.type}{dirEnabled ? ` · ${p.direction}°` : ''}</span>
         </div>
-        <button
-          onClick={togglePlay}
-          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
-          title="Play this pattern on the bouquets"
-        >
-          {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play on flowers</>}
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button onClick={triggerOnce} title="Play the pattern through once" className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/80 hover:bg-white/20 transition">
+            <Zap className="w-3 h-3" /> Trigger
+          </button>
+          <button
+            onClick={togglePlay}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+            title="Play this pattern on the bouquets"
+          >
+            {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
@@ -134,6 +144,24 @@ export default function PatternScreen() {
           className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
           style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${((p.amount || 0) / 3) * 100}%, rgba(255,255,255,0.12) ${((p.amount || 0) / 3) * 100}%)` }} />
       </label>
+
+      {/* Speed / BPM sync */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wide text-white/40">Speed</span>
+          <button onClick={toggleBpmSync} className={`px-2 py-0.5 rounded-full text-[11px] transition ${synced ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/60 hover:text-white'}`}>Sync to BPM</button>
+        </div>
+        {synced ? (
+          <button onClick={cycleDivision} title="Click to change the division" className="self-start px-2.5 py-1 rounded bg-black/30 text-[11px] text-white/85 border border-white/10">
+            {p.sync} @ {modEngine.bpm} BPM
+          </button>
+        ) : (
+          <input type="range" min="0.05" max="2" step="0.05" value={p.rate}
+            onChange={(e) => setRate(Number(e.target.value))}
+            className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+            style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${(p.rate / 2) * 100}%, rgba(255,255,255,0.12) ${(p.rate / 2) * 100}%)` }} />
+        )}
+      </div>
 
       {/* Colors */}
       <div className="flex flex-col gap-2">
