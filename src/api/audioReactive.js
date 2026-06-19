@@ -47,6 +47,60 @@ export class BpmTracker {
   }
 }
 
+// Estimate which phase of a track is playing from the live energy/band envelopes.
+// Pure heuristic tuned for electronic music (the flowers' usual diet):
+//  - build-up : bass dropped out while overall/high energy keeps climbing (risers,
+//    snare rolls) — the tension before a drop.
+//  - drop     : the bass slams back in with a big energy jump — latched for a few
+//    seconds so it doesn't flicker back the instant the jump settles.
+//  - chorus   : sustained full-energy groove with the low end present (the default).
+// Feed it the per-frame { level, bands } at a modest rate (~15 Hz is plenty).
+export class SongPhaseDetector {
+  constructor() {
+    this.levelFast = 0; this.levelSlow = 0;
+    this.bassFast = 0;
+    this.highFast = 0; this.highSlow = 0;
+    this.phase = 'chorus';
+    this._dropUntil = 0;
+    this._buildFrames = 0;
+  }
+
+  push({ level = 0, bands } = {}, tMs = 0) {
+    const bass = bands?.bass ?? 0;
+    const high = bands?.drums ?? 0;
+    // Fast envelopes react in ~1 s; slow envelopes hold the multi-second baseline.
+    this.levelFast += (level - this.levelFast) * 0.08;
+    this.levelSlow += (level - this.levelSlow) * 0.006;
+    this.bassFast += (bass - this.bassFast) * 0.1;
+    this.highFast += (high - this.highFast) * 0.08;
+    this.highSlow += (high - this.highSlow) * 0.006;
+
+    const rising = this.levelFast > this.levelSlow * 1.06;
+    const highRising = this.highFast > this.highSlow * 1.1;
+    const bassLow = this.bassFast < 0.32;
+    const energyHigh = this.levelFast > 0.14;
+    const jump = this.levelFast - this.levelSlow;
+
+    // Hold a detected drop for ~4 s before re-evaluating.
+    if (tMs < this._dropUntil) { this.phase = 'drop'; return this.phase; }
+
+    if (this.bassFast > 0.5 && jump > 0.035 && energyHigh) {
+      this.phase = 'drop';
+      this._dropUntil = tMs + 4000;
+      this._buildFrames = 0;
+      return this.phase;
+    }
+    if (bassLow && (rising || highRising)) {
+      this._buildFrames += 1;
+      if (this._buildFrames > 6) this.phase = 'buildup';
+      return this.phase;
+    }
+    this._buildFrames = Math.max(0, this._buildFrames - 1);
+    this.phase = 'chorus';
+    return this.phase;
+  }
+}
+
 export function hsvToHex(h, s, v) {
   // h in [0,360), s,v in [0,1] → '#rrggbb'
   const c = v * s;
@@ -67,7 +121,10 @@ export class AudioReactor {
     this.data = null;
     this.bassAvg = 0;
     this.lastBeat = 0;
-    this.onFrame = null; // ({ level, bass, beat }) => void
+    this.kickAvg = 0; // running sub-bass average for kick detection
+    this.kickEnv = 0; // kick meter envelope (fast attack, slow release)
+    this.lastKick = 0;
+    this.onFrame = null; // ({ level, bass, beat, bands, kick, kickHit }) => void
   }
 
   get running() { return !!this.raf; }
@@ -170,7 +227,20 @@ export class AudioReactor {
     };
     const bands = { bass: norm('bass', bassRaw), drums: norm('drums', drumsRaw), melody: norm('melody', midRaw) };
 
-    if (this.onFrame) this.onFrame({ level, bass: bassNorm, beat, bands });
+    // --- Kick detector ---
+    // Just the kick drum: a transient in the sub-bass (40–120 Hz) above its running
+    // average, debounced. Feeds a fast-attack / slow-release envelope for the meter.
+    const kickRaw = bandEnergy(40, 120);
+    this.kickAvg = this.kickAvg * 0.9 + kickRaw * 0.1;
+    let kickHit = false;
+    if (kickRaw > this.kickAvg * 1.5 && kickRaw > 0.12 && now - this.lastKick > 120) {
+      kickHit = true;
+      this.lastKick = now;
+    }
+    this.kickEnv *= 0.84;
+    if (kickHit) this.kickEnv = 1;
+
+    if (this.onFrame) this.onFrame({ level, bass: bassNorm, beat, bands, kick: this.kickEnv, kickHit });
   };
 
   stop() {

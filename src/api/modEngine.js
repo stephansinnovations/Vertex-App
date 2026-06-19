@@ -144,6 +144,9 @@ class ModEngine {
     this.audioLevel = 0; // 0..1 live music level while detecting tempo
     this.detecting = false; // listening for BPM
     this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
+    this.kick = 0; // 0..1 live kick-drum envelope while syncing
+    this.lastBeatMs = 0; // performance.now() of the last detected beat (for the beat meter)
+    this.phase = 'chorus'; // detected song phase: 'buildup' | 'drop' | 'chorus'
     // Spatial pattern: maps a design onto the flowers by their canvas position, so a
     // pattern flows across them in a direction. Move the flowers, the pattern stays.
     // direction in degrees; colorA/colorB + gradient drive the pattern's colors.

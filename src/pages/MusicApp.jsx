@@ -16,7 +16,7 @@ import {
   isTestMode,
   setTestFlowerCount,
 } from '@/api/flowerBle';
-import { AudioReactor, BpmTracker } from '@/api/audioReactive';
+import { AudioReactor, BpmTracker, SongPhaseDetector } from '@/api/audioReactive';
 import { modEngine } from '@/api/modEngine';
 import BouquetVisualizer from '@/components/BouquetVisualizer';
 import PatternScreen from '@/components/PatternScreen';
@@ -24,6 +24,37 @@ import LfoModule from '@/components/LfoModule';
 import Knob from '@/components/Knob';
 
 const SWATCHES = ['#8b5cf6', '#ff0040', '#ff7a00', '#ffd400', '#00e676', '#00b8ff', '#ff00d4', '#ffffff'];
+
+// Song-phase tag styling (next to Live / Test mode / Sync to music).
+const PHASE_TAGS = {
+  buildup: { label: 'Build-up', color: '#ffd400', glow: 'rgba(255,212,0,0.45)' },
+  drop: { label: 'Drop', color: '#ff0040', glow: 'rgba(255,0,64,0.5)' },
+  chorus: { label: 'Chorus', color: '#36d6c3', glow: 'rgba(54,214,195,0.4)' },
+};
+
+// A pair of vertical bars: kick-drum envelope (left) + beat/BPM metronome (right).
+// Reads the live values straight off modEngine; the parent re-renders on engine emits.
+function SyncMeters({ kick, beatFill, bpm, compact = false }) {
+  const h = compact ? 88 : 120;
+  const Bar = ({ value, color, glow }) => (
+    <div className="relative w-3.5 rounded-full bg-white/8 overflow-hidden" style={{ height: h }}>
+      <div className="absolute bottom-0 left-0 right-0 rounded-full"
+        style={{ height: `${Math.round(Math.min(1, value) * 100)}%`, background: color, boxShadow: value > 0.25 ? `0 0 10px ${glow}` : 'none', transition: 'height 70ms linear' }} />
+    </div>
+  );
+  return (
+    <div className="flex items-end gap-3">
+      <div className="flex flex-col items-center gap-1.5">
+        <Bar value={kick} color="#ff6a00" glow="rgba(255,106,0,0.6)" />
+        <span className="text-[9px] uppercase tracking-widest text-white/45">Kick</span>
+      </div>
+      <div className="flex flex-col items-center gap-1.5">
+        <Bar value={beatFill} color="#36d6c3" glow="rgba(54,214,195,0.6)" />
+        <span className="text-[9px] uppercase tracking-widest text-white/45">{bpm} <span className="text-white/30">BPM</span></span>
+      </div>
+    </div>
+  );
+}
 const LFO_OPTS = modEngine.lfos.map((l, i) => ({ value: `lfo:${i}`, label: l.name }));
 const MACRO_OPTS = modEngine.macros.map((m, i) => ({ value: `macro:${i}`, label: m.name }));
 
@@ -116,6 +147,7 @@ export default function MusicApp() {
   const [level, setLevel] = useState(0);
   const reactorRef = useRef(null);
   const trackerRef = useRef(null);
+  const phaseRef = useRef(null);
   const wakeLockRef = useRef(null);
 
   // Re-render on engine ticks so macro meters / playhead stay live.
@@ -187,6 +219,17 @@ export default function MusicApp() {
     return () => clearTimeout(t);
   }, [brightness, connected, waving, running]);
 
+  // Clear all live audio-detection readouts on the engine (kick/level/bands/phase).
+  const resetSyncMeters = useCallback(() => {
+    modEngine.detecting = false;
+    modEngine.audioLevel = 0;
+    modEngine.kick = 0;
+    modEngine.bands = { bass: 0, drums: 0, melody: 0 };
+    modEngine.phase = 'chorus';
+    modEngine.lastBeatMs = 0;
+    phaseRef.current = null;
+  }, []);
+
   // Sync to music = detect the music's BPM and feed it to the LFOs (tempo-synced
   // LFOs follow it; Trigger-mode LFOs retrigger on the beat). Nothing else.
   const handleSyncToggle = useCallback(async () => {
@@ -196,24 +239,29 @@ export default function MusicApp() {
       reactorRef.current = null;
       setSyncing(false);
       setLevel(0);
-      modEngine.detecting = false;
-      modEngine.audioLevel = 0;
-      modEngine.bands = { bass: 0, drums: 0, melody: 0 };
+      resetSyncMeters();
       modEngine.emit();
       return;
     }
     try {
       trackerRef.current = new BpmTracker();
+      phaseRef.current = new SongPhaseDetector();
       const reactor = new AudioReactor();
       let lastEmit = 0;
-      reactor.onFrame = ({ level: lvl, beat, bands }) => {
+      reactor.onFrame = ({ level: lvl, beat, bands, kick }) => {
         modEngine.audioLevel = lvl;
         if (bands) modEngine.bands = bands;
-        if (beat) { modEngine.bpm = trackerRef.current.push(performance.now()); modEngine.onBeat(); }
+        modEngine.kick = kick ?? 0;
+        if (beat) { modEngine.bpm = trackerRef.current.push(performance.now()); modEngine.onBeat(); modEngine.lastBeatMs = performance.now(); }
         const now = performance.now();
-        if (now - lastEmit > 60) { lastEmit = now; setLevel(lvl); modEngine.emit(); }
+        if (now - lastEmit > 60) {
+          lastEmit = now;
+          modEngine.phase = phaseRef.current.push({ level: lvl, bands }, now);
+          setLevel(lvl);
+          modEngine.emit();
+        }
       };
-      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; modEngine.detecting = false; modEngine.audioLevel = 0; modEngine.bands = { bass: 0, drums: 0, melody: 0 }; modEngine.emit(); };
+      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; resetSyncMeters(); modEngine.emit(); };
       await reactor.start(audioSource);
       reactorRef.current = reactor;
       modEngine.detecting = true;
@@ -241,6 +289,12 @@ export default function MusicApp() {
           reactorRef.current = null;
           setSyncing(false);
           setLevel(0);
+          modEngine.detecting = false;
+          modEngine.audioLevel = 0;
+          modEngine.kick = 0;
+          modEngine.bands = { bass: 0, drums: 0, melody: 0 };
+          modEngine.phase = 'chorus';
+          modEngine.lastBeatMs = 0;
         }
       }
     });
@@ -269,6 +323,13 @@ export default function MusicApp() {
   }, [syncing]);
 
   useEffect(() => () => { reactorRef.current?.stop(); }, []);
+
+  // Live readouts for the sync meters / phase tag (recomputed each engine emit).
+  const bpm = modEngine.bpm || 120;
+  const beatFill = (syncing && modEngine.lastBeatMs)
+    ? Math.max(0, 1 - (performance.now() - modEngine.lastBeatMs) / (60000 / bpm))
+    : 0;
+  const phaseTag = PHASE_TAGS[modEngine.phase] || PHASE_TAGS.chorus;
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#0a0a12] via-[#0d0a1a] to-black text-white flex flex-col">
@@ -299,6 +360,16 @@ export default function MusicApp() {
               <span className="block h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: syncing ? '#0b0d11' : '#36d6c3' }} />
             </span>
           </button>
+          {/* Song-phase tag — build-up / drop / chorus, live while syncing */}
+          <span
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition border"
+            style={syncing
+              ? { color: phaseTag.color, borderColor: phaseTag.color, background: 'rgba(255,255,255,0.04)', boxShadow: `0 0 12px ${phaseTag.glow}` }
+              : { color: 'rgba(255,255,255,0.3)', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent' }}
+            title="Detected song phase">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: syncing ? phaseTag.color : 'rgba(255,255,255,0.3)' }} />
+            {syncing ? phaseTag.label : 'Phase'}
+          </span>
           {testMode && <span className="text-[11px] text-[#36d6c3]/80 w-full text-center">Pretending an ESP32 is connected — no hardware needed.</span>}
         </div>
 
@@ -420,6 +491,16 @@ export default function MusicApp() {
         </div>
       </div>
 
+      {/* Floating sync meters — kick + beat/BPM, shown while syncing with popup closed */}
+      {syncing && !syncOpen && (
+        <div className="fixed right-4 bottom-4 z-40 flex flex-col items-center gap-2 rounded-2xl bg-[#14171c]/90 backdrop-blur border border-white/10 px-3 py-3 shadow-xl">
+          <SyncMeters kick={modEngine.kick} beatFill={beatFill} bpm={bpm} compact />
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: phaseTag.color }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: phaseTag.color }} /> {phaseTag.label}
+          </span>
+        </div>
+      )}
+
       {/* Sync to music popup */}
       {syncOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setSyncOpen(false)}>
@@ -438,8 +519,20 @@ export default function MusicApp() {
             </div>
             <button onClick={handleSyncToggle}
               className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition ${syncing ? 'bg-white text-black' : 'bg-[#36d6c3] text-black hover:bg-[#36d6c3]/90'}`}>
-              {syncing ? `Stop · ${modEngine.bpm} BPM` : 'Detect tempo'}
+              {syncing ? `Stop · ${bpm} BPM` : 'Detect tempo'}
             </button>
+            {syncing && (
+              <div className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 border border-white/8 px-4 py-3">
+                <SyncMeters kick={modEngine.kick} beatFill={beatFill} bpm={bpm} />
+                <div className="flex flex-col items-end gap-1">
+                  <span className="text-[10px] uppercase tracking-widest text-white/40">Phase</span>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border"
+                    style={{ color: phaseTag.color, borderColor: phaseTag.color, boxShadow: `0 0 12px ${phaseTag.glow}` }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: phaseTag.color }} /> {phaseTag.label}
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
             </div>
