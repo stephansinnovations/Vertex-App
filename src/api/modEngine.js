@@ -136,8 +136,10 @@ class ModEngine {
     this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
     // Spatial pattern: maps a design onto the flowers by their canvas position, so a
     // pattern flows across them in a direction. Move the flowers, the pattern stays.
-    this.pattern = { type: 'sweep', direction: 0, amount: 0 }; // direction in degrees
+    this.pattern = { type: 'sweep', direction: 0, amount: 1 }; // direction in degrees
     this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
+    this.patternDrive = false; // when on, the pattern itself drives flower brightness
+    this._patternPhase = 0;
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.
@@ -261,18 +263,31 @@ class ModEngine {
     const patternOffsets = computePatternOffsets(this.pattern, positions);
     const cmds = [];
     const perFlower = [];
-    for (let gi = 0; gi < F; gi += 1) {
-      const flowOff = patternOffsets[gi] || 0;
-      const lvals = this.lfos.map((l) => {
-        if (l.band && l.band !== 'none') return l.value;
-        const off = l.stereo * (gi / F) + flowOff;
-        return off > 0.0001 ? sampleCurve(l.points, (l.phase + off) % 1) : l.value;
-      });
-      const mvals = this._macroVals(lvals);
-      const cmd = this._flowerCmd(gi, lvals, mvals);
-      cmds.push(cmd);
-      const st = stateFromCommand(cmd);
-      perFlower.push({ color: st.color, brightness: st.brightness });
+    if (this.patternDrive) {
+      // The pattern itself drives brightness: a wave fades in/out across the flowers
+      // by their position (exactly like the pattern preview).
+      const baseColor = this.targets.all.color.manual || '#8b5cf6';
+      for (let gi = 0; gi < F; gi += 1) {
+        const v = 0.5 + 0.5 * Math.sin(2 * Math.PI * (this._patternPhase - patternOffsets[gi]));
+        const cmd = { br: String(Math.round(8 + v * 92)), co: baseColor };
+        cmds.push(cmd);
+        const st = stateFromCommand(cmd);
+        perFlower.push({ color: st.color, brightness: st.brightness });
+      }
+    } else {
+      for (let gi = 0; gi < F; gi += 1) {
+        const flowOff = patternOffsets[gi] || 0;
+        const lvals = this.lfos.map((l) => {
+          if (l.band && l.band !== 'none') return l.value;
+          const off = l.stereo * (gi / F) + flowOff;
+          return off > 0.0001 ? sampleCurve(l.points, (l.phase + off) % 1) : l.value;
+        });
+        const mvals = this._macroVals(lvals);
+        const cmd = this._flowerCmd(gi, lvals, mvals);
+        cmds.push(cmd);
+        const st = stateFromCommand(cmd);
+        perFlower.push({ color: st.color, brightness: st.brightness });
+      }
     }
     const first = stateFromCommand(cmds[0] || {});
     setFlowerState({ ...first, perFlower });
@@ -282,13 +297,28 @@ class ModEngine {
   // Apply the current (static) settings once — for manual changes while stopped.
   applyOnce() { this._emitOutput(true); }
 
+  // Toggle the pattern driving the flowers directly. Keeps the loop alive on its own.
+  setPatternDrive(on) {
+    this.patternDrive = !!on;
+    if (this.patternDrive && !this._raf) {
+      this._last = performance.now();
+      this._tick();
+    } else if (!this.patternDrive && !this.running && this._raf) {
+      cancelAnimationFrame(this._raf);
+      this._raf = null;
+      this._emitOutput(true);
+      this.emit();
+    }
+  }
+
   _tick = () => {
-    if (!this.running) return;
+    if (!this.running && !this.patternDrive) return;
     this._raf = requestAnimationFrame(this._tick);
     const now = performance.now();
     let dt = (now - this._last) / 1000;
     this._last = now;
     if (dt > 0.1) dt = 0.1;
+    this._patternPhase = (this._patternPhase + dt * 0.35) % 1;
 
     // Advance + sample each LFO per its mode, with onset delay.
     for (const lfo of this.lfos) {

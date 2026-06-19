@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useReducer } from 'react';
+import { Play, Square } from 'lucide-react';
 import { modEngine, PATTERN_TYPES, computePatternOffsets } from '@/api/modEngine';
 
 // Preview grid (5×3 dots in 0..1 space).
@@ -37,6 +38,8 @@ export default function PatternScreen() {
 
   const setType = (type) => { modEngine.pattern.type = type; if (!modEngine.pattern.amount) modEngine.pattern.amount = 1; modEngine.applyOnce(); bump(); };
   const setAmount = (a) => { modEngine.pattern.amount = a; modEngine.applyOnce(); bump(); };
+  const togglePlay = () => { modEngine.setPatternDrive(!modEngine.patternDrive); bump(); };
+  const playing = modEngine.patternDrive;
 
   const dirFromEvent = (e) => {
     if (!dialRef.current) return;
@@ -60,8 +63,17 @@ export default function PatternScreen() {
   return (
     <div className="rounded-2xl bg-[#0f1216] border border-white/8 p-3 flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="text-[10px] uppercase tracking-widest text-white/40">Pattern</span>
-        <span className="text-[11px] text-[#36d6c3] capitalize">{p.type}{dirEnabled ? ` · ${p.direction}°` : ''}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-widest text-white/40">Pattern</span>
+          <span className="text-[11px] text-[#36d6c3] capitalize">{p.type}{dirEnabled ? ` · ${p.direction}°` : ''}</span>
+        </div>
+        <button
+          onClick={togglePlay}
+          className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+          title="Play this pattern on the bouquets"
+        >
+          {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play on flowers</>}
+        </button>
       </div>
 
       <div className="flex items-center gap-3">
