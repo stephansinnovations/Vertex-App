@@ -94,7 +94,51 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   (run `supabase/bug_reports.sql` once). Read all bugs via `node scripts/read-bugs.mjs`
   or the admin `/Bugs` page (Settings → Diagnostics).
 
+## Music App / LED flowers
+- **What it is:** `/MusicApp` (admin) drives Stephan's BLE LED-flower "bouquets" — an
+  ESP32 running the Pollinator MicroPython firmware (`~/Pollinator`). Live mode = Web
+  Bluetooth from the browser; **one ESP32 = one bouquet**. Multi-ESP32 in Live mode is
+  **not built** (Live connects to a single device); the rest is modelled app-side.
+- **Key files:** `api/flowerBle.js` (Web BLE), `api/flowerState.js` (shared live
+  per-flower state the viz mirrors), `api/flowerLayout.js` (bouquets/flowers model;
+  persisted in `app_settings` key `flowerLayout`), `api/modEngine.js` (singleton engine),
+  `api/audioReactive.js` (mic/tab FFT → level/beat/bands + `BpmTracker`); components
+  `BouquetVisualizer`, `LfoModule`, `LfoEditor`, `PatternScreen`, `Knob`.
+- **BLE protocol** (Pollinator, Nordic-UART service `6e400001`): per-flower JSON command
+  chars `6e400002…0000N` (`{co,mo,sp,br,ri}`, `;`-terminated, ≤20-byte packets); state
+  chars `6e400003`; one **binary frame char `6e400004`** = `[br,r,g,b]` per flower (the
+  low-latency hot path). Prefer **write-without-response** (firmware enables
+  `write_no_response`); the engine sends one `sendFrame` per tick, falling back to
+  per-flower JSON if the board lacks the frame char.
+- **Engine (`modEngine`, singleton, single rAF loop):** output is always **per-flower**.
+  Params are **per-target** (`targets` keyed `'all'|b<bi>|f<gi>`, resolved
+  flower→bouquet→all) modulated by LFOs/macros; `pattern` adds a spatial phase offset by
+  each flower's **canvas position** (`computePatternOffsets`, exported & reused by the
+  pattern preview). `applyOnce()` pushes static changes while stopped; loop runs while
+  `running` **or** `patternDrive`. `setFlowerMap`/`setFlowerPositions` are reported up
+  from `BouquetVisualizer` (positions need the live canvas rect, so the viz computes
+  them — not MusicApp).
+- **Test mode** (`flowerBle.setTestMode`): pretends a board is connected so the whole
+  UI/viz works with no hardware (writes no-op, `flowerState` still updates). The viz
+  reports total flower count via `setTestFlowerCount`, which **emits a status** so
+  subscribers re-read the count (otherwise stale → only some flowers "connect").
+- **Pattern/engine state is in-memory, NOT persisted** — pattern type/direction/colors/
+  speed and all LFO/macro/target settings reset on reload. Only the **layout** (bouquets,
+  per-flower positions, wiring) persists (`flowerLayout`).
+
 ## Gotchas
+- **Firmware lives in `~/Pollinator`** (benfogiel's repo, branch `master`) — its changes
+  are committed **locally only, never pushed**. Flash a file with
+  `uvx mpremote connect <port> resume fs cp embedded/micropython/src/<f> :src/<f>` then
+  `… resume reset` (the board runs its app on boot, so plain `mpremote connect` needs
+  `resume`). **`mpremote fs cp` can report success without actually writing** — always
+  verify by reading it back (`fs cat :src/<f> | grep <signature>`) before resetting. The
+  USB serial port **renames across reconnects** (`usbmodem101 → 1101 → …`) and sometimes
+  vanishes entirely — resolve it with `ls /dev/cu.usbmodem*`, don't hardcode.
+- **Web Bluetooth caps latency** (~30 ms floor; no API to set the BLE connection
+  interval) and **drops when Chrome freezes a backgrounded tab** → `flowerBle`
+  auto-reconnects; tab-audio capture mode warns to keep the window visible. No Web
+  Bluetooth on iOS Safari. Lowest latency would need Wi-Fi (WebSocket/UDP), not BLE.
 - **`VITE_*` env vars bake in at build time** → after changing one in Vercel, **redeploy
   with a clean build (uncheck build cache)**. Changing it on localhost needs a dev restart.
 - **localhost has a placeholder `VITE_GOOGLE_SHEETS_API_KEY`** → master-sheet reads (and
@@ -137,8 +181,12 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   sheet, but the header/modals + localStorage features — cart/orders/queue/stock — are
   testable). `CategoryRow` isn't exported, so its card/edit UI can't be harnessed in isolation.
 - **Preview viewport quirk:** after `preview_resize` desktop the viewport can collapse to
-  `width:1` (breaks layout-dependent measurements) — use the **mobile** preset (375px) for
-  reliable width-dependent checks.
+  `width:1` (breaks layout-dependent measurements) — use the **mobile** preset (375px), or a
+  custom width (e.g. 1180×860), for reliable width-dependent checks.
+- **Music App** harnesses with just `MemoryRouter` + `setTestMode(true)` (no auth); the
+  engine animates via rAF. BLE itself (connect/frame/latency) can't be harnessed — verify
+  on the deployed site with the board. **Recreate `bubble-check.html` every time** alongside
+  `src/__bubblecheck.jsx`; if it's missing, Vite serves the SPA fallback (the Login page).
 - Lint per file: `npx eslint <file> --quiet`. The unused `Disc` import in
   `PartsLibrary.jsx` is pre-existing — ignore it. Other stray unused lucide imports are
   common; remove them when you touch the file.
