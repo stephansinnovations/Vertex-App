@@ -18,12 +18,14 @@ import { setFlowerState, stateFromCommand } from './flowerState';
 
 const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
 const CMD_CHAR_PREFIX = '6e400002-b5a3-f393-e0a9-e50e24d';
+const FRAME_CHAR_PREFIX = '6e400004'; // low-latency binary frame characteristic
 
 const MSG_TERMINATOR = ';';
 const MAX_PACKET_BYTES = 20;
 
 let device = null;
 let cmdChars = [];
+let frameChar = null;
 let autoReconnect = false;
 let statusListeners = [];
 
@@ -51,13 +53,14 @@ function emitStatus(s) {
 async function discoverChars(server) {
   const service = await server.getPrimaryService(SERVICE_UUID);
   const chars = await service.getCharacteristics();
+  // The binary frame characteristic (one, low-latency) is separate from the
+  // per-flower command characteristics.
+  frameChar = chars.find((c) => c.uuid.toLowerCase().startsWith(FRAME_CHAR_PREFIX)) || null;
+  const byPrefix = chars.filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX));
   const writable = chars.filter(
-    (c) => c.properties && (c.properties.write || c.properties.writeWithoutResponse),
+    (c) => c.properties && (c.properties.write || c.properties.writeWithoutResponse) && !c.uuid.toLowerCase().startsWith(FRAME_CHAR_PREFIX),
   );
-  cmdChars = (writable.length
-    ? writable
-    : chars.filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX))
-  ).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  cmdChars = (byPrefix.length ? byPrefix : writable).sort((a, b) => a.uuid.localeCompare(b.uuid));
   return cmdChars.length;
 }
 
@@ -66,6 +69,7 @@ async function discoverChars(server) {
 // to reconnect to the same device (no user gesture needed for a known device).
 async function handleDisconnect() {
   cmdChars = [];
+  frameChar = null;
   if (!autoReconnect || !device) { emitStatus('disconnected'); return; }
   for (let attempt = 1; attempt <= 6 && autoReconnect; attempt++) {
     emitStatus('reconnecting');
@@ -173,11 +177,10 @@ export async function disconnect() {
 // that's the only property the characteristic advertises.
 async function writePacket(char, packet) {
   const p = char.properties || {};
-  if (p.write) {
-    await char.writeValue(packet);
-  } else if (p.writeWithoutResponse) {
+  // Prefer write-without-response (no per-write ACK round-trip → much lower latency).
+  if (p.writeWithoutResponse && char.writeValueWithoutResponse) {
     await char.writeValueWithoutResponse(packet);
-  } else if (char.writeValue) {
+  } else if (p.write || char.writeValue) {
     await char.writeValue(packet);
   } else {
     await char.writeValueWithoutResponse(packet);
@@ -237,6 +240,38 @@ export function sendReactivePerFlower(cmds) {
       }
     }
   })().catch(() => {}).finally(() => { _reactiveBusy = false; });
+  return true;
+}
+
+// True when the connected board exposes the low-latency binary frame characteristic.
+export function hasFrameChannel() {
+  return !!frameChar && isConnected();
+}
+
+function hexToRgb(hex) {
+  const n = parseInt((hex || '#000000').slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Low-latency path: send every flower's brightness + color in ONE binary write
+// (write-without-response). frames = [{ br: 0-100, co: '#rrggbb' }, …] in flower
+// order. Drops the frame if a write is already in flight (always send the freshest).
+export function sendFrame(frames) {
+  if (_reactiveBusy || !isConnected() || !frameChar) return false;
+  _reactiveBusy = true;
+  const bytes = new Uint8Array(frames.length * 4);
+  for (let i = 0; i < frames.length; i += 1) {
+    const f = frames[i] || {};
+    const [r, g, b] = hexToRgb(f.co || '#000000');
+    bytes[i * 4] = Math.max(0, Math.min(255, Math.round((f.br || 0) * 2.55)));
+    bytes[i * 4 + 1] = r;
+    bytes[i * 4 + 2] = g;
+    bytes[i * 4 + 3] = b;
+  }
+  const write = frameChar.writeValueWithoutResponse
+    ? frameChar.writeValueWithoutResponse(bytes)
+    : frameChar.writeValue(bytes);
+  Promise.resolve(write).catch(() => {}).finally(() => { _reactiveBusy = false; });
   return true;
 }
 

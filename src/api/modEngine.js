@@ -10,7 +10,7 @@
 // rate-limited, frame-dropping command to the flowers.
 
 import { setFlowerState, stateFromCommand } from './flowerState';
-import { sendReactivePerFlower, getFlowerCount } from './flowerBle';
+import { sendReactivePerFlower, sendFrame, hasFrameChannel, getFlowerCount } from './flowerBle';
 import { hsvToHex } from './audioReactive';
 
 export const MODES = ['Trigger', 'Loop', 'Sync'];
@@ -308,7 +308,11 @@ class ModEngine {
     }
     const first = stateFromCommand(cmds[0] || {});
     setFlowerState({ ...first, perFlower });
-    if (doSend) sendReactivePerFlower(cmds);
+    if (doSend) {
+      // Low-latency binary frame (one write) when the board supports it; else JSON.
+      if (hasFrameChannel()) sendFrame(cmds.map((c) => ({ br: Number(c.br), co: c.co })));
+      else sendReactivePerFlower(cmds);
+    }
   }
 
   // Apply the current (static) settings once — for manual changes while stopped.
