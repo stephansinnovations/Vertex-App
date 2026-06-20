@@ -302,14 +302,16 @@ function hexToRgb(hex) {
 // in global flower order. Drops the round if a write is already in flight (always
 // send the freshest). Returns false (so the engine falls back) unless every board has
 // a frame char.
-export function sendFrame(frames) {
-  if (_reactiveBusy || !isConnected() || !hasFrameChannel()) return false;
-  _reactiveBusy = true;
+// Build + dispatch one binary frame per board (each board its own channel slice of the
+// global `frames` array) and return the array of in-flight write promises. Shared by
+// the reactive (frame-dropping) and reliable (awaited) frame paths so they encode and
+// address boards identically.
+function frameWritesForBoards(frames) {
   const writes = [];
   let offset = 0;
   for (const c of conns) {
     const n = c.cmdChars.length;
-    if (!n) continue;
+    if (!n || !c.frameChar) { offset += n; continue; }
     const slice = frames.slice(offset, offset + n);
     offset += n;
     const bytes = new Uint8Array(slice.length * 4);
@@ -326,7 +328,13 @@ export function sendFrame(frames) {
       : c.frameChar.writeValue(bytes);
     writes.push(Promise.resolve(w));
   }
-  Promise.all(writes).catch(() => {}).finally(() => { _reactiveBusy = false; });
+  return writes;
+}
+
+export function sendFrame(frames) {
+  if (_reactiveBusy || !isConnected() || !hasFrameChannel()) return false;
+  _reactiveBusy = true;
+  Promise.all(frameWritesForBoards(frames)).catch(() => {}).finally(() => { _reactiveBusy = false; });
   return true;
 }
 
@@ -366,20 +374,33 @@ export async function refreshFlowers() {
 
 // Identification mode: light each flower a distinct solid color so you can physically
 // map a channel to a flower in the room. `colors` is indexed by GLOBAL channel — a hex
-// string per flower, or '#000000'/null for "off". Stops motion and mirrors the colors
-// into flowerState.perFlower so the on-screen visualization shows the same mapping
-// (works in test mode too). Hardware writes go WITH response so the colors hold.
+// string per flower, or '#000000'/null for "off".
+//
+// CRITICAL: the on-screen viz and the real flowers must show the SAME thing. So we send
+// the per-flower colors to the hardware through the very same transport the engine uses
+// (the binary frame char → firmware `set_solid` per flower), and set flowerState.perFlower
+// from the IDENTICAL array. The write is awaited and bypasses the frame-drop guard so the
+// colors always land (this is a deliberate static display, not a hot loop). Falls back to
+// awaited per-flower JSON if a board lacks the frame char. In test mode (no real chars)
+// only the viz updates.
 export async function identifyFlowers(colors) {
   const perFlower = colors.map((c) => {
     const co = (typeof c === 'string' && c) ? c : '#000000';
     return { color: co, brightness: co === '#000000' ? 0 : 100 };
   });
   setFlowerState({ perFlower });
-  const chars = allCmdChars();
-  for (let i = 0; i < chars.length; i += 1) {
-    const co = perFlower[i]?.color || '#000000';
-    // eslint-disable-next-line no-await-in-loop
-    await writeCmdToChar(chars[i], { mo: [], br: '100', co }, true);
+  if (!realConnected()) return; // test mode / disconnected: viz mirror only
+  const frames = perFlower.map((p) => ({ br: p.brightness, co: p.color }));
+  if (hasFrameChannel()) {
+    await Promise.all(frameWritesForBoards(frames)).catch(() => {});
+  } else {
+    // No binary frame char: stop motion + set each flower's solid color over JSON.
+    const chars = allCmdChars();
+    for (let i = 0; i < chars.length; i += 1) {
+      const p = perFlower[i] || { color: '#000000', brightness: 0 };
+      // eslint-disable-next-line no-await-in-loop
+      await writeCmdToChar(chars[i], { mo: [], br: String(p.brightness), co: p.color }, true);
+    }
   }
 }
 
