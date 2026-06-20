@@ -184,6 +184,7 @@ class ModEngine {
     this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35 };
     this._patternOnce = false;
     this._onceLeft = 0;
+    this._ripplePrev = null; // saved pattern/drive state to restore after a ripple burst
     this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
     this.patternDrive = false; // when on, the pattern itself drives flower brightness
     this._patternPhase = 0;
@@ -401,6 +402,23 @@ class ModEngine {
 
   // Play the pattern through once (one full pass across the flowers), then go dark.
   triggerOnce() {
+    this._ripplePrev = null;
+    this._patternPhase = 0;
+    this._onceLeft = 1 + (this.pattern.amount || 0) + 0.6;
+    this._patternOnce = true;
+    this.patternDrive = true;
+    if (!this._raf) { this._last = performance.now(); this._tick(); }
+  }
+
+  // One-shot ripple from the center outward (a "radiate" pulse), in the given colors.
+  // Plays over whatever's set, then restores the pattern + drive state it interrupted —
+  // so a launch-pad tap fires a burst without permanently hijacking the pattern.
+  rippleBurst(colorA, colorB) {
+    this._ripplePrev = { pattern: { ...this.pattern }, patternDrive: this.patternDrive };
+    this.pattern.type = 'radiate';
+    this.pattern.amount = Math.max(this.pattern.amount || 0, 1.5);
+    if (colorA) this.pattern.colorA = colorA;
+    if (colorB != null) { this.pattern.colorB = colorB; this.pattern.gradient = true; }
     this._patternPhase = 0;
     this._onceLeft = 1 + (this.pattern.amount || 0) + 0.6;
     this._patternOnce = true;
@@ -431,9 +449,21 @@ class ModEngine {
       this._onceLeft -= dt * prate;
       if (this._onceLeft <= 0) {
         this._patternOnce = false;
-        this.patternDrive = false;
-        this._allOff();
-        if (!this.running && this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+        const prev = this._ripplePrev;
+        this._ripplePrev = null;
+        if (prev) {
+          // Ripple-burst over: restore the pattern + drive state it interrupted.
+          Object.assign(this.pattern, prev.pattern);
+          this.patternDrive = prev.patternDrive;
+          if (!this.patternDrive && !this.running) {
+            this._allOff();
+            if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+          }
+        } else {
+          this.patternDrive = false;
+          this._allOff();
+          if (!this.running && this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
+        }
         this.emit();
       }
     }

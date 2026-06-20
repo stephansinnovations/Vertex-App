@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useReducer } from 'react';
+import React, { useEffect, useRef, useReducer, useState } from 'react';
 import { Play, Square, Zap } from 'lucide-react';
 import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, SYNC_NAMES } from '@/api/modEngine';
 
@@ -12,6 +12,30 @@ const COLOR_PAIRS = [
   ['#ef4444', '#a855f7'],
 ];
 
+// Finger pad: 2 rows × 8 = 16 preset pads. Tapping a pad loads its pattern preset
+// (type / colors / direction / spread / speed) AND fires a one-shot ripple from the
+// center outward — a launch-pad "hit".
+const PAD_PRESETS = [
+  { type: 'sweep', direction: 0, amount: 1.3, colorA: '#ff0040', colorB: '#ff7a00' },
+  { type: 'sweep', direction: 45, amount: 1.3, colorA: '#ff7a00', colorB: '#ffd400' },
+  { type: 'ripple', direction: 0, amount: 1.3, colorA: '#ffd400', colorB: '#00e676' },
+  { type: 'bounce', direction: 90, amount: 1.3, colorA: '#00e676', colorB: '#00b8ff' },
+  { type: 'radiate', direction: 0, amount: 1.4, colorA: '#00b8ff', colorB: '#6d28d9' },
+  { type: 'scatter', direction: 0, amount: 1.4, colorA: '#8b5cf6', colorB: '#ff00d4' },
+  { type: 'sweep', direction: 180, amount: 1.3, colorA: '#ff00d4', colorB: '#ff0040' },
+  { type: 'bounce', direction: 45, amount: 1.3, colorA: '#f472b6', colorB: '#fb923c' },
+  { type: 'ripple', direction: 0, amount: 1.3, colorA: '#22d3ee', colorB: '#36d6c3' },
+  { type: 'radiate', direction: 0, amount: 1.4, colorA: '#ef4444', colorB: '#a855f7' },
+  { type: 'sweep', direction: 270, amount: 1.3, colorA: '#3b82f6', colorB: '#2dd4bf' },
+  { type: 'scatter', direction: 0, amount: 1.4, colorA: '#d946ef', colorB: '#fbbf24' },
+  { type: 'ripple', direction: 0, amount: 1.3, colorA: '#22c55e', colorB: '#3b82f6' },
+  { type: 'bounce', direction: 135, amount: 1.3, colorA: '#f59e0b', colorB: '#ef4444' },
+  { type: 'sweep', direction: 315, amount: 1.3, colorA: '#06b6d4', colorB: '#8b5cf6' },
+  { type: 'radiate', direction: 0, amount: 1.4, colorA: '#ffffff', colorB: '#36d6c3' },
+].map((p) => ({ ...p, gradient: true, sync: 'free', rate: 0.5 }));
+
+const PAD_ABBR = { sweep: 'SWP', ripple: 'RIP', bounce: 'BNC', radiate: 'RAD', scatter: 'SCT' };
+
 // Preview grid (5×3 dots in 0..1 space).
 const GRID = [];
 for (let r = 0; r < 3; r += 1) for (let c = 0; c < 5; c += 1) GRID.push({ x: c / 4, y: r / 2 });
@@ -21,9 +45,22 @@ for (let r = 0; r < 3; r += 1) for (let c = 0; c < 5; c += 1) GRID.push({ x: c /
 // here is mapped onto the flowers by their canvas position.
 export default function PatternScreen() {
   const [, bump] = useReducer((x) => x + 1, 0);
+  const [activePad, setActivePad] = useState(-1);
   const phaseRef = useRef(0);
   const dialRef = useRef(null);
   const draggingDir = useRef(false);
+
+  // Tap a pad → load its preset into the pattern + fire a ripple from the center out.
+  const pressPad = (pad, idx) => {
+    Object.assign(modEngine.pattern, {
+      type: pad.type, direction: pad.direction, amount: pad.amount,
+      colorA: pad.colorA, colorB: pad.colorB, gradient: pad.gradient,
+      sync: pad.sync, rate: pad.rate,
+    });
+    modEngine.rippleBurst(pad.colorA, pad.gradient ? pad.colorB : null);
+    setActivePad(idx);
+    bump();
+  };
 
   // Animate the preview phase.
   useEffect(() => {
@@ -125,6 +162,24 @@ export default function PatternScreen() {
             <line x1="32" y1="32" x2={32 + 24 * Math.cos(rad)} y2={32 + 24 * Math.sin(rad)} stroke="#36d6c3" strokeWidth="3" strokeLinecap="round" />
             <circle cx={32 + 24 * Math.cos(rad)} cy={32 + 24 * Math.sin(rad)} r="4" fill="#36d6c3" />
           </svg>
+        </div>
+      </div>
+
+      {/* Finger pad — 2 rows × 8. Tap loads the preset + ripples from the center out. */}
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[10px] uppercase tracking-widest text-white/40">Finger pad</span>
+        <div className="grid grid-cols-8 gap-1 touch-none select-none">
+          {PAD_PRESETS.map((pad, i) => (
+            <button
+              key={i}
+              onClick={() => pressPad(pad, i)}
+              title={`${pad.type} · ripple from center`}
+              className={`relative aspect-square rounded-md overflow-hidden transition-transform active:scale-90 ${activePad === i ? 'ring-2 ring-white scale-105' : 'ring-1 ring-white/10 hover:ring-white/30'}`}
+              style={{ background: `linear-gradient(135deg, ${pad.colorA}, ${pad.colorB})`, boxShadow: activePad === i ? `0 0 12px ${pad.colorA}` : 'none' }}
+            >
+              <span className="absolute inset-x-0 bottom-0 text-center text-[7px] font-bold leading-[1.4] text-white/90 bg-black/30">{PAD_ABBR[pad.type]}</span>
+            </button>
+          ))}
         </div>
       </div>
 
