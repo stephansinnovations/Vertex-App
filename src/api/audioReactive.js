@@ -14,6 +14,8 @@
 //    playing inside a browser tab. We request video (required for the picker) then
 //    immediately drop the video track.
 
+import { kickModel } from './musicML';
+
 // Estimate BPM from a stream of detected beat timestamps. Uses the median of recent
 // inter-beat intervals (robust to the odd missed/extra beat) and octave-folds the
 // result into a musical range so half/double-time detections settle sensibly.
@@ -47,60 +49,6 @@ export class BpmTracker {
   }
 }
 
-// Estimate which phase of a track is playing from the live energy/band envelopes.
-// Pure heuristic tuned for electronic music (the flowers' usual diet):
-//  - build-up : bass dropped out while overall/high energy keeps climbing (risers,
-//    snare rolls) — the tension before a drop.
-//  - drop     : the bass slams back in with a big energy jump — latched for a few
-//    seconds so it doesn't flicker back the instant the jump settles.
-//  - chorus   : sustained full-energy groove with the low end present (the default).
-// Feed it the per-frame { level, bands } at a modest rate (~15 Hz is plenty).
-export class SongPhaseDetector {
-  constructor() {
-    this.levelFast = 0; this.levelSlow = 0;
-    this.bassFast = 0;
-    this.highFast = 0; this.highSlow = 0;
-    this.phase = 'chorus';
-    this._dropUntil = 0;
-    this._buildFrames = 0;
-  }
-
-  push({ level = 0, bands } = {}, tMs = 0) {
-    const bass = bands?.bass ?? 0;
-    const high = bands?.drums ?? 0;
-    // Fast envelopes react in ~1 s; slow envelopes hold the multi-second baseline.
-    this.levelFast += (level - this.levelFast) * 0.08;
-    this.levelSlow += (level - this.levelSlow) * 0.006;
-    this.bassFast += (bass - this.bassFast) * 0.1;
-    this.highFast += (high - this.highFast) * 0.08;
-    this.highSlow += (high - this.highSlow) * 0.006;
-
-    const rising = this.levelFast > this.levelSlow * 1.06;
-    const highRising = this.highFast > this.highSlow * 1.1;
-    const bassLow = this.bassFast < 0.32;
-    const energyHigh = this.levelFast > 0.14;
-    const jump = this.levelFast - this.levelSlow;
-
-    // Hold a detected drop for ~4 s before re-evaluating.
-    if (tMs < this._dropUntil) { this.phase = 'drop'; return this.phase; }
-
-    if (this.bassFast > 0.5 && jump > 0.035 && energyHigh) {
-      this.phase = 'drop';
-      this._dropUntil = tMs + 4000;
-      this._buildFrames = 0;
-      return this.phase;
-    }
-    if (bassLow && (rising || highRising)) {
-      this._buildFrames += 1;
-      if (this._buildFrames > 6) this.phase = 'buildup';
-      return this.phase;
-    }
-    this._buildFrames = Math.max(0, this._buildFrames - 1);
-    this.phase = 'chorus';
-    return this.phase;
-  }
-}
-
 export function hsvToHex(h, s, v) {
   // h in [0,360), s,v in [0,1] → '#rrggbb'
   const c = v * s;
@@ -121,7 +69,7 @@ export class AudioReactor {
     this.data = null;
     this.bassAvg = 0;
     this.lastBeat = 0;
-    this.kickAvg = 0; // running sub-bass average for kick detection
+    this.kickModel = kickModel; // shared, persisted adaptive kick detector
     this.kickEnv = 0; // kick meter envelope (fast attack, slow release)
     this.lastKick = 0;
     this.onFrame = null; // ({ level, bass, beat, bands, kick, kickHit }) => void
@@ -212,11 +160,17 @@ export class AudioReactor {
     const bassRaw = bandEnergy(30, 150);
     const midRaw = bandEnergy(300, 2500);
     const highRaw = bandEnergy(4000, 12000);
+    // Spectral flux: full-band (for the drums proxy) and sub-bass-only (40–120 Hz, the
+    // onset signal the learned kick detector watches).
+    const kLo = Math.max(0, Math.floor(40 / binHz));
+    const kHi = Math.min(n - 1, Math.ceil(120 / binHz));
     let flux = 0;
+    let kFlux = 0;
     if (this._prev) {
-      for (let i = 0; i < n; i += 1) { const d = bins[i] - this._prev[i]; if (d > 0) flux += d; }
+      for (let i = 0; i < n; i += 1) { const d = bins[i] - this._prev[i]; if (d > 0) { flux += d; if (i >= kLo && i <= kHi) kFlux += d; } }
     }
     this._prev = bins.slice();
+    const kickOnset = (kHi - kLo + 1) ? kFlux / ((kHi - kLo + 1) * 255) : 0;
     const fluxNorm = Math.min(1, flux / (n * 40));
     const drumsRaw = Math.min(1, fluxNorm * 1.5 + highRaw * 0.4);
 
@@ -227,16 +181,13 @@ export class AudioReactor {
     };
     const bands = { bass: norm('bass', bassRaw), drums: norm('drums', drumsRaw), melody: norm('melody', midRaw) };
 
-    // --- Kick detector ---
-    // Just the kick drum: a transient in the sub-bass (40–120 Hz) above its running
-    // average, debounced. Feeds a fast-attack / slow-release envelope for the meter.
-    const kickRaw = bandEnergy(40, 120);
-    this.kickAvg = this.kickAvg * 0.9 + kickRaw * 0.1;
-    let kickHit = false;
-    if (kickRaw > this.kickAvg * 1.5 && kickRaw > 0.12 && now - this.lastKick > 120) {
-      kickHit = true;
-      this.lastKick = now;
-    }
+    // --- Kick detector (learned) ---
+    // Just the kick drum. The adaptive KickModel watches the sub-bass onset and
+    // decides a hit from its learned running statistics (no fixed thresholds), so it
+    // locks onto the kick of any track and improves the more it listens.
+    const kickEnergy = bandEnergy(40, 120);
+    const { hit: kickHit } = this.kickModel.update(kickOnset, kickEnergy, now - this.lastKick > 110);
+    if (kickHit) this.lastKick = now;
     this.kickEnv *= 0.84;
     if (kickHit) this.kickEnv = 1;
 

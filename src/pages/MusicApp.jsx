@@ -16,7 +16,8 @@ import {
   isTestMode,
   setTestFlowerCount,
 } from '@/api/flowerBle';
-import { AudioReactor, BpmTracker, SongPhaseDetector } from '@/api/audioReactive';
+import { AudioReactor, BpmTracker } from '@/api/audioReactive';
+import { phaseLearner, kickModel, phaseColor, resetMusicModel } from '@/api/musicML';
 import { modEngine } from '@/api/modEngine';
 import BouquetVisualizer from '@/components/BouquetVisualizer';
 import PatternScreen from '@/components/PatternScreen';
@@ -24,13 +25,6 @@ import LfoModule from '@/components/LfoModule';
 import Knob from '@/components/Knob';
 
 const SWATCHES = ['#8b5cf6', '#ff0040', '#ff7a00', '#ffd400', '#00e676', '#00b8ff', '#ff00d4', '#ffffff'];
-
-// Song-phase tag styling (next to Live / Test mode / Sync to music).
-const PHASE_TAGS = {
-  buildup: { label: 'Build-up', color: '#ffd400', glow: 'rgba(255,212,0,0.45)' },
-  drop: { label: 'Drop', color: '#ff0040', glow: 'rgba(255,0,64,0.5)' },
-  chorus: { label: 'Chorus', color: '#36d6c3', glow: 'rgba(54,214,195,0.4)' },
-};
 
 // A pair of vertical bars: kick-drum envelope (left) + beat/BPM metronome (right).
 // Reads the live values straight off modEngine; the parent re-renders on engine emits.
@@ -147,7 +141,6 @@ export default function MusicApp() {
   const [level, setLevel] = useState(0);
   const reactorRef = useRef(null);
   const trackerRef = useRef(null);
-  const phaseRef = useRef(null);
   const wakeLockRef = useRef(null);
 
   // Re-render on engine ticks so macro meters / playhead stay live.
@@ -225,9 +218,8 @@ export default function MusicApp() {
     modEngine.audioLevel = 0;
     modEngine.kick = 0;
     modEngine.bands = { bass: 0, drums: 0, melody: 0 };
-    modEngine.phase = 'chorus';
+    modEngine.phase = 'Chorus';
     modEngine.lastBeatMs = 0;
-    phaseRef.current = null;
   }, []);
 
   // Sync to music = detect the music's BPM and feed it to the LFOs (tempo-synced
@@ -245,7 +237,7 @@ export default function MusicApp() {
     }
     try {
       trackerRef.current = new BpmTracker();
-      phaseRef.current = new SongPhaseDetector();
+      phaseLearner.beginSession();
       const reactor = new AudioReactor();
       let lastEmit = 0;
       reactor.onFrame = ({ level: lvl, beat, bands, kick }) => {
@@ -256,7 +248,7 @@ export default function MusicApp() {
         const now = performance.now();
         if (now - lastEmit > 60) {
           lastEmit = now;
-          modEngine.phase = phaseRef.current.push({ level: lvl, bands }, now);
+          modEngine.phase = phaseLearner.push({ level: lvl, bass: bands?.bass, perc: bands?.drums, mel: bands?.melody, kick: modEngine.kick });
           setLevel(lvl);
           modEngine.emit();
         }
@@ -293,7 +285,7 @@ export default function MusicApp() {
           modEngine.audioLevel = 0;
           modEngine.kick = 0;
           modEngine.bands = { bass: 0, drums: 0, melody: 0 };
-          modEngine.phase = 'chorus';
+          modEngine.phase = 'Chorus';
           modEngine.lastBeatMs = 0;
         }
       }
@@ -329,7 +321,8 @@ export default function MusicApp() {
   const beatFill = (syncing && modEngine.lastBeatMs)
     ? Math.max(0, 1 - (performance.now() - modEngine.lastBeatMs) / (60000 / bpm))
     : 0;
-  const phaseTag = PHASE_TAGS[modEngine.phase] || PHASE_TAGS.chorus;
+  const phaseLabel = modEngine.phase || 'Chorus';
+  const phaseCol = phaseColor(phaseLabel);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#0a0a12] via-[#0d0a1a] to-black text-white flex flex-col">
@@ -360,15 +353,15 @@ export default function MusicApp() {
               <span className="block h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: syncing ? '#0b0d11' : '#36d6c3' }} />
             </span>
           </button>
-          {/* Song-phase tag — build-up / drop / chorus, live while syncing */}
+          {/* Learned song-section tag — grows new categories the more it listens */}
           <span
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition border"
             style={syncing
-              ? { color: phaseTag.color, borderColor: phaseTag.color, background: 'rgba(255,255,255,0.04)', boxShadow: `0 0 12px ${phaseTag.glow}` }
+              ? { color: phaseCol, borderColor: phaseCol, background: 'rgba(255,255,255,0.04)', boxShadow: `0 0 12px ${phaseCol}` }
               : { color: 'rgba(255,255,255,0.3)', borderColor: 'rgba(255,255,255,0.1)', background: 'transparent' }}
-            title="Detected song phase">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: syncing ? phaseTag.color : 'rgba(255,255,255,0.3)' }} />
-            {syncing ? phaseTag.label : 'Phase'}
+            title="Learned song section">
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: syncing ? phaseCol : 'rgba(255,255,255,0.3)' }} />
+            {syncing ? phaseLabel : 'Section'}
           </span>
           {testMode && <span className="text-[11px] text-[#36d6c3]/80 w-full text-center">Pretending an ESP32 is connected — no hardware needed.</span>}
         </div>
@@ -495,8 +488,8 @@ export default function MusicApp() {
       {syncing && !syncOpen && (
         <div className="fixed right-4 bottom-4 z-40 flex flex-col items-center gap-2 rounded-2xl bg-[#14171c]/90 backdrop-blur border border-white/10 px-3 py-3 shadow-xl">
           <SyncMeters kick={modEngine.kick} beatFill={beatFill} bpm={bpm} compact />
-          <span className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: phaseTag.color }}>
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: phaseTag.color }} /> {phaseTag.label}
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: phaseCol }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: phaseCol }} /> {phaseLabel}
           </span>
         </div>
       )}
@@ -525,14 +518,22 @@ export default function MusicApp() {
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 border border-white/8 px-4 py-3">
                 <SyncMeters kick={modEngine.kick} beatFill={beatFill} bpm={bpm} />
                 <div className="flex flex-col items-end gap-1">
-                  <span className="text-[10px] uppercase tracking-widest text-white/40">Phase</span>
+                  <span className="text-[10px] uppercase tracking-widest text-white/40">Section</span>
                   <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border"
-                    style={{ color: phaseTag.color, borderColor: phaseTag.color, boxShadow: `0 0 12px ${phaseTag.glow}` }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: phaseTag.color }} /> {phaseTag.label}
+                    style={{ color: phaseCol, borderColor: phaseCol, boxShadow: `0 0 12px ${phaseCol}` }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: phaseCol }} /> {phaseLabel}
                   </span>
                 </div>
               </div>
             )}
+            {/* On-device learning status — sections discovered so far + forget button */}
+            <div className="flex items-center justify-between text-[11px] text-white/50">
+              <span className="flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#36d6c3] animate-pulse" />
+                Learning · {phaseLearner.count} section{phaseLearner.count === 1 ? '' : 's'} · {kickModel.hits} kicks
+              </span>
+              <button onClick={() => { resetMusicModel(); bump(); }} className="text-white/40 hover:text-white/80 underline underline-offset-2">Reset</button>
+            </div>
             <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
             </div>
