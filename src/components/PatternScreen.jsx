@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useReducer, useState, useMemo } from 'react';
 import { Play, Square, Zap } from 'lucide-react';
-import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, SYNC_NAMES } from '@/api/modEngine';
+import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
 
 // Two-color pairs that blend nicely.
 const COLOR_PAIRS = [
@@ -39,6 +39,7 @@ export default function PatternScreen() {
   const [mode, setMode] = useState('pattern'); // 'pattern' | 'oneshot'
   const [pads, setPads] = useState(loadPads);
   const [activePad, setActivePad] = useState(-1);
+  const [flashType, setFlashType] = useState(''); // one-shot button just pressed
   const dialRef = useRef(null);
   const draggingDir = useRef(false);
   const canvasRef = useRef(null);
@@ -58,7 +59,14 @@ export default function PatternScreen() {
   const setType = (type) => { modEngine.pattern.type = type; if (!modEngine.pattern.amount) modEngine.pattern.amount = 1; modEngine.applyOnce(); bump(); };
   const setAmount = (a) => { modEngine.pattern.amount = a; modEngine.applyOnce(); bump(); };
   const togglePlay = () => { modEngine.setPatternDrive(!modEngine.patternDrive); bump(); };
-  const triggerOneShot = () => { modEngine.oneShot(snapshot(), 1); bump(); };
+  // One-shot tab: fire a single effect of the given type once (using the current colors,
+  // direction and spread), then it goes dark — without changing the working pattern.
+  const fireType = (t) => {
+    modEngine.oneShot({ ...snapshot(), type: t }, 1 + (p.amount || 0) * 0.35);
+    setFlashType(t);
+    setTimeout(() => setFlashType((cur) => (cur === t ? '' : cur)), 360);
+    bump();
+  };
   const setColorA = (c) => { modEngine.pattern.colorA = c; modEngine.applyOnce(); bump(); };
   const setColorB = (c) => { modEngine.pattern.colorB = c; modEngine.applyOnce(); bump(); };
   const setGradient = (on) => { modEngine.pattern.gradient = on; modEngine.applyOnce(); bump(); };
@@ -118,7 +126,9 @@ export default function PatternScreen() {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
       const pat = modEngine.pattern;
-      const prate = (pat.sync && pat.sync !== 'free') ? 0.35 : Math.max(0.08, pat.rate || 0.35);
+      // Animate at the SAME rate the flowers use: when synced this is the live
+      // detected BPM (modEngine.bpm) / division, so the preview visibly locks to the song.
+      const prate = Math.max(0.05, effectiveRate(pat, modEngine.bpm));
       phase = (phase + dt * prate) % 1;
       const ctx = canvasRef.current && canvasRef.current.getContext('2d');
       if (!ctx) return;
@@ -180,10 +190,7 @@ export default function PatternScreen() {
             {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
           </button>
         ) : (
-          <button onClick={triggerOneShot} title="Fire the current pattern once (~1s)"
-            className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-white/80 hover:bg-white/20 transition">
-            <Zap className="w-3 h-3" /> Fire
-          </button>
+          <span className="text-[10px] text-white/35 pr-1">tap an effect to fire it once</span>
         )}
       </div>
 
@@ -205,11 +212,30 @@ export default function PatternScreen() {
         </div>
       </div>
 
-      {/* Finger pad — empty slots you save patterns to */}
+      {/* One-shot tab: one button per effect — tap fires that effect once, then dark. */}
+      {mode === 'oneshot' ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-widest text-white/40">One-shots</span>
+            <span className="text-[9px] text-white/30">tap = fire that effect once</span>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5 touch-none select-none">
+            {PATTERN_TYPES.map((t) => (
+              <button key={t} onClick={() => fireType(t)} title={`Fire a ${t} once`}
+                className={`flex flex-col items-center justify-center gap-1 py-3 rounded-lg text-[11px] capitalize font-semibold transition active:scale-90 ${flashType === t ? 'bg-[#36d6c3] text-black scale-105' : 'bg-white/8 text-white/75 hover:bg-white/15'}`}
+                style={flashType === t ? { boxShadow: `0 0 14px ${p.colorA}` } : undefined}>
+                <Zap className="w-3.5 h-3.5" />
+                {t}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : (
+      /* Pattern tab: finger pad — empty slots you save patterns to */
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-widest text-white/40">Finger pad</span>
-          <span className="text-[9px] text-white/30">{mode === 'oneshot' ? 'tap = 1s burst' : 'tap = play'} · tap + to save</span>
+          <span className="text-[9px] text-white/30">tap = play · tap + to save</span>
         </div>
         <div className="grid grid-cols-8 gap-1 touch-none select-none">
           {pads.map((pad, i) => (pad ? (
@@ -228,6 +254,7 @@ export default function PatternScreen() {
           )))}
         </div>
       </div>
+      )}
 
       {/* Pattern type */}
       <div className="flex flex-wrap gap-1.5">
@@ -253,9 +280,14 @@ export default function PatternScreen() {
           <button onClick={toggleBpmSync} className={`px-2 py-0.5 rounded-full text-[11px] transition ${synced ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/60 hover:text-white'}`}>Sync to BPM</button>
         </div>
         {synced ? (
-          <button onClick={cycleDivision} title="Click to change the division" className="self-start px-2.5 py-1 rounded bg-black/30 text-[11px] text-white/85 border border-white/10">
-            {p.sync} @ {modEngine.bpm} BPM
-          </button>
+          <div className="flex flex-col gap-0.5">
+            <button onClick={cycleDivision} title="Click to change the division" className="self-start px-2.5 py-1 rounded bg-black/30 text-[11px] text-white/85 border border-white/10">
+              {p.sync} @ {modEngine.bpm} BPM
+            </button>
+            <span className="text-[9px] text-white/35">
+              {modEngine.detecting ? 'Following the live song from “Sync to music”.' : 'Start “Sync to music” up top to lock to the song’s tempo.'}
+            </span>
+          </div>
         ) : (
           <input type="range" min="0.05" max="2" step="0.05" value={p.rate}
             onChange={(e) => setRate(Number(e.target.value))}
