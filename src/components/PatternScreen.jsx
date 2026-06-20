@@ -59,6 +59,16 @@ export default function PatternScreen() {
   const setType = (type) => { modEngine.pattern.type = type; if (!modEngine.pattern.amount) modEngine.pattern.amount = 1; modEngine.applyOnce(); bump(); };
   const setAmount = (a) => { modEngine.pattern.amount = a; modEngine.applyOnce(); bump(); };
   const togglePlay = () => { modEngine.setPatternDrive(!modEngine.patternDrive); bump(); };
+  // One-shot tab keeps the selected pattern looping underneath, so the flowers aren't
+  // dark between shots — a one-shot fires on top and falls back to this loop. We only
+  // turn the loop on if it wasn't already running, and turn it back off on leaving.
+  useEffect(() => {
+    if (mode !== 'oneshot') return undefined;
+    const wasDriving = modEngine.patternDrive;
+    if (!wasDriving) { modEngine.setPatternDrive(true); bump(); }
+    return () => { if (!wasDriving && !modEngine.running) { modEngine.setPatternDrive(false); } };
+  }, [mode]);
+
   // One-shot tab: fire a single effect of the given type once (using the current colors,
   // direction and spread), then it goes dark — without changing the working pattern.
   const fireType = (t) => {

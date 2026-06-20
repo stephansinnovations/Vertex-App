@@ -417,7 +417,12 @@ class ModEngine {
   // interrupted. The launch-pad "one shots" use this — tap fires an effect without
   // permanently hijacking the looping pattern.
   oneShot(preset, duration = 1) {
-    this._ripplePrev = { pattern: { ...this.pattern }, patternDrive: this.patternDrive, sceneBri: this.sceneBri, kickFlash: this.kickFlash };
+    // Retrigger: if a one-shot is already mid-play, KEEP the original state to return to
+    // (don't snapshot the temporary one-shot pattern as the thing to restore). This lets
+    // rapid re-taps restart the effect from the top and still fall back to the base loop.
+    if (!this._patternOnce) {
+      this._ripplePrev = { pattern: { ...this.pattern }, patternDrive: this.patternDrive, sceneBri: this.sceneBri, kickFlash: this.kickFlash };
+    }
     Object.assign(this.pattern, preset, { sync: 'free', rate: 1 / Math.max(0.2, duration) });
     this.sceneBri = 100;
     this.kickFlash = 0;
