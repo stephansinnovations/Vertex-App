@@ -31,7 +31,8 @@ const PAD_PRESETS = [
   { type: 'ripple', direction: 0, amount: 1.3, colorA: '#22c55e', colorB: '#3b82f6' },
   { type: 'bounce', direction: 135, amount: 1.3, colorA: '#f59e0b', colorB: '#ef4444' },
   { type: 'sweep', direction: 315, amount: 1.3, colorA: '#06b6d4', colorB: '#8b5cf6' },
-  { type: 'radiate', direction: 0, amount: 1.4, colorA: '#ffffff', colorB: '#36d6c3' },
+  // Signature "bloop" — a bright white ripple that bursts from the center outward.
+  { type: 'radiate', direction: 0, amount: 1.9, colorA: '#ffffff', colorB: '#00e5ff' },
 ].map((p) => ({ ...p, gradient: true, sync: 'free', rate: 0.5 }));
 
 const PAD_ABBR = { sweep: 'SWP', ripple: 'RIP', bounce: 'BNC', radiate: 'RAD', scatter: 'SCT' };
@@ -43,22 +44,29 @@ for (let r = 0; r < 3; r += 1) for (let c = 0; c < 5; c += 1) GRID.push({ x: c /
 // The separate "pattern screen": shows the pattern type + direction as a live
 // animated preview, independent of where the flowers actually are. Whatever you set
 // here is mapped onto the flowers by their canvas position.
-export default function PatternScreen() {
+export default function PatternScreen({ oneShot = false }) {
   const [, bump] = useReducer((x) => x + 1, 0);
   const [activePad, setActivePad] = useState(-1);
+  const [padColors, setPadColors] = useState(['#8b5cf6', '#22d3ee']);
   const phaseRef = useRef(0);
   const dialRef = useRef(null);
   const draggingDir = useRef(false);
 
-  // Tap a pad → load its preset into the pattern + fire a ripple from the center out.
+  // Tap a pad. In one-shot mode → fire this pad's pattern as a ~1 s burst (no lasting
+  // change). In pattern mode → load the preset into the looping pattern + ripple once.
   const pressPad = (pad, idx) => {
-    Object.assign(modEngine.pattern, {
-      type: pad.type, direction: pad.direction, amount: pad.amount,
-      colorA: pad.colorA, colorB: pad.colorB, gradient: pad.gradient,
-      sync: pad.sync, rate: pad.rate,
-    });
-    modEngine.rippleBurst(pad.colorA, pad.gradient ? pad.colorB : null);
     setActivePad(idx);
+    setPadColors([pad.colorA, pad.colorB]);
+    if (oneShot) {
+      modEngine.oneShot({ type: pad.type, direction: pad.direction, amount: pad.amount, colorA: pad.colorA, colorB: pad.colorB, gradient: pad.gradient }, 1);
+    } else {
+      Object.assign(modEngine.pattern, {
+        type: pad.type, direction: pad.direction, amount: pad.amount,
+        colorA: pad.colorA, colorB: pad.colorB, gradient: pad.gradient,
+        sync: pad.sync, rate: pad.rate,
+      });
+      modEngine.rippleBurst(pad.colorA, pad.gradient ? pad.colorB : null);
+    }
     bump();
   };
 
@@ -78,8 +86,12 @@ export default function PatternScreen() {
   }, []);
 
   const p = modEngine.pattern;
-  const dirEnabled = p.type !== 'radiate' && p.type !== 'scatter';
-  const offsets = computePatternOffsets({ ...p, amount: p.amount || 1 }, GRID);
+  // One-shot box always previews a center-out ripple in the last-tapped colors.
+  const previewP = oneShot
+    ? { type: 'radiate', direction: 0, amount: 1.6, colorA: padColors[0], colorB: padColors[1], gradient: true }
+    : p;
+  const dirEnabled = !oneShot && p.type !== 'radiate' && p.type !== 'scatter';
+  const offsets = computePatternOffsets({ ...previewP, amount: previewP.amount || 1 }, GRID);
   const phase = phaseRef.current;
   const rad = (p.direction * Math.PI) / 180;
 
@@ -120,21 +132,23 @@ export default function PatternScreen() {
     <div className="rounded-2xl bg-[#0f1216] border border-white/8 p-3 flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-white/40">Pattern</span>
-          <span className="text-[11px] text-[#36d6c3] capitalize">{p.type}{dirEnabled ? ` · ${p.direction}°` : ''}</span>
+          <span className="text-[10px] uppercase tracking-widest text-white/40">{oneShot ? 'One Shots' : 'Pattern'}</span>
+          <span className="text-[11px] text-[#36d6c3] capitalize">{oneShot ? 'tap = 1s burst' : `${p.type}${dirEnabled ? ` · ${p.direction}°` : ''}`}</span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={triggerOnce} title="Play the pattern through once" className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/80 hover:bg-white/20 transition">
-            <Zap className="w-3 h-3" /> Trigger
-          </button>
-          <button
-            onClick={togglePlay}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
-            title="Play this pattern on the bouquets"
-          >
-            {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
-          </button>
-        </div>
+        {!oneShot && (
+          <div className="flex items-center gap-1.5">
+            <button onClick={triggerOnce} title="Play the pattern through once" className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/80 hover:bg-white/20 transition">
+              <Zap className="w-3 h-3" /> Trigger
+            </button>
+            <button
+              onClick={togglePlay}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+              title="Play this pattern on the bouquets"
+            >
+              {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-3">
@@ -144,28 +158,30 @@ export default function PatternScreen() {
             const x = 16 + g.x * 168;
             const y = 16 + g.y * 88;
             const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * (phase - offsets[i]));
-            const fill = (p.gradient && p.colorB) ? mixHex(p.colorA, p.colorB, w) : p.colorA;
+            const fill = (previewP.gradient && previewP.colorB) ? mixHex(previewP.colorA, previewP.colorB, w) : previewP.colorA;
             return <circle key={i} cx={x} cy={y} r={6} fill={fill} opacity={0.12 + 0.88 * w} />;
           })}
         </svg>
 
-        {/* Direction dial */}
-        <div
-          ref={dialRef}
-          onPointerDown={(e) => { if (!dirEnabled) return; draggingDir.current = true; dirFromEvent(e); }}
-          className={`relative w-16 h-16 rounded-full border flex-shrink-0 ${dirEnabled ? 'border-white/20 cursor-pointer' : 'border-white/5 opacity-40'}`}
-          style={{ background: '#171a20' }}
-          title="Drag to set the pattern direction"
-        >
-          <svg viewBox="0 0 64 64" className="w-full h-full">
-            <circle cx="32" cy="32" r="3" fill="#36d6c3" />
-            <line x1="32" y1="32" x2={32 + 24 * Math.cos(rad)} y2={32 + 24 * Math.sin(rad)} stroke="#36d6c3" strokeWidth="3" strokeLinecap="round" />
-            <circle cx={32 + 24 * Math.cos(rad)} cy={32 + 24 * Math.sin(rad)} r="4" fill="#36d6c3" />
-          </svg>
-        </div>
+        {/* Direction dial (pattern box only) */}
+        {!oneShot && (
+          <div
+            ref={dialRef}
+            onPointerDown={(e) => { if (!dirEnabled) return; draggingDir.current = true; dirFromEvent(e); }}
+            className={`relative w-16 h-16 rounded-full border flex-shrink-0 ${dirEnabled ? 'border-white/20 cursor-pointer' : 'border-white/5 opacity-40'}`}
+            style={{ background: '#171a20' }}
+            title="Drag to set the pattern direction"
+          >
+            <svg viewBox="0 0 64 64" className="w-full h-full">
+              <circle cx="32" cy="32" r="3" fill="#36d6c3" />
+              <line x1="32" y1="32" x2={32 + 24 * Math.cos(rad)} y2={32 + 24 * Math.sin(rad)} stroke="#36d6c3" strokeWidth="3" strokeLinecap="round" />
+              <circle cx={32 + 24 * Math.cos(rad)} cy={32 + 24 * Math.sin(rad)} r="4" fill="#36d6c3" />
+            </svg>
+          </div>
+        )}
       </div>
 
-      {/* Finger pad — 2 rows × 8. Tap loads the preset + ripples from the center out. */}
+      {/* Finger pad — 2 rows × 8. One-shot box: tap = ~1s burst. Pattern box: load + ripple. */}
       <div className="flex flex-col gap-1.5">
         <span className="text-[10px] uppercase tracking-widest text-white/40">Finger pad</span>
         <div className="grid grid-cols-8 gap-1 touch-none select-none">
@@ -173,7 +189,7 @@ export default function PatternScreen() {
             <button
               key={i}
               onClick={() => pressPad(pad, i)}
-              title={`${pad.type} · ripple from center`}
+              title={oneShot ? `${pad.type} one-shot · ~1s` : `${pad.type} · load + ripple`}
               className={`relative aspect-square rounded-md overflow-hidden transition-transform active:scale-90 ${activePad === i ? 'ring-2 ring-white scale-105' : 'ring-1 ring-white/10 hover:ring-white/30'}`}
               style={{ background: `linear-gradient(135deg, ${pad.colorA}, ${pad.colorB})`, boxShadow: activePad === i ? `0 0 12px ${pad.colorA}` : 'none' }}
             >
@@ -183,6 +199,9 @@ export default function PatternScreen() {
         </div>
       </div>
 
+      {/* Pattern-editing controls (pattern box only — one-shots are self-contained pads) */}
+      {!oneShot && (
+      <>
       {/* Pattern type */}
       <div className="flex flex-wrap gap-1.5">
         {PATTERN_TYPES.map((t) => (
@@ -253,6 +272,8 @@ export default function PatternScreen() {
           )}
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 }

@@ -405,12 +405,19 @@ export default function MusicApp() {
           {error && <p className="text-xs text-red-400/80 text-center max-w-xs">{error}</p>}
         </div>
 
-        {/* Bottom: macros + contextual params (left) · LFO module (right) */}
-        <div className="flex flex-col lg:flex-row gap-5 items-start">
-          <div className="w-full lg:w-80 flex flex-col gap-4">
-            {/* Pattern screen — type + direction, mapped onto the flowers by position */}
-            <PatternScreen />
+        {/* Bottom: Patterns + One Shots (top) · LFO full-width below · macros + params */}
+        <div className="flex flex-col gap-5">
+          {/* Pattern box + One-shot launch box, side by side */}
+          <div className="flex flex-col lg:flex-row gap-5 items-start">
+            <div className="w-full lg:flex-1 min-w-0"><PatternScreen /></div>
+            <div className="w-full lg:flex-1 min-w-0"><PatternScreen oneShot /></div>
+          </div>
 
+          {/* LFO module — full width, below the pattern boxes */}
+          <div className="w-full min-w-0"><LfoModule /></div>
+
+          {/* Macros + contextual parameters */}
+          <div className="w-full lg:w-80 flex flex-col gap-4">
             {/* Macros */}
             <div className="flex flex-col gap-2">
               <span className="text-[10px] uppercase tracking-widest text-white/40">Macros</span>
@@ -481,9 +488,6 @@ export default function MusicApp() {
               })()}
             </div>
           </div>
-
-          {/* LFO module */}
-          <div className="flex-1 w-full min-w-0"><LfoModule /></div>
         </div>
       </div>
 

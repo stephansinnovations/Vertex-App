@@ -184,7 +184,8 @@ class ModEngine {
     this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35 };
     this._patternOnce = false;
     this._onceLeft = 0;
-    this._ripplePrev = null; // saved pattern/drive state to restore after a ripple burst
+    this._onceEndsAt = 0; // wall-clock end time for a fixed-duration one-shot (0 = use _onceLeft)
+    this._ripplePrev = null; // saved pattern/drive/scene state to restore after a one-shot
     this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
     this.patternDrive = false; // when on, the pattern itself drives flower brightness
     this._patternPhase = 0;
@@ -403,6 +404,7 @@ class ModEngine {
   // Play the pattern through once (one full pass across the flowers), then go dark.
   triggerOnce() {
     this._ripplePrev = null;
+    this._onceEndsAt = 0;
     this._patternPhase = 0;
     this._onceLeft = 1 + (this.pattern.amount || 0) + 0.6;
     this._patternOnce = true;
@@ -410,20 +412,31 @@ class ModEngine {
     if (!this._raf) { this._last = performance.now(); this._tick(); }
   }
 
-  // One-shot ripple from the center outward (a "radiate" pulse), in the given colors.
-  // Plays over whatever's set, then restores the pattern + drive state it interrupted —
-  // so a launch-pad tap fires a burst without permanently hijacking the pattern.
-  rippleBurst(colorA, colorB) {
-    this._ripplePrev = { pattern: { ...this.pattern }, patternDrive: this.patternDrive };
-    this.pattern.type = 'radiate';
-    this.pattern.amount = Math.max(this.pattern.amount || 0, 1.5);
-    if (colorA) this.pattern.colorA = colorA;
-    if (colorB != null) { this.pattern.colorB = colorB; this.pattern.gradient = true; }
+  // Play a pattern preset once as a brief wall-clock one-shot (default ~1 s, one full
+  // pass), at full brightness, then restore the pattern + drive + scene state it
+  // interrupted. The launch-pad "one shots" use this — tap fires an effect without
+  // permanently hijacking the looping pattern.
+  oneShot(preset, duration = 1) {
+    this._ripplePrev = { pattern: { ...this.pattern }, patternDrive: this.patternDrive, sceneBri: this.sceneBri, kickFlash: this.kickFlash };
+    Object.assign(this.pattern, preset, { sync: 'free', rate: 1 / Math.max(0.2, duration) });
+    this.sceneBri = 100;
+    this.kickFlash = 0;
     this._patternPhase = 0;
-    this._onceLeft = 1 + (this.pattern.amount || 0) + 0.6;
     this._patternOnce = true;
+    this._onceEndsAt = performance.now() + duration * 1000;
     this.patternDrive = true;
     if (!this._raf) { this._last = performance.now(); this._tick(); }
+  }
+
+  // One-shot ripple from the center outward (a "radiate" pulse) in the given colors,
+  // ~1 s. Used by the Pattern box pads as a launch burst.
+  rippleBurst(colorA, colorB) {
+    this.oneShot({
+      type: 'radiate', direction: 0, amount: 1.6,
+      colorA: colorA || this.pattern.colorA,
+      colorB: colorB != null ? colorB : this.pattern.colorB,
+      gradient: colorB != null,
+    }, 1);
   }
 
   // Turn every flower off (used at the end of a one-shot trigger).
@@ -446,15 +459,20 @@ class ModEngine {
     const prate = effectiveRate(this.pattern, this.bpm);
     this._patternPhase = (this._patternPhase + dt * prate) % 1;
     if (this._patternOnce) {
-      this._onceLeft -= dt * prate;
-      if (this._onceLeft <= 0) {
+      let done;
+      if (this._onceEndsAt) { done = now >= this._onceEndsAt; }
+      else { this._onceLeft -= dt * prate; done = this._onceLeft <= 0; }
+      if (done) {
         this._patternOnce = false;
+        this._onceEndsAt = 0;
         const prev = this._ripplePrev;
         this._ripplePrev = null;
         if (prev) {
-          // Ripple-burst over: restore the pattern + drive state it interrupted.
+          // One-shot over: restore the pattern + drive + scene state it interrupted.
           Object.assign(this.pattern, prev.pattern);
           this.patternDrive = prev.patternDrive;
+          this.sceneBri = prev.sceneBri ?? this.sceneBri;
+          this.kickFlash = prev.kickFlash ?? this.kickFlash;
           if (!this.patternDrive && !this.running) {
             this._allOff();
             if (this._raf) { cancelAnimationFrame(this._raf); this._raf = null; }
