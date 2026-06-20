@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useReducer, useState } from 'react';
+import React, { useEffect, useRef, useReducer, useState, useMemo } from 'react';
 import { Play, Square, Zap } from 'lucide-react';
 import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, SYNC_NAMES } from '@/api/modEngine';
 
@@ -12,102 +12,136 @@ const COLOR_PAIRS = [
   ['#ef4444', '#a855f7'],
 ];
 
-// Finger pad: 2 rows × 8 = 16 preset pads. Tapping a pad loads its pattern preset
-// (type / colors / direction / spread / speed) AND fires a one-shot ripple from the
-// center outward — a launch-pad "hit".
-const PAD_PRESETS = [
-  { type: 'sweep', direction: 0, amount: 1.3, colorA: '#ff0040', colorB: '#ff7a00' },
-  { type: 'sweep', direction: 45, amount: 1.3, colorA: '#ff7a00', colorB: '#ffd400' },
-  { type: 'ripple', direction: 0, amount: 1.3, colorA: '#ffd400', colorB: '#00e676' },
-  { type: 'bounce', direction: 90, amount: 1.3, colorA: '#00e676', colorB: '#00b8ff' },
-  { type: 'radiate', direction: 0, amount: 1.4, colorA: '#00b8ff', colorB: '#6d28d9' },
-  { type: 'scatter', direction: 0, amount: 1.4, colorA: '#8b5cf6', colorB: '#ff00d4' },
-  { type: 'sweep', direction: 180, amount: 1.3, colorA: '#ff00d4', colorB: '#ff0040' },
-  { type: 'bounce', direction: 45, amount: 1.3, colorA: '#f472b6', colorB: '#fb923c' },
-  { type: 'ripple', direction: 0, amount: 1.3, colorA: '#22d3ee', colorB: '#36d6c3' },
-  { type: 'radiate', direction: 0, amount: 1.4, colorA: '#ef4444', colorB: '#a855f7' },
-  { type: 'sweep', direction: 270, amount: 1.3, colorA: '#3b82f6', colorB: '#2dd4bf' },
-  { type: 'scatter', direction: 0, amount: 1.4, colorA: '#d946ef', colorB: '#fbbf24' },
-  { type: 'ripple', direction: 0, amount: 1.3, colorA: '#22c55e', colorB: '#3b82f6' },
-  { type: 'bounce', direction: 135, amount: 1.3, colorA: '#f59e0b', colorB: '#ef4444' },
-  { type: 'sweep', direction: 315, amount: 1.3, colorA: '#06b6d4', colorB: '#8b5cf6' },
-  // Signature "bloop" — a bright white ripple that bursts from the center outward.
-  { type: 'radiate', direction: 0, amount: 1.9, colorA: '#ffffff', colorB: '#00e5ff' },
-].map((p) => ({ ...p, gradient: true, sync: 'free', rate: 0.5 }));
-
 const PAD_ABBR = { sweep: 'SWP', ripple: 'RIP', bounce: 'BNC', radiate: 'RAD', scatter: 'SCT' };
 
-// Preview grid (5×3 dots in 0..1 space).
-const GRID = [];
-for (let r = 0; r < 3; r += 1) for (let c = 0; c < 5; c += 1) GRID.push({ x: c / 4, y: r / 2 });
+// User-saved finger pads — empty by default. Persisted across reloads.
+const PAD_COUNT = 16;
+const PADS_KEY = 'musicPads.v1';
+function loadPads() {
+  try {
+    const a = JSON.parse(localStorage.getItem(PADS_KEY));
+    if (Array.isArray(a)) { const out = a.slice(0, PAD_COUNT); while (out.length < PAD_COUNT) out.push(null); return out; }
+  } catch { /* ignore */ }
+  return Array(PAD_COUNT).fill(null);
+}
+function persistPads(pads) { try { localStorage.setItem(PADS_KEY, JSON.stringify(pads)); } catch { /* ignore */ } }
 
-// The separate "pattern screen": shows the pattern type + direction as a live
-// animated preview, independent of where the flowers actually are. Whatever you set
-// here is mapped onto the flowers by their canvas position.
-export default function PatternScreen({ oneShot = false }) {
+// Dense preview matrix (drawn on a canvas so we can afford ~1.8k dots).
+const COLS = 64;
+const ROWS = 28;
+
+// The pattern screen: a live animated preview of the current pattern + the controls to
+// shape it, plus one finger pad of save slots. A Pattern / One-shot tab switches what a
+// saved pad does when tapped (loop it vs fire a ~1 s burst); the pads themselves don't
+// change between tabs.
+export default function PatternScreen() {
   const [, bump] = useReducer((x) => x + 1, 0);
+  const [mode, setMode] = useState('pattern'); // 'pattern' | 'oneshot'
+  const [pads, setPads] = useState(loadPads);
   const [activePad, setActivePad] = useState(-1);
-  const [padColors, setPadColors] = useState(['#8b5cf6', '#22d3ee']);
-  const phaseRef = useRef(0);
   const dialRef = useRef(null);
   const draggingDir = useRef(false);
-
-  // Tap a pad. In one-shot mode → fire this pad's pattern as a ~1 s burst (no lasting
-  // change). In pattern mode → load the preset into the looping pattern + ripple once.
-  const pressPad = (pad, idx) => {
-    setActivePad(idx);
-    setPadColors([pad.colorA, pad.colorB]);
-    if (oneShot) {
-      modEngine.oneShot({ type: pad.type, direction: pad.direction, amount: pad.amount, colorA: pad.colorA, colorB: pad.colorB, gradient: pad.gradient }, 1);
-    } else {
-      Object.assign(modEngine.pattern, {
-        type: pad.type, direction: pad.direction, amount: pad.amount,
-        colorA: pad.colorA, colorB: pad.colorB, gradient: pad.gradient,
-        sync: pad.sync, rate: pad.rate,
-      });
-      modEngine.rippleBurst(pad.colorA, pad.gradient ? pad.colorB : null);
-    }
-    bump();
-  };
-
-  // Animate the preview phase.
-  useEffect(() => {
-    let raf;
-    let last = performance.now();
-    const loop = (t) => {
-      raf = requestAnimationFrame(loop);
-      const dt = Math.min(0.05, (t - last) / 1000);
-      last = t;
-      phaseRef.current = (phaseRef.current + dt * 0.35) % 1;
-      bump();
-    };
-    raf = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(raf);
-  }, []);
+  const canvasRef = useRef(null);
 
   const p = modEngine.pattern;
-  // One-shot box always previews a center-out ripple in the last-tapped colors.
-  const previewP = oneShot
-    ? { type: 'radiate', direction: 0, amount: 1.6, colorA: padColors[0], colorB: padColors[1], gradient: true }
-    : p;
-  const dirEnabled = !oneShot && p.type !== 'radiate' && p.type !== 'scatter';
-  const offsets = computePatternOffsets({ ...previewP, amount: previewP.amount || 1 }, GRID);
-  const phase = phaseRef.current;
+  const dirEnabled = p.type !== 'radiate' && p.type !== 'scatter';
   const rad = (p.direction * Math.PI) / 180;
+  const playing = modEngine.patternDrive;
+  const synced = p.sync !== 'free';
+
+  // Snapshot the current working pattern (what gets saved to a pad).
+  const snapshot = () => ({
+    type: p.type, direction: p.direction, amount: p.amount,
+    colorA: p.colorA, colorB: p.colorB, gradient: p.gradient, sync: p.sync, rate: p.rate,
+  });
 
   const setType = (type) => { modEngine.pattern.type = type; if (!modEngine.pattern.amount) modEngine.pattern.amount = 1; modEngine.applyOnce(); bump(); };
   const setAmount = (a) => { modEngine.pattern.amount = a; modEngine.applyOnce(); bump(); };
   const togglePlay = () => { modEngine.setPatternDrive(!modEngine.patternDrive); bump(); };
-  const playing = modEngine.patternDrive;
+  const triggerOneShot = () => { modEngine.oneShot(snapshot(), 1); bump(); };
   const setColorA = (c) => { modEngine.pattern.colorA = c; modEngine.applyOnce(); bump(); };
   const setColorB = (c) => { modEngine.pattern.colorB = c; modEngine.applyOnce(); bump(); };
   const setGradient = (on) => { modEngine.pattern.gradient = on; modEngine.applyOnce(); bump(); };
   const setPair = (a, b) => { modEngine.pattern.colorA = a; modEngine.pattern.colorB = b; modEngine.pattern.gradient = true; modEngine.applyOnce(); bump(); };
-  const triggerOnce = () => { modEngine.triggerOnce(); bump(); };
-  const synced = p.sync !== 'free';
   const toggleBpmSync = () => { modEngine.pattern.sync = synced ? 'free' : '1 bar'; bump(); };
   const cycleDivision = () => { const i = SYNC_NAMES.indexOf(p.sync); modEngine.pattern.sync = SYNC_NAMES[(i + 1) % SYNC_NAMES.length]; bump(); };
   const setRate = (r) => { modEngine.pattern.rate = r; bump(); };
+
+  // Tap a pad. Empty → save the current working pattern there. Saved → play it
+  // (Pattern tab loops it; One-shot tab fires it as a ~1 s burst).
+  const pressPad = (i) => {
+    const pad = pads[i];
+    setActivePad(i);
+    if (!pad) {
+      const next = pads.slice(); next[i] = snapshot(); setPads(next); persistPads(next);
+      bump();
+      return;
+    }
+    if (mode === 'oneshot') {
+      modEngine.oneShot({ ...pad }, 1);
+    } else {
+      Object.assign(modEngine.pattern, pad);
+      modEngine.setPatternDrive(true);
+    }
+    bump();
+  };
+
+  const clearPad = (i, e) => {
+    e.stopPropagation();
+    const next = pads.slice(); next[i] = null; setPads(next); persistPads(next);
+    if (activePad === i) setActivePad(-1);
+    bump();
+  };
+
+  // Dense dot matrix positions (0..1 space), computed once.
+  const gridPositions = useMemo(() => {
+    const g = [];
+    for (let r = 0; r < ROWS; r += 1) for (let c = 0; c < COLS; c += 1) {
+      g.push({ x: COLS > 1 ? c / (COLS - 1) : 0.5, y: ROWS > 1 ? r / (ROWS - 1) : 0.5 });
+    }
+    return g;
+  }, []);
+
+  // Animate the preview on a canvas (reads the live pattern each frame).
+  useEffect(() => {
+    let raf;
+    let last = performance.now();
+    let phase = 0;
+    const cvs = canvasRef.current;
+    const W = cvs ? cvs.width : 600;
+    const H = cvs ? cvs.height : 260;
+    const mx = 12;
+    const my = 12;
+    const dotR = Math.max(1, Math.min((W - 2 * mx) / COLS, (H - 2 * my) / ROWS) * 0.42);
+    const draw = (t) => {
+      raf = requestAnimationFrame(draw);
+      const dt = Math.min(0.05, (t - last) / 1000);
+      last = t;
+      const pat = modEngine.pattern;
+      const prate = (pat.sync && pat.sync !== 'free') ? 0.35 : Math.max(0.08, pat.rate || 0.35);
+      phase = (phase + dt * prate) % 1;
+      const ctx = canvasRef.current && canvasRef.current.getContext('2d');
+      if (!ctx) return;
+      ctx.clearRect(0, 0, W, H);
+      const offs = computePatternOffsets({ ...pat, amount: pat.amount || 1 }, gridPositions);
+      const A = pat.colorA || '#8b5cf6';
+      const B = pat.colorB || A;
+      const grad = !!(pat.gradient && pat.colorB);
+      for (let i = 0; i < gridPositions.length; i += 1) {
+        const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * (phase - offs[i]));
+        const x = mx + gridPositions[i].x * (W - 2 * mx);
+        const y = my + gridPositions[i].y * (H - 2 * my);
+        ctx.globalAlpha = 0.08 + 0.92 * w;
+        ctx.fillStyle = grad ? mixHex(A, B, w) : A;
+        ctx.beginPath();
+        ctx.arc(x, y, dotR, 0, 6.283185);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [gridPositions]);
 
   const dirFromEvent = (e) => {
     if (!dialRef.current) return;
@@ -130,78 +164,71 @@ export default function PatternScreen({ oneShot = false }) {
 
   return (
     <div className="rounded-2xl bg-[#0f1216] border border-white/8 p-3 flex flex-col gap-3">
+      {/* Tabs + transport */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-widest text-white/40">{oneShot ? 'One Shots' : 'Pattern'}</span>
-          <span className="text-[11px] text-[#36d6c3] capitalize">{oneShot ? 'tap = 1s burst' : `${p.type}${dirEnabled ? ` · ${p.direction}°` : ''}`}</span>
-        </div>
-        {!oneShot && (
-          <div className="flex items-center gap-1.5">
-            <button onClick={triggerOnce} title="Play the pattern through once" className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-white/10 text-white/80 hover:bg-white/20 transition">
-              <Zap className="w-3 h-3" /> Trigger
-            </button>
-            <button
-              onClick={togglePlay}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
-              title="Play this pattern on the bouquets"
-            >
-              {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center gap-3">
-        {/* Live preview */}
-        <svg viewBox="0 0 200 120" className="flex-1 rounded-lg" style={{ background: '#171a20' }}>
-          {GRID.map((g, i) => {
-            const x = 16 + g.x * 168;
-            const y = 16 + g.y * 88;
-            const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * (phase - offsets[i]));
-            const fill = (previewP.gradient && previewP.colorB) ? mixHex(previewP.colorA, previewP.colorB, w) : previewP.colorA;
-            return <circle key={i} cx={x} cy={y} r={6} fill={fill} opacity={0.12 + 0.88 * w} />;
-          })}
-        </svg>
-
-        {/* Direction dial (pattern box only) */}
-        {!oneShot && (
-          <div
-            ref={dialRef}
-            onPointerDown={(e) => { if (!dirEnabled) return; draggingDir.current = true; dirFromEvent(e); }}
-            className={`relative w-16 h-16 rounded-full border flex-shrink-0 ${dirEnabled ? 'border-white/20 cursor-pointer' : 'border-white/5 opacity-40'}`}
-            style={{ background: '#171a20' }}
-            title="Drag to set the pattern direction"
-          >
-            <svg viewBox="0 0 64 64" className="w-full h-full">
-              <circle cx="32" cy="32" r="3" fill="#36d6c3" />
-              <line x1="32" y1="32" x2={32 + 24 * Math.cos(rad)} y2={32 + 24 * Math.sin(rad)} stroke="#36d6c3" strokeWidth="3" strokeLinecap="round" />
-              <circle cx={32 + 24 * Math.cos(rad)} cy={32 + 24 * Math.sin(rad)} r="4" fill="#36d6c3" />
-            </svg>
-          </div>
-        )}
-      </div>
-
-      {/* Finger pad — 2 rows × 8. One-shot box: tap = ~1s burst. Pattern box: load + ripple. */}
-      <div className="flex flex-col gap-1.5">
-        <span className="text-[10px] uppercase tracking-widest text-white/40">Finger pad</span>
-        <div className="grid grid-cols-8 gap-1 touch-none select-none">
-          {PAD_PRESETS.map((pad, i) => (
-            <button
-              key={i}
-              onClick={() => pressPad(pad, i)}
-              title={oneShot ? `${pad.type} one-shot · ~1s` : `${pad.type} · load + ripple`}
-              className={`relative aspect-square rounded-md overflow-hidden transition-transform active:scale-90 ${activePad === i ? 'ring-2 ring-white scale-105' : 'ring-1 ring-white/10 hover:ring-white/30'}`}
-              style={{ background: `linear-gradient(135deg, ${pad.colorA}, ${pad.colorB})`, boxShadow: activePad === i ? `0 0 12px ${pad.colorA}` : 'none' }}
-            >
-              <span className="absolute inset-x-0 bottom-0 text-center text-[7px] font-bold leading-[1.4] text-white/90 bg-black/30">{PAD_ABBR[pad.type]}</span>
+        <div className="flex items-center gap-1 p-0.5 rounded-full bg-white/5">
+          {[['pattern', 'Pattern'], ['oneshot', 'One-shot']].map(([m, label]) => (
+            <button key={m} onClick={() => setMode(m)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition ${mode === m ? 'bg-white text-black' : 'text-white/50 hover:text-white/80'}`}>
+              {label}
             </button>
           ))}
         </div>
+        {mode === 'pattern' ? (
+          <button onClick={togglePlay} title="Loop this pattern on the bouquets"
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}>
+            {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
+          </button>
+        ) : (
+          <button onClick={triggerOneShot} title="Fire the current pattern once (~1s)"
+            className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-white/10 text-white/80 hover:bg-white/20 transition">
+            <Zap className="w-3 h-3" /> Fire
+          </button>
+        )}
       </div>
 
-      {/* Pattern-editing controls (pattern box only — one-shots are self-contained pads) */}
-      {!oneShot && (
-      <>
+      {/* Dense live preview + direction dial */}
+      <div className="flex items-center gap-3">
+        <canvas ref={canvasRef} width={600} height={260} className="flex-1 w-full rounded-lg" style={{ background: '#171a20' }} />
+        <div
+          ref={dialRef}
+          onPointerDown={(e) => { if (!dirEnabled) return; draggingDir.current = true; dirFromEvent(e); }}
+          className={`relative w-16 h-16 rounded-full border flex-shrink-0 ${dirEnabled ? 'border-white/20 cursor-pointer' : 'border-white/5 opacity-40'}`}
+          style={{ background: '#171a20' }}
+          title="Drag to set the pattern direction"
+        >
+          <svg viewBox="0 0 64 64" className="w-full h-full">
+            <circle cx="32" cy="32" r="3" fill="#36d6c3" />
+            <line x1="32" y1="32" x2={32 + 24 * Math.cos(rad)} y2={32 + 24 * Math.sin(rad)} stroke="#36d6c3" strokeWidth="3" strokeLinecap="round" />
+            <circle cx={32 + 24 * Math.cos(rad)} cy={32 + 24 * Math.sin(rad)} r="4" fill="#36d6c3" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Finger pad — empty slots you save patterns to */}
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-widest text-white/40">Finger pad</span>
+          <span className="text-[9px] text-white/30">{mode === 'oneshot' ? 'tap = 1s burst' : 'tap = play'} · tap + to save</span>
+        </div>
+        <div className="grid grid-cols-8 gap-1 touch-none select-none">
+          {pads.map((pad, i) => (pad ? (
+            <button key={i} onClick={() => pressPad(i)} title={`${pad.type} · ${mode === 'oneshot' ? 'one-shot' : 'play'}`}
+              className={`relative aspect-square rounded-md overflow-hidden transition-transform active:scale-90 ${activePad === i ? 'ring-2 ring-white scale-105' : 'ring-1 ring-white/10 hover:ring-white/30'}`}
+              style={{ background: `linear-gradient(135deg, ${pad.colorA}, ${pad.gradient && pad.colorB ? pad.colorB : pad.colorA})`, boxShadow: activePad === i ? `0 0 12px ${pad.colorA}` : 'none' }}>
+              <span className="absolute inset-x-0 bottom-0 text-center text-[7px] font-bold leading-[1.4] text-white/90 bg-black/30">{PAD_ABBR[pad.type]}</span>
+              <span role="button" tabIndex={-1} onClick={(e) => clearPad(i, e)} title="Clear pad"
+                className="absolute top-0 right-0 w-3.5 h-3.5 flex items-center justify-center text-[9px] leading-none text-white/70 bg-black/45 rounded-bl hover:text-white">×</span>
+            </button>
+          ) : (
+            <button key={i} onClick={() => pressPad(i)} title="Save the current pattern here"
+              className="aspect-square rounded-md border border-dashed border-white/15 text-white/30 hover:border-white/40 hover:text-white/60 flex items-center justify-center transition active:scale-90">
+              <span className="text-sm leading-none">+</span>
+            </button>
+          )))}
+        </div>
+      </div>
+
       {/* Pattern type */}
       <div className="flex flex-wrap gap-1.5">
         {PATTERN_TYPES.map((t) => (
@@ -272,8 +299,6 @@ export default function PatternScreen({ oneShot = false }) {
           )}
         </div>
       </div>
-      </>
-      )}
     </div>
   );
 }

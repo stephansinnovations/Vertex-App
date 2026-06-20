@@ -407,11 +407,8 @@ export default function MusicApp() {
 
         {/* Bottom: Patterns + One Shots (top) · LFO full-width below · macros + params */}
         <div className="flex flex-col gap-5">
-          {/* Pattern box + One-shot launch box, side by side */}
-          <div className="flex flex-col lg:flex-row gap-5 items-start">
-            <div className="w-full lg:flex-1 min-w-0"><PatternScreen /></div>
-            <div className="w-full lg:flex-1 min-w-0"><PatternScreen oneShot /></div>
-          </div>
+          {/* Pattern + One-shot box (single, tabbed) */}
+          <div className="w-full lg:max-w-lg"><PatternScreen /></div>
 
           {/* LFO module — full width, below the pattern boxes */}
           <div className="w-full min-w-0"><LfoModule /></div>
