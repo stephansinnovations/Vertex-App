@@ -364,6 +364,31 @@ export async function refreshFlowers() {
   await writeCommand({ ri: '1' });
 }
 
+// Identification mode: light each flower a distinct solid color so you can physically
+// map a channel to a flower in the room. `colors` is indexed by GLOBAL channel — a hex
+// string per flower, or '#000000'/null for "off". Stops motion and mirrors the colors
+// into flowerState.perFlower so the on-screen visualization shows the same mapping
+// (works in test mode too). Hardware writes go WITH response so the colors hold.
+export async function identifyFlowers(colors) {
+  const perFlower = colors.map((c) => {
+    const co = (typeof c === 'string' && c) ? c : '#000000';
+    return { color: co, brightness: co === '#000000' ? 0 : 100 };
+  });
+  setFlowerState({ perFlower });
+  const chars = allCmdChars();
+  for (let i = 0; i < chars.length; i += 1) {
+    const co = perFlower[i]?.color || '#000000';
+    // eslint-disable-next-line no-await-in-loop
+    await writeCmdToChar(chars[i], { mo: [], br: '100', co }, true);
+  }
+}
+
+// Leave identification mode: drop the per-flower override so the viz returns to the
+// shared live color. (The caller restores the hardware to a solid color afterward.)
+export function clearIdentify() {
+  setFlowerState({ perFlower: null });
+}
+
 // Light the flowers a solid color (no motion). Used for instant feedback on connect
 // and when the user just wants steady color.
 export async function setSolid(color, brightness = 100) {

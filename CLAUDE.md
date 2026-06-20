@@ -102,6 +102,12 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   (shown next to Wave/Refresh once connected) pops the picker again and appends a board.
   Channels concatenate in connect order → matches `flowerLayout`'s global flower index,
   so the Nth board lights the Nth bouquet. (Connect boards in bouquet order.)
+- **Identify mode:** an "Identify flowers" toggle under the title lights each flower of
+  the selected bouquet a distinct color (1st red, 2nd green, 3rd blue…) so you can map a
+  channel to a physical flower. `flowerBle.identifyFlowers(colors)` (colors by global
+  channel) writes the hardware AND sets `flowerState.perFlower` so the viz mirrors it
+  (works in test mode); `clearIdentify()` drops the override. Enabling it stops the
+  engine/wave so nothing overwrites the colors; selection changes re-light live.
 - **Key files:** `api/flowerBle.js` (Web BLE), `api/flowerState.js` (shared live
   per-flower state the viz mirrors), `api/flowerLayout.js` (bouquets/flowers model;
   persisted in `app_settings` key `flowerLayout`), `api/modEngine.js` (singleton engine),

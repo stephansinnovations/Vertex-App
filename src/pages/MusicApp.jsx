@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Check, Settings, Plus } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Check, Settings, Plus, Fingerprint } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -16,6 +16,8 @@ import {
   isTestMode,
   setTestFlowerCount,
   getDeviceCount,
+  identifyFlowers,
+  clearIdentify,
 } from '@/api/flowerBle';
 import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import { phaseLearner, kickModel, phaseColor, resetMusicModel } from '@/api/musicML';
@@ -26,6 +28,29 @@ import LfoModule from '@/components/LfoModule';
 import Knob from '@/components/Knob';
 
 const SWATCHES = ['#8b5cf6', '#ff0040', '#ff7a00', '#ffd400', '#00e676', '#00b8ff', '#ff00d4', '#ffffff'];
+
+// Identification colors, one per flower-within-a-bouquet (1st = red, 2nd = green,
+// 3rd = blue, then extras) so each flower in a selected bouquet glows a distinct color.
+const ID_COLORS = ['#ff0022', '#00ff44', '#1e6bff', '#ffd400', '#ff00d4', '#00e5ff', '#ffffff'];
+
+// Build the per-global-channel color array for identify mode from the layout + the
+// current selection. A bouquet selection lights that bouquet's flowers in ID order and
+// darkens the rest; a single-flower selection lights just that one white; 'all' lights
+// every bouquet's flowers in ID order at once.
+function identifyColors(layout, sel) {
+  const out = [];
+  let gi = 0;
+  (layout?.bouquets || []).forEach((b, bi) => {
+    b.flowers.forEach((f, fi) => {
+      let co = '#000000';
+      if (sel === 'all' || sel === `b${bi}`) co = ID_COLORS[fi % ID_COLORS.length];
+      else if (sel === `f${gi}`) co = '#ffffff';
+      out[gi] = co;
+      gi += 1;
+    });
+  });
+  return out;
+}
 
 // A pair of vertical bars: kick-drum envelope (left) + beat/BPM metronome (right).
 // Reads the live values straight off modEngine; the parent re-renders on engine emits.
@@ -108,6 +133,7 @@ export default function MusicApp() {
   const [selected, setSelected] = useState('all'); // 'all' | b<bi> | f<gi>
   const [layout, setLayout] = useState(null);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [identify, setIdentify] = useState(false); // flower-identification mode
 
   // When the layout loads/changes, tell the engine each flower's bouquet (for
   // per-bouquet/per-flower params) and its canvas position (for the spatial pattern).
@@ -136,6 +162,28 @@ export default function MusicApp() {
     setTestModeState(on);
     setError('');
   };
+
+  // Identification mode: light each flower of the selected bouquet a distinct color
+  // (1st red, 2nd green, 3rd blue…) so you can physically tell which flower is which.
+  const toggleIdentify = (on) => {
+    setIdentify(on);
+    if (on) {
+      // It's a diagnostic display — stop motion/engine so nothing overwrites the colors.
+      if (modEngine.running) { modEngine.stop(); setRunning(false); }
+      setWaving(false);
+      identifyFlowers(identifyColors(layout, selected)).catch(() => {});
+    } else {
+      clearIdentify();
+      // Restore the flowers to the current solid color.
+      if (connected) setSolid(color, brightness).catch(() => {});
+    }
+  };
+
+  // Re-light when the selection changes while identify mode is on.
+  useEffect(() => {
+    if (!identify) return;
+    identifyFlowers(identifyColors(layout, selected)).catch(() => {});
+  }, [identify, selected, layout, connected]);
 
   // --- Tempo-detection (Sync to music) state ---
   const [syncing, setSyncing] = useState(false);
@@ -356,6 +404,28 @@ export default function MusicApp() {
           <ArrowLeft className="w-6 h-6 text-white/80" />
         </button>
         <h1 className="text-lg font-semibold tracking-[0.25em] uppercase text-white/90">Music App</h1>
+      </div>
+
+      {/* Identify toggle: light the selected bouquet's flowers red/green/blue to map them */}
+      <div className="flex flex-col items-center gap-1 pb-2">
+        <button onClick={() => toggleIdentify(!identify)} role="switch" aria-checked={identify}
+          title="Light each flower of the selected bouquet a distinct color so you can tell which is which"
+          className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition ${identify ? 'bg-[#ffd400] text-black' : 'bg-white/5 text-white/60 hover:text-white/90'}`}>
+          <Fingerprint className="w-4 h-4" />
+          Identify flowers
+          <span className={`ml-1 relative w-8 h-4 rounded-full transition ${identify ? 'bg-black/30' : 'bg-white/15'}`}>
+            <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${identify ? 'left-[18px]' : 'left-0.5'}`} />
+          </span>
+        </button>
+        {identify && (
+          <span className="text-[11px] text-[#ffd400]/80 text-center max-w-xs">
+            {selected[0] === 'b' || selected === 'all'
+              ? 'Each flower glows a different color — 1st red, 2nd green, 3rd blue. Select a bouquet to isolate it.'
+              : selected[0] === 'f'
+                ? 'Selected flower is white; tap a bouquet to color all its flowers.'
+                : 'Select a bouquet or flower to identify it.'}
+          </span>
+        )}
       </div>
 
       <div className="flex-1 w-full max-w-6xl mx-auto px-4 pb-24 flex flex-col gap-5">
