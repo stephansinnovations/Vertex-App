@@ -21,6 +21,21 @@ const RANGES = { brightness: [0, 100], color: [0, 360], speed: [6, 60] };
 
 export const PATTERN_TYPES = ['sweep', 'ripple', 'bounce', 'radiate', 'scatter'];
 
+// Auto light scenes — when the learned song section changes, the engine swaps to the
+// matching scene so the flowers fit the part of the track. Each scene sets the spatial
+// pattern (type/colors/speed via tempo `sync`), a max brightness, and a `kickFlash`
+// amount (how hard the kick drum punches brightness — high for drops). Keyed by the
+// base section label from musicML's PhaseLearner.
+export const SECTION_SCENES = {
+  Intro: { pattern: { type: 'sweep', amount: 1, direction: 0, colorA: '#1e3a8a', colorB: '#6d28d9', gradient: true, sync: 'free', rate: 0.12 }, brightness: 45, kickFlash: 0.1 },
+  'Build-up': { pattern: { type: 'scatter', amount: 1.4, direction: 0, colorA: '#f59e0b', colorB: '#fde047', gradient: true, sync: 'free', rate: 1.1 }, brightness: 78, kickFlash: 0.25 },
+  Drop: { pattern: { type: 'radiate', amount: 1.6, direction: 0, colorA: '#ff0040', colorB: '#ff00d4', gradient: true, sync: '1/4', rate: 0.5 }, brightness: 100, kickFlash: 0.9 },
+  Chorus: { pattern: { type: 'sweep', amount: 1.2, direction: 0, colorA: '#36d6c3', colorB: '#22d3ee', gradient: true, sync: '1/2', rate: 0.5 }, brightness: 95, kickFlash: 0.5 },
+  Verse: { pattern: { type: 'ripple', amount: 1, direction: 0, colorA: '#a78bfa', colorB: '#36d6c3', gradient: true, sync: '1 bar', rate: 0.35 }, brightness: 70, kickFlash: 0.3 },
+  Breakdown: { pattern: { type: 'bounce', amount: 1, direction: 0, colorA: '#60a5fa', colorB: '#1e3a8a', gradient: true, sync: 'free', rate: 0.18 }, brightness: 50, kickFlash: 0.15 },
+  Groove: { pattern: { type: 'sweep', amount: 1, direction: 0, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: true, sync: '1/2', rate: 0.4 }, brightness: 85, kickFlash: 0.4 },
+};
+
 // Mix two hex colors. t=0 → a, t=1 → b.
 export function mixHex(a, b, t) {
   const pa = parseInt((a || '#000000').slice(1), 16);
@@ -157,7 +172,11 @@ class ModEngine {
     this.bands = { bass: 0, drums: 0, melody: 0 }; // live band envelopes (0..1)
     this.kick = 0; // 0..1 live kick-drum envelope while syncing
     this.lastBeatMs = 0; // performance.now() of the last detected beat (for the beat meter)
-    this.phase = 'chorus'; // detected song phase: 'buildup' | 'drop' | 'chorus'
+    this.phase = 'Chorus'; // learned song section label (from musicML.PhaseLearner)
+    this.autoScene = false; // when on, the detected section auto-drives the light scene
+    this.sceneBri = 100; // current scene's max brightness (used by patternDrive)
+    this.kickFlash = 0; // current scene's kick→brightness punch (0..1)
+    this._sceneBase = null; // base label of the scene currently applied
     // Spatial pattern: maps a design onto the flowers by their canvas position, so a
     // pattern flows across them in a direction. Move the flowers, the pattern stays.
     // direction in degrees; colorA/colorB + gradient drive the pattern's colors.
@@ -298,9 +317,12 @@ class ModEngine {
       const A = this.pattern.colorA || '#8b5cf6';
       const B = this.pattern.colorB || A;
       const grad = !!(this.pattern.gradient && this.pattern.colorB);
+      const hi = this.sceneBri ?? 100; // scene's max brightness
+      const flash = this.kickFlash || 0; // kick punch (scene-driven)
       for (let gi = 0; gi < F; gi += 1) {
         const v = 0.5 + 0.5 * Math.sin(2 * Math.PI * (this._patternPhase - patternOffsets[gi]));
-        const cmd = { br: String(Math.round(8 + v * 92)), co: grad ? mixHex(A, B, v) : A };
+        const vEff = Math.min(1, v + this.kick * flash); // kick drum punches brightness
+        const cmd = { br: String(Math.round(6 + vEff * (hi - 6))), co: grad ? mixHex(A, B, vEff) : A };
         cmds.push(cmd);
         const st = stateFromCommand(cmd);
         perFlower.push({ color: st.color, brightness: st.brightness });
@@ -345,6 +367,36 @@ class ModEngine {
       this._emitOutput(true);
       this.emit();
     }
+  }
+
+  // --- Auto light scenes (section → pattern) ---------------------------------
+  // Apply the scene for a base section label: swap the pattern, brightness ceiling and
+  // kick-flash, and let the pattern drive the flowers.
+  applyScene(base) {
+    const s = SECTION_SCENES[base] || SECTION_SCENES.Groove;
+    Object.assign(this.pattern, s.pattern);
+    this.sceneBri = s.brightness ?? 100;
+    this.kickFlash = s.kickFlash ?? 0;
+    this.setPatternDrive(true);
+  }
+
+  // Called each section update (the learner's label). Also keeps `phase` current.
+  onSection(label) {
+    this.phase = label || 'Chorus';
+    if (!this.autoScene) return this.phase;
+    const base = this.phase.replace(/\s+\d+$/, '');
+    if (base !== this._sceneBase) { this._sceneBase = base; this.applyScene(base); }
+    return this.phase;
+  }
+
+  // Toggle auto-scenes. On → apply the current section's scene immediately; off → stop
+  // driving the flowers (back to manual / LFO control).
+  setAutoScene(on) {
+    this.autoScene = !!on;
+    this._sceneBase = null;
+    if (on) { const base = (this.phase || 'Chorus').replace(/\s+\d+$/, ''); this._sceneBase = base; this.applyScene(base); }
+    else { this.setPatternDrive(false); }
+    this.emit();
   }
 
   // Play the pattern through once (one full pass across the flowers), then go dark.

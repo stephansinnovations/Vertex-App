@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -220,6 +220,9 @@ export default function MusicApp() {
     modEngine.bands = { bass: 0, drums: 0, melody: 0 };
     modEngine.phase = 'Chorus';
     modEngine.lastBeatMs = 0;
+    // Stop scene-driven lights when detection ends (keep the autoScene preference).
+    if (modEngine.autoScene && !modEngine.running) modEngine.setPatternDrive(false);
+    modEngine._sceneBase = null;
   }, []);
 
   // Sync to music = detect the music's BPM and feed it to the LFOs (tempo-synced
@@ -248,7 +251,7 @@ export default function MusicApp() {
         const now = performance.now();
         if (now - lastEmit > 60) {
           lastEmit = now;
-          modEngine.phase = phaseLearner.push({ level: lvl, bass: bands?.bass, perc: bands?.drums, mel: bands?.melody, kick: modEngine.kick });
+          modEngine.onSection(phaseLearner.push({ level: lvl, bass: bands?.bass, perc: bands?.drums, mel: bands?.melody, kick: modEngine.kick }));
           setLevel(lvl);
           modEngine.emit();
         }
@@ -534,6 +537,17 @@ export default function MusicApp() {
               </span>
               <button onClick={() => { resetMusicModel(); bump(); }} className="text-white/40 hover:text-white/80 underline underline-offset-2">Reset</button>
             </div>
+            {/* Auto light scenes — the detected section drives the pattern/color/kick punch */}
+            <button onClick={() => modEngine.setAutoScene(!modEngine.autoScene)}
+              className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition ${modEngine.autoScene ? 'bg-[#36d6c3]/15 border-[#36d6c3]/40' : 'bg-black/20 border-white/8 hover:border-white/20'}`}>
+              <span className="flex flex-col">
+                <span className="text-xs font-semibold text-white flex items-center gap-1.5"><Sparkles className="w-3.5 h-3.5" /> Auto light scenes</span>
+                <span className="text-[10px] text-white/45">Each section picks its own pattern, color &amp; kick punch.</span>
+              </span>
+              <span className={`flex-shrink-0 w-9 h-5 rounded-full p-0.5 transition ${modEngine.autoScene ? 'bg-[#36d6c3]' : 'bg-white/15'}`}>
+                <span className={`block w-4 h-4 rounded-full bg-white transition-transform ${modEngine.autoScene ? 'translate-x-4' : ''}`} />
+              </span>
+            </button>
             <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
             </div>
