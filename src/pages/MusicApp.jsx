@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Check, Settings } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -348,14 +348,23 @@ export default function MusicApp() {
               </button>
             ))}
           </div>
-          {/* Sync to music button with a live level meter under its label */}
-          <button onClick={() => setSyncOpen(true)}
-            className={`relative overflow-hidden flex flex-col items-center justify-center px-5 py-1.5 rounded-full text-xs font-medium transition ${syncing ? 'bg-[#36d6c3] text-black' : 'bg-white/5 text-white/70 hover:text-white'}`}>
-            <span className="flex items-center gap-1.5"><Music className="w-3.5 h-3.5" /> {syncing ? 'Syncing…' : 'Sync to music'}</span>
-            <span className="mt-1 w-24 h-1 rounded-full bg-black/20 overflow-hidden">
-              <span className="block h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: syncing ? '#0b0d11' : '#36d6c3' }} />
-            </span>
-          </button>
+          {/* Sync to music — one press enables it; gear opens source/scene/learning settings */}
+          <div className="flex items-center gap-1.5">
+            <button onClick={handleSyncToggle}
+              className={`relative overflow-hidden flex flex-col items-center justify-center px-5 py-1.5 rounded-full text-xs font-medium transition ${syncing ? 'bg-[#36d6c3] text-black' : 'bg-white/5 text-white/70 hover:text-white'}`}>
+              <span className="flex items-center gap-1.5">
+                {syncing ? <Check className="w-3.5 h-3.5" /> : <Music className="w-3.5 h-3.5" />}
+                {syncing ? 'Synced' : 'Sync to music'}
+              </span>
+              <span className="mt-1 w-24 h-1 rounded-full bg-black/20 overflow-hidden">
+                <span className="block h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: syncing ? '#0b0d11' : '#36d6c3' }} />
+              </span>
+            </button>
+            <button onClick={() => setSyncOpen(true)} title="Sync settings — source, auto scenes, learning" aria-label="Sync settings"
+              className="p-2 rounded-full bg-white/5 text-white/50 hover:text-white transition">
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
           {/* Learned song-section tag — grows new categories the more it listens */}
           <span
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition border"
@@ -366,6 +375,7 @@ export default function MusicApp() {
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: syncing ? phaseCol : 'rgba(255,255,255,0.3)' }} />
             {syncing ? phaseLabel : 'Section'}
           </span>
+          {syncing && <span className="text-[11px] text-[#36d6c3] w-full text-center">Alright, it&apos;s synced ✓ — reading the beat from {audioSource === 'tab' ? 'this browser tab' : 'the microphone'}. Anything set to “Sync to BPM” now follows the music.</span>}
           {testMode && <span className="text-[11px] text-[#36d6c3]/80 w-full text-center">Pretending an ESP32 is connected — no hardware needed.</span>}
         </div>
 
@@ -503,7 +513,7 @@ export default function MusicApp() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setSyncOpen(false)}>
           <div className="w-full max-w-xs rounded-2xl bg-[#14171c] border border-white/10 p-4 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
-              <span className="text-sm font-semibold text-white flex items-center gap-2"><Music className="w-4 h-4" /> Sync to music</span>
+              <span className="text-sm font-semibold text-white flex items-center gap-2"><Settings className="w-4 h-4" /> Sync settings</span>
               <button onClick={() => setSyncOpen(false)} className="p-1 rounded hover:bg-white/10 text-white/50" aria-label="Close">✕</button>
             </div>
             <div className="flex items-center gap-1 p-1 rounded-full bg-white/5 self-start">
@@ -516,7 +526,7 @@ export default function MusicApp() {
             </div>
             <button onClick={handleSyncToggle}
               className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition ${syncing ? 'bg-white text-black' : 'bg-[#36d6c3] text-black hover:bg-[#36d6c3]/90'}`}>
-              {syncing ? `Stop · ${bpm} BPM` : 'Detect tempo'}
+              {syncing ? `Stop syncing · ${bpm} BPM` : 'Start syncing'}
             </button>
             {syncing && (
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 border border-white/8 px-4 py-3">
@@ -552,7 +562,7 @@ export default function MusicApp() {
             <div className="w-full h-2 rounded-full bg-white/10 overflow-hidden">
               <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
             </div>
-            <p className="text-[11px] text-white/40 leading-relaxed">Detects the music&apos;s BPM and locks your tempo-synced LFOs to it — nothing else. Set an LFO&apos;s TEMPO to 1&nbsp;bar / 1&frasl;2 / 1&frasl;4…</p>
+            <p className="text-[11px] text-white/40 leading-relaxed">Listens to your music and tracks its BPM, kick &amp; sections. Anything set to “Sync to BPM” — a pattern&apos;s speed or an LFO&apos;s TEMPO — then follows the music automatically.</p>
             {audioSource === 'tab' && <p className="text-[10px] text-amber-300/60 leading-relaxed">Tab mode pauses Bluetooth when hidden — keep this window visible, or use Microphone.</p>}
           </div>
         </div>
