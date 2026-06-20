@@ -97,8 +97,11 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
 ## Music App / LED flowers
 - **What it is:** `/MusicApp` (admin) drives Stephan's BLE LED-flower "bouquets" — an
   ESP32 running the Pollinator MicroPython firmware (`~/Pollinator`). Live mode = Web
-  Bluetooth from the browser; **one ESP32 = one bouquet**. Multi-ESP32 in Live mode is
-  **not built** (Live connects to a single device); the rest is modelled app-side.
+  Bluetooth from the browser; **one ESP32 = one bouquet**. **Multi-ESP32 in Live mode
+  IS supported:** `flowerBle` holds a *list* of connections; the **"Add ESP32"** button
+  (shown next to Wave/Refresh once connected) pops the picker again and appends a board.
+  Channels concatenate in connect order → matches `flowerLayout`'s global flower index,
+  so the Nth board lights the Nth bouquet. (Connect boards in bouquet order.)
 - **Key files:** `api/flowerBle.js` (Web BLE), `api/flowerState.js` (shared live
   per-flower state the viz mirrors), `api/flowerLayout.js` (bouquets/flowers model;
   persisted in `app_settings` key `flowerLayout`), `api/modEngine.js` (singleton engine),
