@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Check, Settings } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Check, Settings, Plus } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -15,6 +15,7 @@ import {
   setTestMode,
   isTestMode,
   setTestFlowerCount,
+  getDeviceCount,
 } from '@/api/flowerBle';
 import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import { phaseLearner, kickModel, phaseColor, resetMusicModel } from '@/api/musicML';
@@ -96,6 +97,7 @@ export default function MusicApp() {
   const [brightness, setBrightness] = useState(100);
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [boards, setBoards] = useState(0); // # of connected ESP32 boards (bouquets)
   const [reconnecting, setReconnecting] = useState(false);
   const [waving, setWaving] = useState(false);
   const [running, setRunning] = useState(modEngine.running);
@@ -154,6 +156,7 @@ export default function MusicApp() {
     try {
       const count = await connectFlowers();
       setConnected(true);
+      setBoards(getDeviceCount());
       try { await setSolid(color, brightness); } catch { /* surfaced on Wave */ }
       setError(count ? '' : 'Connected, but no flowers responded.');
     } catch (e) {
@@ -162,6 +165,23 @@ export default function MusicApp() {
       setConnecting(false);
     }
   }, []);
+
+  // Add another ESP32 (bouquet): pops the picker again and appends the board. Its
+  // flowers extend the global channel order, so the second bouquet in the layout
+  // comes online. Lights it to the current color for instant feedback.
+  const handleAddBoard = useCallback(async () => {
+    setError('');
+    setConnecting(true);
+    try {
+      await connectFlowers();
+      setBoards(getDeviceCount());
+      try { await setSolid(color, brightness); } catch { /* surfaced on Wave */ }
+    } catch (e) {
+      if (!/cancelled|User cancelled/i.test(e?.message || '')) setError(e?.message || 'Could not add the board.');
+    } finally {
+      setConnecting(false);
+    }
+  }, [color, brightness]);
 
   const toggleRun = () => {
     if (modEngine.running) { modEngine.stop(); setRunning(false); }
@@ -273,6 +293,7 @@ export default function MusicApp() {
 
   useEffect(() => {
     const off = onStatus((s) => {
+      setBoards(getDeviceCount());
       if (s === 'connected') { setConnected(true); setReconnecting(false); }
       else if (s === 'reconnecting') { setReconnecting(true); }
       else if (s === 'disconnected' || s === 'failed') {
@@ -403,10 +424,18 @@ export default function MusicApp() {
                 <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} /> Refresh
               </button>
             )}
+            {connected && !testMode && (
+              <button onClick={handleAddBoard} disabled={connecting} title="Connect another ESP32 — it becomes the next bouquet in line" className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm bg-white/10 text-white/80 hover:bg-white/15 transition disabled:opacity-50">
+                {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Add ESP32
+              </button>
+            )}
           </div>
+          {connected && !testMode && boards > 0 && (
+            <span className="text-[11px] text-white/40">{boards} ESP32{boards === 1 ? '' : 's'} connected{boards === 1 ? ' — add another for the next bouquet' : ''}</span>
+          )}
           {reconnecting && <span className="flex items-center gap-2 text-xs text-amber-300/70"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Reconnecting to flowers…</span>}
           {connected && !testMode && (
-            <button onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); if (modEngine.running) { modEngine.stop(); setRunning(false); } await disconnect(); setConnected(false); setWaving(false); }}
+            <button onClick={async () => { reactorRef.current?.stop(); reactorRef.current = null; setSyncing(false); setLevel(0); if (modEngine.running) { modEngine.stop(); setRunning(false); } await disconnect(); setConnected(false); setBoards(0); setWaving(false); }}
               className="flex items-center gap-2 text-xs text-white/45 hover:text-white/70 transition">
               <Bluetooth className="w-3.5 h-3.5" /> Disconnect
             </button>

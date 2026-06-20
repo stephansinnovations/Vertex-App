@@ -1,10 +1,16 @@
-// Web Bluetooth control for the "Bouquet 1" ESP32 LED flowers (Pollinator firmware).
+// Web Bluetooth control for the Pollinator LED-flower "bouquets".
 //
-// The board advertises a single Nordic-UART-style service. Each flower exposes its
-// own command characteristic (prefix 6e400002…) differing only in the last 5 hex
-// digits (00000 / 00001 / 00002). We connect once, grab every command characteristic
-// under the service, and fan each command out to all of them so the whole bouquet
-// reacts together.
+// Each ESP32 = one bouquet, advertising a single Nordic-UART-style service. Each
+// flower exposes its own command characteristic (prefix 6e400002…) differing only in
+// the last 5 hex digits (00000 / 00001 / 00002). We connect to a board, grab every
+// command characteristic under the service, and fan each command out to all of them
+// so the whole bouquet reacts together.
+//
+// MULTI-BOARD: we keep a LIST of connections (one per ESP32). The "Add ESP32" button
+// calls connectFlowers() again to pop the picker and append another board. The global
+// flower channel order is the concatenation of every board's flowers in the order the
+// boards were connected — which matches flowerLayout's bouquet/flower ordering, so
+// channel N drives layout flower N.
 //
 // Commands are JSON objects ({ co, mo, sp, br }) matching the firmware's `pollinate`
 // protocol — JSON-stringified, chunked into ≤20-byte BLE packets, the stream
@@ -23,10 +29,9 @@ const FRAME_CHAR_PREFIX = '6e400004'; // low-latency binary frame characteristic
 const MSG_TERMINATOR = ';';
 const MAX_PACKET_BYTES = 20;
 
-let device = null;
-let cmdChars = [];
-let frameChar = null;
-let autoReconnect = false;
+// One entry per connected ESP32: { device, cmdChars, frameChar, autoReconnect }.
+// Order = connect order = global flower channel order.
+let conns = [];
 let statusListeners = [];
 
 // Test mode: pretend a board is connected so the whole UI/visualization can be
@@ -49,45 +54,50 @@ function emitStatus(s) {
   statusListeners.forEach((cb) => { try { cb(s); } catch { /* ignore */ } });
 }
 
-// Discover and cache the flower command characteristics from a connected server.
+// Flat list of every flower command characteristic across all boards, in board order.
+function allCmdChars() {
+  return conns.flatMap((c) => c.cmdChars);
+}
+
+// Discover and return the flower command + frame characteristics for one server.
 async function discoverChars(server) {
   const service = await server.getPrimaryService(SERVICE_UUID);
   const chars = await service.getCharacteristics();
   // The binary frame characteristic (one, low-latency) is separate from the
   // per-flower command characteristics.
-  frameChar = chars.find((c) => c.uuid.toLowerCase().startsWith(FRAME_CHAR_PREFIX)) || null;
+  const frameChar = chars.find((c) => c.uuid.toLowerCase().startsWith(FRAME_CHAR_PREFIX)) || null;
   const byPrefix = chars.filter((c) => c.uuid.toLowerCase().startsWith(CMD_CHAR_PREFIX));
   const writable = chars.filter(
     (c) => c.properties && (c.properties.write || c.properties.writeWithoutResponse) && !c.uuid.toLowerCase().startsWith(FRAME_CHAR_PREFIX),
   );
-  cmdChars = (byPrefix.length ? byPrefix : writable).sort((a, b) => a.uuid.localeCompare(b.uuid));
-  return cmdChars.length;
+  const cmdChars = (byPrefix.length ? byPrefix : writable).sort((a, b) => a.uuid.localeCompare(b.uuid));
+  return { cmdChars, frameChar };
 }
 
-// Fired when the GATT link drops (board reset, out of range, or — most commonly —
-// Chrome freezing a backgrounded tab). If the user didn't ask to disconnect, try
-// to reconnect to the same device (no user gesture needed for a known device).
-async function handleDisconnect() {
-  cmdChars = [];
-  frameChar = null;
-  if (!autoReconnect || !device) { emitStatus('disconnected'); return; }
-  for (let attempt = 1; attempt <= 6 && autoReconnect; attempt++) {
+// Fired when one board's GATT link drops (reset, out of range, or — most commonly —
+// Chrome freezing a backgrounded tab). If the user didn't ask to disconnect that
+// board, try to reconnect it (no user gesture needed for a known device).
+async function handleDisconnect(conn) {
+  conn.cmdChars = [];
+  conn.frameChar = null;
+  if (!conn.autoReconnect || !conn.device) { emitStatus(realConnected() ? 'connected' : 'disconnected'); return; }
+  for (let attempt = 1; attempt <= 6 && conn.autoReconnect; attempt++) {
     emitStatus('reconnecting');
     try {
       // eslint-disable-next-line no-await-in-loop
-      const server = await device.gatt.connect();
+      const server = await conn.device.gatt.connect();
       // eslint-disable-next-line no-await-in-loop
-      await discoverChars(server);
-      if (cmdChars.length) { emitStatus('connected'); return; }
+      const { cmdChars, frameChar } = await discoverChars(server);
+      if (cmdChars.length) { conn.cmdChars = cmdChars; conn.frameChar = frameChar; emitStatus('connected'); return; }
     } catch { /* retry */ }
     // eslint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 500 * attempt));
   }
-  if (autoReconnect) emitStatus('failed');
+  if (conn.autoReconnect) emitStatus(realConnected() ? 'connected' : 'failed');
 }
 
 function realConnected() {
-  return !!(device && device.gatt && device.gatt.connected && cmdChars.length);
+  return conns.some((c) => c.device && c.device.gatt && c.device.gatt.connected && c.cmdChars.length);
 }
 
 export function isConnected() {
@@ -98,7 +108,22 @@ export function isConnected() {
 // the reported layout total so every flower shows as connected.
 export function getFlowerCount() {
   if (testMode) return testFlowerCount;
-  return realConnected() ? cmdChars.length : 0;
+  return realConnected() ? allCmdChars().length : 0;
+}
+
+// Number of physically connected ESP32 boards (bouquets). Drives the "Add ESP32"
+// button label and the per-board status line.
+export function getDeviceCount() {
+  if (testMode) return 1;
+  return conns.filter((c) => c.device && c.device.gatt && c.device.gatt.connected && c.cmdChars.length).length;
+}
+
+// Names of the connected boards, in channel order (for status text).
+export function getDeviceNames() {
+  if (testMode) return ['Test board'];
+  return conns
+    .filter((c) => c.device && c.device.gatt && c.device.gatt.connected && c.cmdChars.length)
+    .map((c) => c.device.name || 'ESP32');
 }
 
 export function isTestMode() { return testMode; }
@@ -106,7 +131,7 @@ export function isTestMode() { return testMode; }
 // Enter/leave test mode (fakes a connection for testing the UI without hardware).
 export function setTestMode(on) {
   testMode = !!on;
-  emitStatus(testMode ? 'connected' : 'disconnected');
+  emitStatus(testMode ? 'connected' : (realConnected() ? 'connected' : 'disconnected'));
 }
 
 // The visualization reports the total flower count so test mode lights them all and
@@ -133,43 +158,56 @@ function splitIntoPackets(message, maxBytes = MAX_PACKET_BYTES) {
 }
 
 // Prompt the browser device picker, connect GATT, and cache every flower command
-// characteristic. Returns the flower count discovered.
+// characteristic — APPENDING the board to the connection list (so calling this again
+// adds another ESP32 rather than replacing the first). Returns the total flower count
+// discovered across all connected boards.
 export async function connectFlowers() {
   if (!isBluetoothSupported()) {
     throw new Error('Web Bluetooth is not available in this browser. Use Chrome on desktop or Android (iOS is unsupported).');
   }
 
-  device = await navigator.bluetooth.requestDevice({
+  const device = await navigator.bluetooth.requestDevice({
     filters: [{ services: [SERVICE_UUID] }],
     optionalServices: [SERVICE_UUID],
   });
 
-  // Only attach the disconnect handler once per device object.
-  device.removeEventListener('gattserverdisconnected', handleDisconnect);
-  device.addEventListener('gattserverdisconnected', handleDisconnect);
-  autoReconnect = true;
+  // Already connected to this board? Don't add it twice — just refresh its chars.
+  let conn = conns.find((c) => c.device && c.device.id === device.id);
+  if (!conn) {
+    conn = { device, cmdChars: [], frameChar: null, autoReconnect: true };
+    device.addEventListener('gattserverdisconnected', () => handleDisconnect(conn));
+    conns.push(conn);
+  }
+  conn.autoReconnect = true;
 
   const server = await device.gatt.connect();
-  await discoverChars(server);
+  const { cmdChars, frameChar } = await discoverChars(server);
+  conn.cmdChars = cmdChars;
+  conn.frameChar = frameChar;
 
   // eslint-disable-next-line no-console
-  console.log('[flowerBle] connected to', device.name, '| using cmd chars:', cmdChars.map((c) => c.uuid));
+  console.log('[flowerBle] connected to', device.name, '| flowers:', cmdChars.length, '| total boards:', getDeviceCount());
 
   if (!cmdChars.length) {
+    // Drop the empty connection so it doesn't count as a board.
+    conns = conns.filter((c) => c !== conn);
     throw new Error('Connected, but found no writable flower characteristics.');
   }
   emitStatus('connected');
-  return cmdChars.length;
+  return allCmdChars().length;
 }
 
+// Disconnect every board (the "Disconnect" button) and forget them.
 export async function disconnect() {
-  autoReconnect = false; // user asked to disconnect — don't fight it
-  try {
-    if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
-  } finally {
-    cmdChars = [];
-    emitStatus('disconnected');
+  const list = conns;
+  conns = [];
+  for (const c of list) {
+    c.autoReconnect = false; // user asked to disconnect — don't fight it
+    try {
+      if (c.device && c.device.gatt && c.device.gatt.connected) c.device.gatt.disconnect();
+    } catch { /* ignore */ }
   }
+  emitStatus('disconnected');
 }
 
 // Write a single packet. The firmware command characteristic is write-WITH-response
@@ -193,7 +231,7 @@ async function writeCommand(command) {
   const patch = stateFromCommand(command);
   if (Object.keys(patch).length) setFlowerState(patch);
   const packets = splitIntoPackets(JSON.stringify(command));
-  for (const char of cmdChars) {
+  for (const char of allCmdChars()) {
     for (const packet of packets) {
       // eslint-disable-next-line no-await-in-loop
       await writePacket(char, packet);
@@ -205,7 +243,7 @@ async function writeCommand(command) {
 export async function sendCommand(command) {
   if (!isConnected()) throw new Error('Not connected to the flowers.');
   // eslint-disable-next-line no-console
-  console.log('[flowerBle] send', JSON.stringify(command), '→', cmdChars.length, 'flowers');
+  console.log('[flowerBle] send', JSON.stringify(command), '→', allCmdChars().length, 'flowers');
   await writeCommand(command);
 }
 
@@ -224,28 +262,33 @@ export function sendReactive(command) {
 }
 
 // Like sendReactive but with a distinct command per flower (for stereo spread).
-// cmds[i] drives channel i; a shorter array reuses its last entry. Does NOT mirror
-// to flowerState (the caller sets per-flower state itself).
+// cmds[i] drives global channel i (across all boards); a shorter array reuses its
+// last entry. Does NOT mirror to flowerState (the caller sets per-flower state).
 export function sendReactivePerFlower(cmds) {
   if (_reactiveBusy || !isConnected()) return false;
   _reactiveBusy = true;
+  const chars = allCmdChars();
   (async () => {
-    for (let i = 0; i < cmdChars.length; i += 1) {
+    for (let i = 0; i < chars.length; i += 1) {
       const cmd = cmds[i] || cmds[cmds.length - 1];
       if (!cmd) continue;
       const packets = splitIntoPackets(JSON.stringify(cmd));
       for (const packet of packets) {
         // eslint-disable-next-line no-await-in-loop
-        await writePacket(cmdChars[i], packet);
+        await writePacket(chars[i], packet);
       }
     }
   })().catch(() => {}).finally(() => { _reactiveBusy = false; });
   return true;
 }
 
-// True when the connected board exposes the low-latency binary frame characteristic.
+// True when EVERY connected board exposes the low-latency binary frame characteristic
+// (so a single per-board frame write can drive all flowers). If any board lacks it,
+// the engine falls back to per-flower JSON, which spans boards transparently.
 export function hasFrameChannel() {
-  return !!frameChar && isConnected();
+  if (!isConnected()) return false;
+  const live = conns.filter((c) => c.cmdChars.length);
+  return live.length > 0 && live.every((c) => !!c.frameChar);
 }
 
 function hexToRgb(hex) {
@@ -253,25 +296,37 @@ function hexToRgb(hex) {
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
-// Low-latency path: send every flower's brightness + color in ONE binary write
-// (write-without-response). frames = [{ br: 0-100, co: '#rrggbb' }, …] in flower
-// order. Drops the frame if a write is already in flight (always send the freshest).
+// Low-latency path: send every flower's brightness + color as binary frames —
+// one write-without-response PER BOARD, each carrying just that board's slice of the
+// global frame array (in channel order). frames = [{ br: 0-100, co: '#rrggbb' }, …]
+// in global flower order. Drops the round if a write is already in flight (always
+// send the freshest). Returns false (so the engine falls back) unless every board has
+// a frame char.
 export function sendFrame(frames) {
-  if (_reactiveBusy || !isConnected() || !frameChar) return false;
+  if (_reactiveBusy || !isConnected() || !hasFrameChannel()) return false;
   _reactiveBusy = true;
-  const bytes = new Uint8Array(frames.length * 4);
-  for (let i = 0; i < frames.length; i += 1) {
-    const f = frames[i] || {};
-    const [r, g, b] = hexToRgb(f.co || '#000000');
-    bytes[i * 4] = Math.max(0, Math.min(255, Math.round((f.br || 0) * 2.55)));
-    bytes[i * 4 + 1] = r;
-    bytes[i * 4 + 2] = g;
-    bytes[i * 4 + 3] = b;
+  const writes = [];
+  let offset = 0;
+  for (const c of conns) {
+    const n = c.cmdChars.length;
+    if (!n) continue;
+    const slice = frames.slice(offset, offset + n);
+    offset += n;
+    const bytes = new Uint8Array(slice.length * 4);
+    for (let i = 0; i < slice.length; i += 1) {
+      const f = slice[i] || {};
+      const [r, g, b] = hexToRgb(f.co || '#000000');
+      bytes[i * 4] = Math.max(0, Math.min(255, Math.round((f.br || 0) * 2.55)));
+      bytes[i * 4 + 1] = r;
+      bytes[i * 4 + 2] = g;
+      bytes[i * 4 + 3] = b;
+    }
+    const w = c.frameChar.writeValueWithoutResponse
+      ? c.frameChar.writeValueWithoutResponse(bytes)
+      : c.frameChar.writeValue(bytes);
+    writes.push(Promise.resolve(w));
   }
-  const write = frameChar.writeValueWithoutResponse
-    ? frameChar.writeValueWithoutResponse(bytes)
-    : frameChar.writeValue(bytes);
-  Promise.resolve(write).catch(() => {}).finally(() => { _reactiveBusy = false; });
+  Promise.all(writes).catch(() => {}).finally(() => { _reactiveBusy = false; });
   return true;
 }
 
@@ -285,12 +340,13 @@ async function writeCmdToChar(char, cmd, withResponse = false) {
   }
 }
 
-// Flash one flower white, then restore it. The white write is sent WITH response,
-// so the returned promise resolves roughly when the board has acked it — i.e. ~one
-// BLE round-trip. Returns null if that flower has no real channel (e.g. test mode).
+// Flash one flower white, then restore it. `index` is a GLOBAL channel index across
+// all boards. The white write is sent WITH response, so the returned promise resolves
+// roughly when the board has acked it — i.e. ~one BLE round-trip. Returns null if that
+// flower has no real channel (e.g. test mode).
 export function flashFlower(index, ms = 280) {
-  if (!isConnected() || !cmdChars[index]) return null;
-  const char = cmdChars[index];
+  const char = allCmdChars()[index];
+  if (!isConnected() || !char) return null;
   const p = writeCmdToChar(char, { co: '#ffffff', br: '100' }, true);
   setTimeout(() => {
     const s = getFlowerState();
