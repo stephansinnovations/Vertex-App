@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Zap, ZapOff, Plus, Trash2, X, Check } from 'lucide-react';
-import { isConnected, getFlowerCount, onStatus, flashFlower } from '@/api/flowerBle';
+import { isConnected, getFlowerCount, getDeviceCount, isTestMode, onStatus, flashFlower } from '@/api/flowerBle';
 import { loadLayout, saveLayout, newBouquet, SHAPES } from '@/api/flowerLayout';
 import { onFlowerState, getFlowerState } from '@/api/flowerState';
 
@@ -109,10 +109,31 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   useEffect(() => { loadLayout().then((l) => { setLayout(l); setFlowerCount(getFlowerCount()); report(l); }); }, [report]);
   useEffect(() => onFlowerState(setLive), []);
   useEffect(() => {
-    const sync = () => { setConnected(isConnected()); setFlowerCount(getFlowerCount()); };
+    const sync = () => {
+      setConnected(isConnected());
+      setFlowerCount(getFlowerCount());
+      // Auto-grow the layout so there's one bouquet per connected ESP32: when you
+      // "Add ESP32" and a new board comes online, append a bouquet for it (its 3
+      // channels map to the new bouquet's flowers, in connect order). Real mode only —
+      // test mode reports a single device, and we never auto-remove bouquets.
+      if (!isTestMode()) {
+        const boards = getDeviceCount();
+        const cur = layoutRef.current;
+        if (cur && boards > cur.bouquets.length) {
+          let next = cur;
+          while (next.bouquets.length < boards) {
+            next = { ...next, bouquets: [...next.bouquets, newBouquet(next.bouquets.length)] };
+          }
+          layoutRef.current = next; // avoid a double-add if status fires again before render
+          setLayout(next);
+          saveLayout(next);
+          report(next);
+        }
+      }
+    };
     sync();
     return onStatus(sync);
-  }, []);
+  }, [report]);
   useEffect(() => { const id = setInterval(() => setHead((h) => h + 1), 90); return () => clearInterval(id); }, []);
 
   // Global start index per bouquet.
