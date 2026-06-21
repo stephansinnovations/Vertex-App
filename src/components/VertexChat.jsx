@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus, AudioLines, PhoneOff } from 'lucide-react';
 import { localClient } from '@/api/localDb';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
@@ -124,6 +125,14 @@ You help manage: van builds (phases, tasks, parts), SOPs (standard operating pro
 When the user wants to create something, use the show_form tool — prefill any fields you already know from the conversation.
 When you navigate somewhere or create a record, a card will appear automatically — just describe what you did concisely.
 For lists, be brief. Lead with the most relevant item.`;
+}
+
+// Wraps the normal prompt with voice-conversation rules: short, spoken-friendly,
+// no markdown. Used by the live Voice Mode (speech in, speech out).
+function buildVoiceSystemPrompt(base) {
+  return `${base}
+
+You are in a live VOICE conversation — the user is speaking to you and your reply is read aloud. Keep answers short and natural for the ear: usually one to three sentences. Plain spoken language only — no markdown, no bullet lists, no headings, no emoji, no code blocks. If something genuinely needs detail, give the gist and offer to go deeper. Be warm, quick, and direct.`;
 }
 
 // ── Tools ────────────────────────────────────────────────────────────────────
@@ -586,6 +595,196 @@ function SettingsPanel({ onClose, contextKey, buildMode, onToggleBuildMode }) {
   );
 }
 
+// ── Voice Mode ───────────────────────────────────────────────────────────────
+// Hands-free spoken conversation: Web Speech recognition (listen) → Claude →
+// speech synthesis (Jarvis talks back) → listen again. Shares the chat's history
+// via `seedApi` (snapshot at open) and writes each turn back through `onTurn`.
+
+const SpeechRecognitionImpl =
+  typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+
+function pickVoice() {
+  const synth = window.speechSynthesis;
+  if (!synth) return null;
+  const voices = synth.getVoices() || [];
+  if (!voices.length) return null;
+  // Prefer a polished English voice; fall back to any English, then the first.
+  const prefer = ['Google UK English Male', 'Daniel', 'Google US English', 'Samantha', 'Alex'];
+  for (const name of prefer) {
+    const v = voices.find(x => x.name === name);
+    if (v) return v;
+  }
+  return voices.find(v => /^en[-_]/i.test(v.lang)) || voices[0];
+}
+
+function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose }) {
+  const [status, setStatus] = useState('connecting'); // connecting|listening|thinking|speaking|unsupported
+  const [transcript, setTranscript] = useState('');    // what the user is saying now
+  const [lastReply, setLastReply] = useState('');      // Jarvis's latest spoken line
+
+  const activeRef = useRef(true);
+  const statusRef = useRef('connecting');
+  const recRef = useRef(null);
+  const finalRef = useRef('');
+  const workingApi = useRef([...(seedApi || [])]);
+  const voiceRef = useRef(null);
+  const voiceSystem = useRef(buildVoiceSystemPrompt(systemPrompt));
+
+  const setStat = useCallback((s) => { statusRef.current = s; setStatus(s); }, []);
+
+  const startListening = useCallback(() => {
+    if (!activeRef.current || !SpeechRecognitionImpl) return;
+    let rec;
+    try { rec = new SpeechRecognitionImpl(); } catch { return; }
+    rec.lang = 'en-US';
+    rec.continuous = false;
+    rec.interimResults = true;
+    finalRef.current = '';
+    setTranscript('');
+    setStat('listening');
+
+    rec.onresult = (e) => {
+      let interim = '', final = '';
+      for (let i = 0; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += t; else interim += t;
+      }
+      if (final) finalRef.current = final;
+      setTranscript((finalRef.current || interim).trim());
+    };
+    rec.onerror = () => {}; // onend handles recovery
+    rec.onend = () => {
+      if (!activeRef.current || statusRef.current !== 'listening') return;
+      const text = finalRef.current.trim();
+      if (text) handleUtterance(text);
+      else startListening(); // silence — keep the mic open
+    };
+    recRef.current = rec;
+    try { rec.start(); } catch {}
+  }, [setStat]);
+
+  const speak = useCallback((text) => {
+    setLastReply(text);
+    setStat('speaking');
+    const synth = window.speechSynthesis;
+    if (!synth) { startListening(); return; }
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    if (voiceRef.current) u.voice = voiceRef.current;
+    u.rate = 1.02; u.pitch = 1.0;
+    u.onend = () => { if (activeRef.current) startListening(); };
+    u.onerror = () => { if (activeRef.current) startListening(); };
+    synth.speak(u);
+  }, [setStat, startListening]);
+
+  const handleUtterance = useCallback(async (text) => {
+    setStat('thinking');
+    setTranscript(text);
+    workingApi.current = [...workingApi.current, { role: 'user', content: text }];
+    try {
+      const resp = await callClaude(workingApi.current, voiceSystem.current, [], model);
+      const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+        || "Sorry, I didn't catch that.";
+      workingApi.current = [...workingApi.current, { role: 'assistant', content: reply }];
+      onTurn?.(text, reply);
+      if (activeRef.current) speak(reply);
+    } catch {
+      if (activeRef.current) speak('Something went wrong reaching the server.');
+    }
+  }, [model, onTurn, speak, setStat]);
+
+  // Boot: load voices, greet, then listen.
+  useEffect(() => {
+    activeRef.current = true;
+    if (!SpeechRecognitionImpl) { setStat('unsupported'); return; }
+
+    const loadVoice = () => { voiceRef.current = pickVoice(); };
+    loadVoice();
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = loadVoice;
+
+    const greeting = `Hey, I'm ${name || 'Jarvis'}. I'm listening — what do you need?`;
+    const t = setTimeout(() => { if (activeRef.current) speak(greeting); }, 350);
+
+    return () => {
+      activeRef.current = false;
+      clearTimeout(t);
+      try { recRef.current?.abort?.(); } catch {}
+      try { recRef.current?.stop?.(); } catch {}
+      try { window.speechSynthesis?.cancel(); } catch {}
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+    };
+  }, [name, speak, setStat]);
+
+  const STATUS_LABEL = {
+    connecting: 'Connecting…',
+    listening: 'Listening…',
+    thinking: 'Thinking…',
+    speaking: 'Speaking…',
+    unsupported: 'Voice not supported',
+  };
+
+  const orbScale = status === 'speaking' ? [1, 1.18, 1] : status === 'listening' ? [1, 1.08, 1] : 1;
+  const orbDur = status === 'speaking' ? 0.6 : 1.6;
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-between py-16 px-6"
+      style={{ background: 'radial-gradient(ellipse at 50% 35%, #0d1a2e 0%, #05070d 70%, #000 100%)' }}>
+      {/* Title */}
+      <div className="flex flex-col items-center gap-1">
+        <p className="text-white/90 text-lg font-semibold tracking-wide">{name || 'Jarvis'}</p>
+        <p className="text-sky-300/70 text-sm">{STATUS_LABEL[status]}</p>
+      </div>
+
+      {/* Orb */}
+      <div className="relative flex items-center justify-center" style={{ width: 220, height: 220 }}>
+        <motion.div
+          className="absolute rounded-full pointer-events-none"
+          animate={{ opacity: status === 'thinking' ? [0.3, 0.6, 0.3] : [0.35, 0.7, 0.35], scale: [1, 1.3, 1] }}
+          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
+          style={{ width: 220, height: 220, background: 'radial-gradient(circle, rgba(56,189,248,0.55), transparent 70%)', filter: 'blur(24px)' }}
+        />
+        <motion.div
+          animate={{ scale: orbScale }}
+          transition={{ duration: orbDur, repeat: Infinity, ease: 'easeInOut' }}
+          className="rounded-full flex items-center justify-center relative"
+          style={{
+            width: 150, height: 150,
+            background: 'radial-gradient(circle at 35% 28%, rgba(186,230,253,0.95), rgba(2,132,199,0.95))',
+            boxShadow: '0 0 60px rgba(56,189,248,0.7), inset 0 3px 0 rgba(255,255,255,0.6), inset 0 -3px 8px rgba(3,70,120,0.55)',
+            border: '1px solid rgba(186,230,253,0.4)',
+          }}>
+          <span style={{ fontSize: 56 }}>{emoji || '🤖'}</span>
+        </motion.div>
+      </div>
+
+      {/* Captions */}
+      <div className="w-full max-w-md min-h-[96px] flex flex-col items-center justify-end gap-3 text-center">
+        {status === 'unsupported' ? (
+          <p className="text-white/60 text-sm leading-relaxed">
+            Live voice needs the Web Speech API — open the app in Chrome (desktop or Android) to talk to {name || 'Jarvis'}.
+            You can still type in the chat.
+          </p>
+        ) : (
+          <>
+            {lastReply && <p className="text-white/85 text-base leading-snug">{lastReply}</p>}
+            {transcript && <p className="text-sky-300/80 text-sm italic">“{transcript}”</p>}
+          </>
+        )}
+      </div>
+
+      {/* End call */}
+      <button
+        onClick={onClose}
+        aria-label="End voice session"
+        className="w-16 h-16 rounded-full flex items-center justify-center active:scale-90 transition-transform"
+        style={{ background: '#dc2626', boxShadow: '0 8px 24px rgba(220,38,38,0.5)' }}
+      >
+        <PhoneOff className="w-7 h-7 text-white" />
+      </button>
+    </div>
+  );
+}
+
 // ── Main VertexChat ──────────────────────────────────────────────────────────
 
 export default function VertexChat({ isOpen, onClose }) {
@@ -618,6 +817,7 @@ export default function VertexChat({ isOpen, onClose }) {
   const [pendingImages, setPendingImages] = useState([]); // [{dataUrl, mediaType}]
   const [departments, setDepartments] = useState([]);
   const [buildMode, setBuildMode] = useState(() => localStorage.getItem('vx_build_mode') === 'true');
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   const toggleBuildMode = (v) => {
     setBuildMode(v);
@@ -660,6 +860,30 @@ export default function VertexChat({ isOpen, onClose }) {
     saveDisplay(contextKey, display);
     saveApi(contextKey, api);
   }, [contextKey]);
+
+  // Record one spoken turn (user + Jarvis) into the shared chat history so the
+  // text transcript stays in sync with the voice conversation.
+  const commitVoiceTurn = useCallback((userText, aiText) => {
+    const stamp = Date.now();
+    setDisplayMsgs(prev => {
+      const next = [...prev,
+        { id: stamp + 'vu', type: 'user', text: userText },
+        { id: stamp + 'va', type: 'ai', text: aiText }];
+      saveDisplay(contextKey, next);
+      return next;
+    });
+    setApiMsgs(prev => {
+      const next = [...prev,
+        { role: 'user', content: userText },
+        { role: 'assistant', content: aiText }];
+      saveApi(contextKey, next);
+      return next;
+    });
+  }, [contextKey]);
+
+  // Base prompt for voice mode (agent persona or the contextual Jarvis prompt;
+  // never Build Mode — voice shouldn't edit source).
+  const voiceBasePrompt = agentPrompt || buildSystemPrompt(contextKey, personality);
 
   // Form submitted
   const handleFormSubmit = async (formData) => {
@@ -898,6 +1122,11 @@ export default function VertexChat({ isOpen, onClose }) {
               {model === 'claude-haiku-4-5' ? 'Haiku' : 'Sonnet'}
             </button>
           )}
+          <button onClick={() => setVoiceOpen(true)} title="Talk to Jarvis"
+            className="p-2 rounded-xl hover:opacity-70 transition-opacity"
+            style={{ color: 'var(--vx-accent)' }}>
+            <AudioLines className="w-[18px] h-[18px]" />
+          </button>
           <button onClick={() => setShowSettings(v => !v)} className="p-2 rounded-xl hover:opacity-70 transition-opacity"
             style={{ color: 'var(--vx-text2)' }}>
             <Settings className="w-4.5 h-4.5 w-[18px] h-[18px]" />
@@ -1025,6 +1254,19 @@ export default function VertexChat({ isOpen, onClose }) {
           />
         )}
       </div>
+
+      {/* Voice Mode — full-screen spoken conversation */}
+      {voiceOpen && (
+        <VoiceMode
+          name={agentName || 'Jarvis'}
+          emoji={agentEmoji}
+          systemPrompt={voiceBasePrompt}
+          model={model}
+          seedApi={apiMsgs}
+          onTurn={commitVoiceTurn}
+          onClose={() => setVoiceOpen(false)}
+        />
+      )}
     </>
   );
 }
