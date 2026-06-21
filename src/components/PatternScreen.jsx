@@ -43,12 +43,26 @@ export default function PatternScreen() {
   const dialRef = useRef(null);
   const draggingDir = useRef(false);
   const canvasRef = useRef(null);
+  const canvasWrapRef = useRef(null);
+  const viewDragRef = useRef(null);
 
   const p = modEngine.pattern;
   const dirEnabled = p.type !== 'radiate' && p.type !== 'scatter';
   const rad = (p.direction * Math.PI) / 180;
   const playing = modEngine.patternDrive;
   const synced = p.sync !== 'free';
+  const view = p.view || { x: 0, y: 0, w: 1, h: 1 };
+
+  // Capture window (the grid box over the pattern) — drag to move, corner to resize.
+  // Flowers only play the slice inside it, so this zooms/pans into a spot of the pattern.
+  const startViewDrag = (kind) => (e) => {
+    e.stopPropagation();
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return;
+    const r = wrap.getBoundingClientRect();
+    viewDragRef.current = { kind, r, startX: e.clientX, startY: e.clientY, v: { ...view } };
+  };
+  const resetView = () => { modEngine.pattern.view = { x: 0, y: 0, w: 1, h: 1 }; modEngine.applyOnce(); bump(); };
 
   // Snapshot the current working pattern (what gets saved to a pad).
   const snapshot = () => ({
@@ -175,8 +189,24 @@ export default function PatternScreen() {
   };
 
   useEffect(() => {
-    const move = (e) => { if (draggingDir.current) dirFromEvent(e); };
-    const up = () => { draggingDir.current = false; };
+    const move = (e) => {
+      if (draggingDir.current) { dirFromEvent(e); return; }
+      const vd = viewDragRef.current;
+      if (!vd) return;
+      const dx = (e.clientX - vd.startX) / vd.r.width;
+      const dy = (e.clientY - vd.startY) / vd.r.height;
+      const v = modEngine.pattern.view || { x: 0, y: 0, w: 1, h: 1 };
+      if (vd.kind === 'move') {
+        v.x = Math.max(0, Math.min(1 - vd.v.w, vd.v.x + dx));
+        v.y = Math.max(0, Math.min(1 - vd.v.h, vd.v.y + dy));
+      } else {
+        v.w = Math.max(0.08, Math.min(1 - vd.v.x, vd.v.w + dx));
+        v.h = Math.max(0.08, Math.min(1 - vd.v.y, vd.v.h + dy));
+      }
+      modEngine.applyOnce();
+      bump();
+    };
+    const up = () => { draggingDir.current = false; viewDragRef.current = null; };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
@@ -206,7 +236,24 @@ export default function PatternScreen() {
 
       {/* Dense live preview + direction dial */}
       <div className="flex items-center gap-3">
-        <canvas ref={canvasRef} width={600} height={260} className="flex-1 w-full rounded-lg" style={{ background: '#171a20' }} />
+        <div ref={canvasWrapRef} className="relative flex-1 min-w-0">
+          <canvas ref={canvasRef} width={600} height={260} className="w-full rounded-lg block" style={{ background: '#171a20' }} />
+          {/* Capture window — the grid box the flowers play; drag to move, corner to resize */}
+          <div
+            onPointerDown={startViewDrag('move')}
+            onDoubleClick={resetView}
+            title="Drag to pan · corner to resize · double-click to reset — the flowers play the slice inside this box"
+            className="absolute border-2 border-[#36d6c3]/90 rounded-sm cursor-move"
+            style={{
+              left: `${view.x * 100}%`, top: `${view.y * 100}%`, width: `${view.w * 100}%`, height: `${view.h * 100}%`,
+              boxShadow: '0 0 0 9999px rgba(0,0,0,0.45)',
+              backgroundImage: 'repeating-linear-gradient(0deg, rgba(54,214,195,0.22) 0 1px, transparent 1px 33.34%), repeating-linear-gradient(90deg, rgba(54,214,195,0.22) 0 1px, transparent 1px 33.34%)',
+              backgroundSize: '100% 100%',
+            }}
+          >
+            <div onPointerDown={startViewDrag('resize')} className="absolute -right-1.5 -bottom-1.5 w-3.5 h-3.5 rounded-sm bg-[#36d6c3] cursor-se-resize" title="Resize the capture window" />
+          </div>
+        </div>
         <div
           ref={dialRef}
           onPointerDown={(e) => { if (!dirEnabled) return; draggingDir.current = true; dirFromEvent(e); }}

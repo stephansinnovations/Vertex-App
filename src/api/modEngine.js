@@ -58,22 +58,22 @@ export function computePatternOffsets(pattern, positions) {
     for (let i = 0; i < n; i += 1) out[i] = amount * (Math.abs(Math.sin((i + 1) * 12.9898) * 43758.5453) % 1);
     return out;
   }
+  // Normalized against the FULL unit field (0..1), not the flowers' own span — so a
+  // viewport window (sub-rect of the field, applied to positions before this call)
+  // captures a real sub-region of the pattern rather than always spanning the flowers.
   if (type === 'radiate') {
-    let maxD = 1e-6;
-    const ds = positions.map((p) => { const d = Math.hypot(p.x - 0.5, p.y - 0.5); if (d > maxD) maxD = d; return d; });
-    for (let i = 0; i < n; i += 1) out[i] = amount * (ds[i] / maxD);
+    const maxD = Math.hypot(0.5, 0.5); // centre → corner of the unit field
+    for (let i = 0; i < n; i += 1) out[i] = amount * Math.min(1.5, Math.hypot(positions[i].x - 0.5, positions[i].y - 0.5) / maxD);
     return out;
   }
-  // Projection onto the direction axis, normalized across the flowers.
+  // Projection onto the direction axis, normalized over the unit square's projection.
   const rad = (direction * Math.PI) / 180;
   const cos = Math.cos(rad);
   const sin = Math.sin(rad);
-  let mn = Infinity;
-  let mx = -Infinity;
-  const projs = positions.map((p) => { const pr = p.x * cos + p.y * sin; if (pr < mn) mn = pr; if (pr > mx) mx = pr; return pr; });
-  const span = Math.max(1e-6, mx - mn);
+  const base = Math.min(0, cos) + Math.min(0, sin);
+  const span = (Math.abs(cos) + Math.abs(sin)) || 1;
   for (let i = 0; i < n; i += 1) {
-    const t = (projs[i] - mn) / span;
+    const t = (positions[i].x * cos + positions[i].y * sin - base) / span;
     out[i] = type === 'bounce' ? amount * (1 - Math.abs(2 * t - 1)) : amount * t;
   }
   return out;
@@ -181,7 +181,9 @@ class ModEngine {
     // pattern flows across them in a direction. Move the flowers, the pattern stays.
     // direction in degrees; colorA/colorB + gradient drive the pattern's colors.
     // sync: 'free' (uses rate, cycles/sec) or a SYNC_DIVISIONS key (locks to BPM).
-    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35 };
+    // `view` = the capture window over the pattern field (0..1). Flowers map into this
+    // sub-rect, so shrinking/moving it zooms/pans into a different spot of the pattern.
+    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35, view: { x: 0, y: 0, w: 1, h: 1 } };
     this._patternOnce = false;
     this._onceLeft = 0;
     this._onceEndsAt = 0; // wall-clock end time for a fixed-duration one-shot (0 = use _onceLeft)
@@ -309,7 +311,11 @@ class ModEngine {
     const F = Math.max(getFlowerCount() || this.flowerBouquet.length || 3, 1);
     const positions = [];
     for (let gi = 0; gi < F; gi += 1) positions.push(this.flowerPos[gi] || { x: gi / Math.max(1, F - 1), y: 0.5 });
-    const patternOffsets = computePatternOffsets(this.pattern, positions);
+    // Map flower positions into the pattern's capture window so the flowers only play
+    // the slice of the pattern inside it (zoom/pan into a spot).
+    const v = this.pattern.view || { x: 0, y: 0, w: 1, h: 1 };
+    const mapped = positions.map((p) => ({ x: v.x + p.x * v.w, y: v.y + p.y * v.h }));
+    const patternOffsets = computePatternOffsets(this.pattern, mapped);
     const cmds = [];
     const perFlower = [];
     if (this.patternDrive) {

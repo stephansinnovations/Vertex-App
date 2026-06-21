@@ -44,8 +44,8 @@ export function newBouquet(index) {
   };
 }
 
-// Default = one bouquet (the current rig).
-export const DEFAULT_LAYOUT = { bouquets: [newBouquet(0)] };
+// Default = one bouquet (the current rig). gridFeet = display width in feet.
+export const DEFAULT_LAYOUT = { bouquets: [newBouquet(0)], gridFeet: 8 };
 
 // Accept the new shape ({ bouquets }) or migrate the old flat shape ({ flowers }).
 function sanitize(layout) {
@@ -64,7 +64,10 @@ function sanitize(layout) {
     };
   }).filter((b) => b.flowers.length);
   if (!bouquets.length) return null;
-  return { bouquets };
+  // gridFeet = real-world width (in feet) the display represents; drives the grid + the
+  // physically-accurate flower sizes (each LED ring is 2 in across).
+  const gridFeet = Number.isFinite(+layout?.gridFeet) ? Math.max(1, Math.min(60, +layout.gridFeet)) : 8;
+  return { bouquets, gridFeet };
 }
 
 export async function loadLayout() {

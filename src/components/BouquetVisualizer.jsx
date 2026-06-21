@@ -84,11 +84,24 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   const [draft, setDraft] = useState(null);
   const [flashGi, setFlashGi] = useState(null);
   const [latency, setLatency] = useState(null);
+  const [canvasW, setCanvasW] = useState(0);
   const canvasRef = useRef(null);
   const dragRef = useRef(null);
   const layoutRef = useRef(null);
   const flashTimer = useRef(null);
+  const scaleRef = useRef(1); // cluster scale (so flower drag math accounts for it)
   layoutRef.current = layout;
+
+  // Measure the canvas width so we can size the feet grid + flowers in real units.
+  // Depends on `layout` because the canvas isn't mounted until the layout loads.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(() => setCanvasW(el.getBoundingClientRect().width));
+    ro.observe(el);
+    setCanvasW(el.getBoundingClientRect().width);
+    return () => ro.disconnect();
+  }, [layout]);
 
   // Briefly flash a flower white (visual click feedback / identify).
   const flashRef = useRef(() => {});
@@ -150,10 +163,12 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
       if (!d.moved && (Math.abs(e.clientX - d.startX) > 4 || Math.abs(e.clientY - d.startY) > 4)) d.moved = true;
       if (!d.moved) return;
       if (d.fi != null && d.clusterEl) {
-        // Drag a single flower within its bouquet cluster.
+        // Drag a single flower within its bouquet cluster (cr is the scaled rect, so
+        // divide by the cluster scale to get unscaled fx/fy in the 124×108 box).
         const cr = d.clusterEl.getBoundingClientRect();
-        const fx = Math.max(10, Math.min(114, e.clientX - cr.left));
-        const fy = Math.max(10, Math.min(98, e.clientY - cr.top));
+        const sc = scaleRef.current || 1;
+        const fx = Math.max(10, Math.min(114, (e.clientX - cr.left) / sc));
+        const fy = Math.max(10, Math.min(98, (e.clientY - cr.top) / sc));
         setLayout((prev) => {
           const next = {
             ...prev,
@@ -192,7 +207,16 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   if (!layout) return null;
   const isWave = Array.isArray(live.motion) && live.motion.includes('wave');
 
+  // Real-world scale: the display is `gridFeet` feet wide; each LED ring is 2 in (1/6 ft).
+  // The cluster art is drawn for a 48 px flower, so scale the whole cluster to match.
+  const gridFeet = layout.gridFeet ?? 8;
+  const pxPerFoot = canvasW > 0 ? canvasW / gridFeet : 0;
+  const flowerPx = pxPerFoot / 6; // 2 inches
+  const clusterScale = pxPerFoot > 0 ? Math.max(0.16, Math.min(3, flowerPx / 48)) : 1;
+  scaleRef.current = clusterScale;
+
   const persist = (next) => { setLayout(next); saveLayout(next); report(next); };
+  const setGridFeet = (delta) => { const cur = layoutRef.current || layout; persist({ ...cur, gridFeet: Math.max(1, Math.min(60, Math.round((cur.gridFeet ?? 8) + delta))) }); };
   const openEdit = (bi, fi) => { setDraft({ ...layout.bouquets[bi].flowers[fi] }); setEditing({ bi, fi }); };
   const closeEdit = () => { setEditing(null); setDraft(null); };
   const saveEdit = () => {
@@ -217,6 +241,13 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
 
   return (
     <div ref={canvasRef} className="relative w-full rounded-2xl border border-white/8 bg-black/30 overflow-hidden" style={{ height: 360, touchAction: 'none' }}>
+      {/* Feet grid — one square per foot */}
+      {pxPerFoot > 0 && (
+        <div className="absolute inset-0 pointer-events-none" style={{
+          backgroundImage: 'linear-gradient(to right, rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.07) 1px, transparent 1px)',
+          backgroundSize: `${pxPerFoot}px ${pxPerFoot}px`,
+        }} />
+      )}
       {layout.bouquets.map((b, bi) => {
         const bSelected = selected === `b${bi}`;
         const bConnected = connected && starts[bi] < flowerCount;
@@ -226,7 +257,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
             key={bi}
             onPointerDown={(e) => startDrag(e, bi)}
             className="absolute cursor-grab active:cursor-grabbing select-none"
-            style={{ left: `${(b.x ?? 0.5) * 100}%`, top: `${(b.y ?? 0.5) * 100}%`, transform: 'translate(-50%, -50%)' }}
+            style={{ left: `${(b.x ?? 0.5) * 100}%`, top: `${(b.y ?? 0.5) * 100}%`, transform: `translate(-50%, -50%) scale(${clusterScale})` }}
           >
             <div data-cluster={bi} className={`relative w-[124px] h-[108px] rounded-xl ${bSelected ? 'ring-1 ring-white/40 bg-white/[0.03]' : ''}`}>
               {/* header */}
@@ -266,6 +297,14 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
       <button onClick={addBouquet} className="absolute bottom-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-xs text-white/80 transition">
         <Plus className="w-3.5 h-3.5" /> Bouquet
       </button>
+
+      {/* Grid scale (feet) — sizes the grid and the flowers to real scale */}
+      <div className="absolute bottom-3 left-3 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/40 border border-white/10 text-xs text-white/70">
+        <span className="text-[10px] uppercase tracking-wide text-white/40 mr-0.5">Grid</span>
+        <button onClick={() => setGridFeet(-1)} className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 leading-none" title="Smaller area (zoom in)">−</button>
+        <span className="tabular-nums w-12 text-center">{gridFeet} ft</span>
+        <button onClick={() => setGridFeet(1)} className="w-5 h-5 rounded-full bg-white/10 hover:bg-white/20 leading-none" title="Larger area (zoom out)">+</button>
+      </div>
       <span className="absolute top-2 left-3 text-[10px] uppercase tracking-widest text-white/25 pointer-events-none">Drag bouquets to arrange · click a flower to flash it</span>
       {latency != null && (
         <span className="absolute top-2 right-3 text-[11px] font-medium tabular-nums text-[#36d6c3] pointer-events-none">⚡ {latency} ms round-trip</span>
