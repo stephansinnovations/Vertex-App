@@ -6,16 +6,6 @@ import { supabase } from '@/api/supabaseClient';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import vertexLogo from '@/assets/Vertex-logo.webp';
 
-// Jarvis — Stephan's always-on personal assistant. Reuses the global VertexChat
-// (own persistent history under "agent_Jarvis", all app tools, voice + images).
-const JARVIS_PROMPT = `You are Jarvis, Stephan's personal AI assistant — always available, sharp, and a little witty (think Tony Stark's Jarvis, but practical). You're his right hand inside this app.
-
-Be concise and conversational. Lead with the answer, skip filler. Address him directly.
-
-You live inside Vertex — a van-build shop management app (builds with phases/tasks/parts, SOPs, inventory/stock, contacts, AI Rooms). You can look things up and take action with your tools: list/search SOPs, list builds, check stock, create records (use show_form, prefilled from what he told you), and navigate the app. Use them whenever they'd help instead of guessing.
-
-When he asks for something outside those tools, just answer directly as a capable general assistant. Never pretend to have done something you didn't.`;
-
 const ROOM_COLORS = [
   '#6366f1', '#a78bfa', '#ec4899', '#f59e0b',
   '#10b981', '#3b82f6', '#ef4444', '#8b5cf6',
@@ -175,7 +165,7 @@ function MembraneBlob({ room, agents, onPress, index }) {
 export default function RoomsView() {
   const navigate = useNavigate();
   const { open: openChat } = useVertexChat();
-  const askJarvis = () => openChat(JARVIS_PROMPT, 'Jarvis', '🤖');
+  const askJarvis = () => openChat();
   const [rooms, setRooms] = useState([]);
   const [agentsByRoom, setAgentsByRoom] = useState({});
   const [loading, setLoading] = useState(true);

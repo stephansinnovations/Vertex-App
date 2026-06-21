@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Palette, Code2, ImagePlus } from 'lucide-react';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus } from 'lucide-react';
 import { localClient } from '@/api/localDb';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
@@ -72,7 +72,7 @@ function buildDevSystemPrompt(personality) {
     professional: 'Be formal and thorough.',
   }[personality] || 'Be brief and direct.';
 
-  return `You are Vertex AI in Build Mode — you can read and modify this app's own source code. ${tone}
+  return `You are Jarvis in Build Mode — you can read and modify this app's own source code. ${tone}
 
 This is a React + Vite + Tailwind CSS app called "Vertex Vans" (a van build shop management tool).
 
@@ -115,7 +115,7 @@ function buildSystemPrompt(contextKey, personality) {
     contacts:  'The user is on the Contacts page.',
   }[contextKey] || (contextKey.startsWith('build_') ? `The user is viewing a specific build. Focus on this build's phases, tasks, and parts.` : '');
 
-  return `You are Vertex AI, an intelligent assistant inside the Vertex Vans shop management app. ${tone}
+  return `You are Jarvis, the intelligent assistant inside the Vertex Vans shop management app. ${tone}
 
 ${ctx}
 
@@ -565,7 +565,7 @@ function SettingsPanel({ onClose, contextKey, buildMode, onToggleBuildMode }) {
             <Code2 className="w-4 h-4" style={{ color: buildMode ? '#a78bfa' : 'var(--vx-text2)' }} />
             <div className="text-left">
               <p className="text-sm font-medium" style={{ color: 'var(--vx-text)' }}>Edit App Code</p>
-              <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>Let Vertex AI modify this app's source files</p>
+              <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>Let Jarvis modify this app's source files</p>
             </div>
           </div>
           <div className={`w-10 h-5.5 rounded-full transition-colors relative flex-shrink-0`}
@@ -870,7 +870,7 @@ export default function VertexChat({ isOpen, onClose }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-sm font-bold truncate" style={{ color: 'var(--vx-text)' }}>
-                {agentName || 'Vertex AI'}
+                {agentName || 'Jarvis'}
               </p>
               {buildMode && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0"
@@ -913,7 +913,7 @@ export default function VertexChat({ isOpen, onClose }) {
           {displayMsgs.length === 0 && (
             <div className="text-center pt-6 pb-2">
               <img src={vertexLogo} alt="Vertex" className="w-14 h-14 object-contain mx-auto mb-3 rounded-2xl opacity-80" />
-              <p className="text-sm font-semibold" style={{ color: 'var(--vx-text)' }}>Vertex AI</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--vx-text)' }}>Jarvis</p>
               <p className="text-xs mt-1 px-6" style={{ color: 'var(--vx-text2)' }}>{greeting}</p>
               <SuggestionGrid contextKey={contextKey} onSend={sendMessage} />
             </div>
@@ -975,7 +975,7 @@ export default function VertexChat({ isOpen, onClose }) {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-              placeholder="Message Vertex AI…"
+              placeholder="Message Jarvis…"
               rows={1}
               disabled={loading}
               className="flex-1 rounded-2xl px-4 py-2.5 text-sm border focus:outline-none resize-none"

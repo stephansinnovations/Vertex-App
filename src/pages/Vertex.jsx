@@ -138,7 +138,7 @@ async function callClaude(messages) {
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 4096,
-      system: `You are Vertex AI, the intelligent assistant built into the Vertex Vans app. You help the team manage SOPs, builds, inventory, and parts. You can create and search SOPs, manage builds, and check stock levels. Be concise and action-oriented. When you create something, confirm what you made. When listing items, format them clearly.`,
+      system: `You are Jarvis, the intelligent assistant built into the Vertex Vans app. You help the team manage SOPs, builds, inventory, and parts. You can create and search SOPs, manage builds, and check stock levels. Be concise and action-oriented. When you create something, confirm what you made. When listing items, format them clearly.`,
       tools: TOOLS,
       messages,
     }),
@@ -233,7 +233,7 @@ export default function Vertex() {
         </button>
         <div className="flex items-center gap-2">
           <img src={vertexLogo} alt="Vertex" className="w-6 h-6 object-contain rounded-xl" />
-          <h1 className="text-xl font-bold text-white">Vertex AI</h1>
+          <h1 className="text-xl font-bold text-white">Jarvis</h1>
         </div>
       </div>
 
@@ -242,7 +242,7 @@ export default function Vertex() {
         {messages.length === 0 && (
           <div className="text-center mt-20">
             <img src={vertexLogo} alt="Vertex" className="w-16 h-16 object-contain rounded-xl mx-auto mb-4 opacity-30" />
-            <p className="text-gray-500 text-lg font-medium">Vertex AI</p>
+            <p className="text-gray-500 text-lg font-medium">Jarvis</p>
             <p className="text-gray-600 text-sm mt-1">Ask me to build SOPs, check inventory, manage builds, and more.</p>
             <div className="mt-6 flex flex-wrap gap-2 justify-center">
               {[
@@ -300,7 +300,7 @@ export default function Vertex() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-            placeholder="Ask Vertex AI anything…"
+            placeholder="Ask Jarvis anything…"
             rows={1}
             className="flex-1 bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 text-white text-sm placeholder:text-gray-600 focus:outline-none focus:border-zinc-500 resize-none"
             style={{ maxHeight: '120px' }}

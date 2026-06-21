@@ -118,7 +118,7 @@ export default function EntityChat({ isOpen, onClose }) {
   }, [showHistory, displayHistory]);
 
   const systemPrompt = agentPrompt ||
-    `You are Vertex AI, a helpful assistant for a van conversion shop. Be concise — one clear paragraph max per response.`;
+    `You are Jarvis, a helpful assistant for a van conversion shop. Be concise — one clear paragraph max per response.`;
 
   const send = async (text) => {
     const msg = (text || input).trim();
@@ -279,7 +279,7 @@ export default function EntityChat({ isOpen, onClose }) {
                 </div>
               </motion.div>
               <p className="text-white/80 text-sm font-semibold tracking-widest uppercase">
-                {agentName || 'Vertex AI'}
+                {agentName || 'Jarvis'}
               </p>
               {/* Online dot */}
               <div className="flex items-center gap-1.5 mt-1">

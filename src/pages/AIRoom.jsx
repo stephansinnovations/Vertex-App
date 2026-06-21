@@ -22,7 +22,7 @@ function getRoomApp(room) {
 
 const DEFAULT_AGENT = {
   id: 'default',
-  name: 'Vertex AI',
+  name: 'Jarvis',
   emoji: null,
   description: 'Your van build assistant',
   prompt: null,

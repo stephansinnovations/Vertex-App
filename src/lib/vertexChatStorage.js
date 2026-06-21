@@ -63,12 +63,12 @@ export function getContextKey() {
 }
 
 export function getContextLabel(key) {
-  const MAP = { home: 'Vertex AI', builds: 'Builds', sops: 'SOPs', inventory: 'Inventory', contacts: 'Contacts', meetings: 'Meetings' };
+  const MAP = { home: 'Jarvis', builds: 'Builds', sops: 'SOPs', inventory: 'Inventory', contacts: 'Contacts', meetings: 'Meetings' };
   if (MAP[key]) return MAP[key];
   if (key.startsWith('build_')) return 'This Build';
   if (key.startsWith('sop_')) return 'This SOP';
   if (key.startsWith('sopfolder_')) return 'This Dept';
-  return 'Vertex AI';
+  return 'Jarvis';
 }
 
 export function getContextGreeting(key) {

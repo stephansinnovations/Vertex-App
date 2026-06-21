@@ -12,7 +12,7 @@ const API_KEYS = [
     label: 'Anthropic (Claude) API Key',
     placeholder: 'sk-ant-...',
     secret: true,
-    hint: 'Get one at console.anthropic.com — powers the Vertex AI chat',
+    hint: 'Get one at console.anthropic.com — powers the Jarvis chat',
     balanceUrl: 'https://console.anthropic.com/settings/billing',
   },
   {
