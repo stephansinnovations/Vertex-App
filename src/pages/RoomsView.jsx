@@ -1,9 +1,20 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, Check, ArrowLeft, Sparkles, Code2 } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
+import { useVertexChat } from '@/lib/VertexChatContext';
 import vertexLogo from '@/assets/Vertex-logo.webp';
+
+// Jarvis — Stephan's always-on personal assistant. Reuses the global VertexChat
+// (own persistent history under "agent_Jarvis", all app tools, voice + images).
+const JARVIS_PROMPT = `You are Jarvis, Stephan's personal AI assistant — always available, sharp, and a little witty (think Tony Stark's Jarvis, but practical). You're his right hand inside this app.
+
+Be concise and conversational. Lead with the answer, skip filler. Address him directly.
+
+You live inside Vertex — a van-build shop management app (builds with phases/tasks/parts, SOPs, inventory/stock, contacts, AI Rooms). You can look things up and take action with your tools: list/search SOPs, list builds, check stock, create records (use show_form, prefilled from what he told you), and navigate the app. Use them whenever they'd help instead of guessing.
+
+When he asks for something outside those tools, just answer directly as a capable general assistant. Never pretend to have done something you didn't.`;
 
 const ROOM_COLORS = [
   '#6366f1', '#a78bfa', '#ec4899', '#f59e0b',
@@ -163,6 +174,8 @@ function MembraneBlob({ room, agents, onPress, index }) {
 
 export default function RoomsView() {
   const navigate = useNavigate();
+  const { open: openChat } = useVertexChat();
+  const askJarvis = () => openChat(JARVIS_PROMPT, 'Jarvis', '🤖');
   const [rooms, setRooms] = useState([]);
   const [agentsByRoom, setAgentsByRoom] = useState({});
   const [loading, setLoading] = useState(true);
@@ -293,12 +306,35 @@ Return ONLY the raw HTML, starting with <!doctype html>. No explanation, no mark
           <ArrowLeft className="w-5 h-5" style={{ color: 'var(--ios-blue)', strokeWidth: 2 }} />
         </button>
         <h1 style={{ fontSize: 17, fontWeight: 600, color: 'rgba(255,255,255,0.92)', letterSpacing: -0.3 }}>AI Rooms</h1>
-        <button
-          onClick={() => setShowNewRoom(true)}
-          className="active:opacity-50 transition-opacity"
-        >
-          <Plus className="w-6 h-6" style={{ color: 'var(--ios-blue)', strokeWidth: 2 }} />
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Jarvis — always-on personal assistant */}
+          <button
+            onClick={askJarvis}
+            aria-label="Ask Jarvis"
+            className="relative flex items-center justify-center active:opacity-60 transition-opacity"
+          >
+            <motion.div
+              className="absolute inset-0 rounded-full pointer-events-none"
+              animate={{ opacity: [0.3, 0.7, 0.3], scale: [1, 1.35, 1] }}
+              transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+              style={{ background: 'radial-gradient(circle, rgba(56,189,248,0.7), transparent)', margin: -6, filter: 'blur(7px)' }}
+            />
+            <div className="w-8 h-8 rounded-full flex items-center justify-center relative"
+              style={{
+                background: 'radial-gradient(circle at 35% 28%, rgba(186,230,253,0.95), rgba(2,132,199,0.95))',
+                boxShadow: '0 0 14px rgba(56,189,248,0.8), inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 3px rgba(3,70,120,0.5)',
+                border: '0.5px solid rgba(186,230,253,0.5)',
+              }}>
+              <Sparkles className="w-4 h-4" style={{ color: 'rgba(255,255,255,0.95)' }} />
+            </div>
+          </button>
+          <button
+            onClick={() => setShowNewRoom(true)}
+            className="active:opacity-50 transition-opacity"
+          >
+            <Plus className="w-6 h-6" style={{ color: 'var(--ios-blue)', strokeWidth: 2 }} />
+          </button>
+        </div>
       </div>
 
       {/* Ambient */}
