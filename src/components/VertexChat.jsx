@@ -618,102 +618,131 @@ function pickVoice() {
 }
 
 function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose }) {
-  const [status, setStatus] = useState('connecting'); // connecting|listening|thinking|speaking|unsupported
+  const [status, setStatus] = useState('connecting'); // connecting|listening|thinking|speaking|unsupported|blocked
   const [transcript, setTranscript] = useState('');    // what the user is saying now
   const [lastReply, setLastReply] = useState('');      // Jarvis's latest spoken line
 
-  const activeRef = useRef(true);
-  const statusRef = useRef('connecting');
-  const recRef = useRef(null);
-  const finalRef = useRef('');
-  const workingApi = useRef([...(seedApi || [])]);
-  const voiceRef = useRef(null);
-  const voiceSystem = useRef(buildVoiceSystemPrompt(systemPrompt));
+  // Latest props for the long-lived loop without re-running the effect.
+  const onTurnRef = useRef(onTurn); onTurnRef.current = onTurn;
+  const modelRef = useRef(model);   modelRef.current = model;
 
-  const setStat = useCallback((s) => { statusRef.current = s; setStatus(s); }, []);
-
-  const startListening = useCallback(() => {
-    if (!activeRef.current || !SpeechRecognitionImpl) return;
-    let rec;
-    try { rec = new SpeechRecognitionImpl(); } catch { return; }
-    rec.lang = 'en-US';
-    rec.continuous = false;
-    rec.interimResults = true;
-    finalRef.current = '';
-    setTranscript('');
-    setStat('listening');
-
-    rec.onresult = (e) => {
-      let interim = '', final = '';
-      for (let i = 0; i < e.results.length; i++) {
-        const t = e.results[i][0].transcript;
-        if (e.results[i].isFinal) final += t; else interim += t;
-      }
-      if (final) finalRef.current = final;
-      setTranscript((finalRef.current || interim).trim());
-    };
-    rec.onerror = () => {}; // onend handles recovery
-    rec.onend = () => {
-      if (!activeRef.current || statusRef.current !== 'listening') return;
-      const text = finalRef.current.trim();
-      if (text) handleUtterance(text);
-      else startListening(); // silence — keep the mic open
-    };
-    recRef.current = rec;
-    try { rec.start(); } catch {}
-  }, [setStat]);
-
-  const speak = useCallback((text) => {
-    setLastReply(text);
-    setStat('speaking');
-    const synth = window.speechSynthesis;
-    if (!synth) { startListening(); return; }
-    synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    if (voiceRef.current) u.voice = voiceRef.current;
-    u.rate = 1.02; u.pitch = 1.0;
-    u.onend = () => { if (activeRef.current) startListening(); };
-    u.onerror = () => { if (activeRef.current) startListening(); };
-    synth.speak(u);
-  }, [setStat, startListening]);
-
-  const handleUtterance = useCallback(async (text) => {
-    setStat('thinking');
-    setTranscript(text);
-    workingApi.current = [...workingApi.current, { role: 'user', content: text }];
-    try {
-      const resp = await callClaude(workingApi.current, voiceSystem.current, [], model);
-      const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-        || "Sorry, I didn't catch that.";
-      workingApi.current = [...workingApi.current, { role: 'assistant', content: reply }];
-      onTurn?.(text, reply);
-      if (activeRef.current) speak(reply);
-    } catch {
-      if (activeRef.current) speak('Something went wrong reaching the server.');
-    }
-  }, [model, onTurn, speak, setStat]);
-
-  // Boot: load voices, greet, then listen.
+  // The whole conversation loop lives in one effect with stable local closures —
+  // ONE persistent recognizer (continuous), so there's no start/stop race.
   useEffect(() => {
-    activeRef.current = true;
-    if (!SpeechRecognitionImpl) { setStat('unsupported'); return; }
+    let active = true;
+    const SR = SpeechRecognitionImpl;
+    if (!SR) { setStatus('unsupported'); return; }
 
-    const loadVoice = () => { voiceRef.current = pickVoice(); };
-    loadVoice();
-    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = loadVoice;
+    const workingApi = [...(seedApi || [])];
+    const voiceSystem = buildVoiceSystemPrompt(systemPrompt);
+    let voice = pickVoice();
+    const onVoices = () => { voice = pickVoice(); };
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = onVoices;
+
+    let mode = 'idle';   // idle|listening|thinking|speaking|blocked
+    let rec = null;
+    let pending = '';    // finalized speech awaiting send
+    let interimTxt = ''; // in-flight (not yet final) speech
+    let silenceTimer = null;
+
+    async function handleUtterance(text) {
+      mode = 'thinking';
+      if (active) { setStatus('thinking'); setTranscript(text); }
+      clearTimeout(silenceTimer);
+      try { rec && rec.stop(); } catch {} // pause the mic while we think + speak
+      workingApi.push({ role: 'user', content: text });
+      try {
+        const resp = await callClaude(workingApi, voiceSystem, [], modelRef.current);
+        const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+          || "Sorry, I didn't catch that — could you say it again?";
+        workingApi.push({ role: 'assistant', content: reply });
+        onTurnRef.current?.(text, reply);
+        if (active) speak(reply);
+      } catch (err) {
+        const msg = /api key/i.test(err?.message || '')
+          ? "I need an Anthropic API key set in the app's Settings before I can answer."
+          : "Something went wrong reaching the server. Check the connection and try again.";
+        if (active) { setLastReply(msg); speak(msg); }
+      }
+    }
+
+    function trySend() {
+      const text = `${pending} ${interimTxt}`.trim();
+      if (text && mode === 'listening') { pending = ''; interimTxt = ''; handleUtterance(text); }
+    }
+
+    function ensureRec() {
+      if (rec) return rec;
+      rec = new SR();
+      rec.lang = 'en-US';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onresult = (e) => {
+        let interim = '', finalChunk = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalChunk += t; else interim += t;
+        }
+        if (finalChunk) pending = `${pending} ${finalChunk}`.trim();
+        interimTxt = interim;
+        if (active) setTranscript(`${pending} ${interim}`.trim());
+        // Send once the user pauses (~1.1s with no new words).
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(trySend, 1100);
+      };
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          mode = 'blocked';
+          if (active) setStatus('blocked');
+        }
+        // no-speech / aborted / network → onend recovers
+      };
+      rec.onend = () => {
+        if (active && mode === 'listening') { try { rec.start(); } catch {} }
+      };
+      return rec;
+    }
+
+    function startListening() {
+      if (!active) return;
+      mode = 'listening';
+      pending = ''; interimTxt = '';
+      if (active) { setStatus('listening'); setTranscript(''); }
+      const r = ensureRec();
+      try { r.start(); } catch {} // throws if already running — harmless
+    }
+
+    function speak(text) {
+      mode = 'speaking';
+      if (active) { setStatus('speaking'); setLastReply(text); }
+      const synth = window.speechSynthesis;
+      if (!synth) { startListening(); return; }
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice;
+      u.rate = 1.02;
+      let done = false;
+      const finish = () => { if (done) return; done = true; if (active) startListening(); };
+      u.onend = finish;
+      u.onerror = finish;
+      // Chrome sometimes never fires onend — fall back on a length-based timer.
+      setTimeout(finish, Math.min(20000, 1600 + text.length * 60));
+      synth.speak(u);
+    }
 
     const greeting = `Hey, I'm ${name || 'Jarvis'}. I'm listening — what do you need?`;
-    const t = setTimeout(() => { if (activeRef.current) speak(greeting); }, 350);
+    const bootT = setTimeout(() => { if (active) speak(greeting); }, 350);
 
     return () => {
-      activeRef.current = false;
-      clearTimeout(t);
-      try { recRef.current?.abort?.(); } catch {}
-      try { recRef.current?.stop?.(); } catch {}
-      try { window.speechSynthesis?.cancel(); } catch {}
+      active = false;
+      clearTimeout(bootT);
+      clearTimeout(silenceTimer);
+      try { rec && rec.abort(); } catch {}
+      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {}
       if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
     };
-  }, [name, speak, setStat]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const STATUS_LABEL = {
     connecting: 'Connecting…',
@@ -721,6 +750,7 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
     thinking: 'Thinking…',
     speaking: 'Speaking…',
     unsupported: 'Voice not supported',
+    blocked: 'Microphone blocked',
   };
 
   const orbScale = status === 'speaking' ? [1, 1.18, 1] : status === 'listening' ? [1, 1.08, 1] : 1;
@@ -763,6 +793,11 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
           <p className="text-white/60 text-sm leading-relaxed">
             Live voice needs the Web Speech API — open the app in Chrome (desktop or Android) to talk to {name || 'Jarvis'}.
             You can still type in the chat.
+          </p>
+        ) : status === 'blocked' ? (
+          <p className="text-white/70 text-sm leading-relaxed">
+            Your browser blocked the microphone. Click the camera/mic icon in the address bar, choose
+            “Always allow”, then close and reopen voice.
           </p>
         ) : (
           <>
