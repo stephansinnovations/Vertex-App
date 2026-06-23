@@ -266,18 +266,21 @@ async function callClaude(messages, systemPrompt, tools, model = 'claude-haiku-4
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
   }
 
+  // `tools === undefined` → default TOOLS; an explicit `[]` → omit tools entirely
+  // (the API rejects an empty tools array, and tools-less is what voice wants).
+  const toolList = tools === undefined ? TOOLS : tools;
+  const body = { model, max_tokens: 8096, system: systemPrompt, messages };
+  if (toolList && toolList.length) body.tools = toolList;
+
   const res = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      model,
-      max_tokens: 8096,
-      system: systemPrompt,
-      tools: tools || TOOLS,
-      messages,
-    }),
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`API ${res.status}`);
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`API ${res.status}${detail ? ` — ${detail.slice(0, 300)}` : ''}`);
+  }
   return res.json();
 }
 
@@ -633,7 +636,23 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
     const SR = SpeechRecognitionImpl;
     if (!SR) { setStatus('unsupported'); return; }
 
-    const workingApi = [...(seedApi || [])];
+    // Seed from chat history, but flatten to plain text and drop tool_use /
+    // tool_result blocks — sending those without a `tools` definition 400s. Also
+    // merge consecutive same-role turns and ensure we start with a user turn.
+    const toText = (c) => typeof c === 'string'
+      ? c
+      : Array.isArray(c) ? c.filter(b => b.type === 'text').map(b => b.text).join(' ').trim() : '';
+    const workingApi = [];
+    for (const m of (seedApi || [])) {
+      if (m.role !== 'user' && m.role !== 'assistant') continue;
+      const text = toText(m.content);
+      if (!text) continue;
+      const last = workingApi[workingApi.length - 1];
+      if (last && last.role === m.role) last.content += `\n${text}`;
+      else workingApi.push({ role: m.role, content: text });
+    }
+    while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
+
     const voiceSystem = buildVoiceSystemPrompt(systemPrompt);
     let voice = pickVoice();
     const onVoices = () => { voice = pickVoice(); };
@@ -659,10 +678,12 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
         onTurnRef.current?.(text, reply);
         if (active) speak(reply);
       } catch (err) {
-        const msg = /api key/i.test(err?.message || '')
+        const detail = err?.message || 'unknown error';
+        const spoken = /api key/i.test(detail)
           ? "I need an Anthropic API key set in the app's Settings before I can answer."
           : "Something went wrong reaching the server. Check the connection and try again.";
-        if (active) { setLastReply(msg); speak(msg); }
+        // Show the raw error on screen (not spoken) so failures are diagnosable.
+        if (active) { setLastReply(`${spoken}\n\n${detail}`); speak(spoken); }
       }
     }
 
@@ -801,7 +822,7 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
           </p>
         ) : (
           <>
-            {lastReply && <p className="text-white/85 text-base leading-snug">{lastReply}</p>}
+            {lastReply && <p className="text-white/85 text-base leading-snug whitespace-pre-line">{lastReply}</p>}
             {transcript && <p className="text-sky-300/80 text-sm italic">“{transcript}”</p>}
           </>
         )}
