@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus, AudioLines, PhoneOff, Hammer, ExternalLink } from 'lucide-react';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, ImagePlus, AudioLines, PhoneOff, Hammer, ExternalLink } from 'lucide-react';
 import JarvisBuild, { ApprovalModal } from '@/components/JarvisBuild';
 import { runAgentTask, approveAgentCommand, isAgentConfigured, REPO_WEB } from '@/api/jarvisAgent';
 import { localClient } from '@/api/localDb';
@@ -12,95 +12,6 @@ import {
   getContextKey, getContextLabel, getContextGreeting, getContextSuggestions,
 } from '@/lib/vertexChatStorage';
 import vertexLogo from '@/assets/Vertex-logo.webp';
-
-// ── Dev (Build Mode) tools ────────────────────────────────────────────────────
-
-const DEV_TOOLS = [
-  {
-    name: 'read_file',
-    description: 'Read a source file. Always read before editing.',
-    input_schema: {
-      type: 'object', required: ['path'],
-      properties: { path: { type: 'string', description: 'Path from project root, e.g. "src/pages/Home.jsx"' } },
-    },
-  },
-  {
-    name: 'write_file',
-    description: 'Write the complete content of a source file. Vite hot-reloads automatically after write.',
-    input_schema: {
-      type: 'object', required: ['path', 'content'],
-      properties: {
-        path: { type: 'string' },
-        content: { type: 'string', description: 'The COMPLETE new file content — never partial' },
-      },
-    },
-  },
-  {
-    name: 'list_files',
-    description: 'List files/folders in a directory.',
-    input_schema: {
-      type: 'object',
-      properties: { dir: { type: 'string', description: 'Directory from project root, e.g. "src/pages"' } },
-    },
-  },
-];
-
-async function execDevTool(name, input) {
-  switch (name) {
-    case 'read_file': {
-      const res = await fetch(`/api/dev/read?path=${encodeURIComponent(input.path)}`);
-      return res.json();
-    }
-    case 'write_file': {
-      const res = await fetch('/api/dev/write', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ path: input.path, content: input.content }),
-      });
-      return res.json();
-    }
-    case 'list_files': {
-      const res = await fetch(`/api/dev/list?dir=${encodeURIComponent(input.dir || 'src')}`);
-      return res.json();
-    }
-    default:
-      return { error: `Unknown dev tool: ${name}` };
-  }
-}
-
-function buildDevSystemPrompt(personality) {
-  const tone = {
-    direct: 'Be brief and direct.',
-    conversational: 'Be friendly and natural.',
-    professional: 'Be formal and thorough.',
-  }[personality] || 'Be brief and direct.';
-
-  return `You are Jarvis in Build Mode — you can read and modify this app's own source code. ${tone}
-
-This is a React + Vite + Tailwind CSS app called "Vertex Vans" (a van build shop management tool).
-
-Tech stack:
-- React 18, React Router v6, @tanstack/react-query
-- Tailwind CSS — dark theme (zinc-900/800/700 backgrounds, white text)
-- Lucide React for icons
-- localStorage as database via localClient from @/api/localDb
-- Vite HMR — changes appear in the browser instantly after write_file
-
-Project structure:
-- src/pages/       — page components (Home.jsx, Builds.jsx, PhaseDetail.jsx, etc.)
-- src/components/  — reusable components (VertexChat.jsx, FloatingVertexButton.jsx, etc.)
-- src/lib/         — contexts (ThemeContext, VertexChatContext, AuthContext)
-- src/api/         — localDb.js, googleSheets.js, seed JSON files
-- src/assets/      — Vertex-logo.webp
-
-Rules:
-1. ALWAYS call read_file before editing any file — never guess the content
-2. Write the COMPLETE file when using write_file — never partial content
-3. After writing, briefly describe what changed
-4. Match the existing code style (no comments unless the why is non-obvious)
-5. Auth is bypassed — user is always local@localhost, company_id: 'vertexvans'
-6. The local user object: { id: 'local-user', email: 'local@localhost', company_id: 'vertexvans' }`;
-}
 
 // ── System prompt ────────────────────────────────────────────────────────────
 
@@ -247,12 +158,6 @@ async function execTool(name, input, { formResolve, navigate }) {
       navigate(`/${input.page}`);
       return { navigated: true, page: input.page };
     }
-    // Dev tools
-    case 'read_file':
-    case 'write_file':
-    case 'list_files':
-      return execDevTool(name, input);
-
     default:
       return { error: `Unknown tool: ${name}` };
   }
@@ -360,9 +265,6 @@ function ToolCallChip({ toolName }) {
     get_stock: 'Checking stock',
     show_form: 'Preparing form',
     navigate_to: 'Navigating',
-    read_file: 'Reading file',
-    write_file: 'Writing file',
-    list_files: 'Listing files',
     build_app: 'Building',
   };
   return (
@@ -540,7 +442,7 @@ function Field({ label, value, onChange, placeholder, highlight }) {
 
 // ── Settings Panel ───────────────────────────────────────────────────────────
 
-function SettingsPanel({ onClose, contextKey, buildMode, onToggleBuildMode }) {
+function SettingsPanel({ onClose, contextKey }) {
   const { themeKey, setTheme, accent, setAccent, personality, setPersonality } = useTheme();
   return (
     <div className="absolute inset-x-0 bottom-0 z-20 rounded-t-3xl border-t px-5 pt-5 pb-8 space-y-5"
@@ -600,31 +502,6 @@ function SettingsPanel({ onClose, contextKey, buildMode, onToggleBuildMode }) {
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Build Mode */}
-      <div>
-        <p className="text-xs font-medium mb-2" style={{ color: 'var(--vx-text2)' }}>Build Mode</p>
-        <button
-          onClick={() => onToggleBuildMode(!buildMode)}
-          className="w-full flex items-center justify-between px-3 py-3 rounded-xl border transition-all"
-          style={{
-            background: buildMode ? 'color-mix(in srgb, #a78bfa 15%, var(--vx-surface2))' : 'var(--vx-surface2)',
-            borderColor: buildMode ? '#a78bfa' : 'var(--vx-border)',
-          }}>
-          <div className="flex items-center gap-2.5">
-            <Code2 className="w-4 h-4" style={{ color: buildMode ? '#a78bfa' : 'var(--vx-text2)' }} />
-            <div className="text-left">
-              <p className="text-sm font-medium" style={{ color: 'var(--vx-text)' }}>Edit App Code</p>
-              <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>Let Jarvis modify this app's source files</p>
-            </div>
-          </div>
-          <div className={`w-10 h-5.5 rounded-full transition-colors relative flex-shrink-0`}
-            style={{ width: 40, height: 22, background: buildMode ? '#a78bfa' : 'var(--vx-surface2)', border: `1px solid ${buildMode ? '#a78bfa' : 'var(--vx-border)'}` }}>
-            <div className="absolute top-0.5 rounded-full transition-all"
-              style={{ width: 18, height: 18, background: buildMode ? '#fff' : 'var(--vx-muted)', left: buildMode ? 20 : 2 }} />
-          </div>
-        </button>
       </div>
 
       {/* Clear history */}
@@ -933,17 +810,11 @@ export default function VertexChat({ isOpen, onClose }) {
   const [pendingForm, setPendingForm] = useState(null);
   const [pendingImages, setPendingImages] = useState([]); // [{dataUrl, mediaType}]
   const [departments, setDepartments] = useState([]);
-  const [buildMode, setBuildMode] = useState(() => localStorage.getItem('vx_build_mode') === 'true');
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [buildOpen, setBuildOpen] = useState(false);
   const [pendingApproval, setPendingApproval] = useState(null); // { id, command }
   const [approvalPassword, setApprovalPassword] = useState('');
   const agentSessionRef = useRef(null); // continuity with the coding engine
-
-  const toggleBuildMode = (v) => {
-    setBuildMode(v);
-    localStorage.setItem('vx_build_mode', v ? 'true' : 'false');
-  };
 
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
@@ -1130,18 +1001,15 @@ export default function VertexChat({ isOpen, onClose }) {
     persistMessages(newDisplay, newApi);
     setLoading(true);
 
-    const activeTools = buildMode ? [...TOOLS, ...DEV_TOOLS] : TOOLS;
-    const systemPrompt = agentPrompt
-      ? agentPrompt
-      : buildMode ? buildDevSystemPrompt(personality) : buildSystemPrompt(contextKey, personality);
+    const activeTools = TOOLS;
+    const systemPrompt = agentPrompt || buildSystemPrompt(contextKey, personality);
 
     try {
       let currentApi = [...newApi];
       let currentDisplay = [...newDisplay];
 
       while (true) {
-        const activeModel = buildMode ? 'claude-sonnet-4-6' : model;
-        const resp = await callClaude(currentApi, systemPrompt, activeTools, activeModel);
+        const resp = await callClaude(currentApi, systemPrompt, activeTools, model);
 
         if (resp.stop_reason === 'tool_use') {
           const toolBlocks = resp.content.filter(b => b.type === 'tool_use');
@@ -1269,32 +1137,24 @@ export default function VertexChat({ isOpen, onClose }) {
               <p className="text-sm font-bold truncate" style={{ color: 'var(--vx-text)' }}>
                 {agentName || 'Jarvis'}
               </p>
-              {buildMode && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md flex-shrink-0"
-                  style={{ background: '#a78bfa22', color: '#a78bfa', border: '1px solid #a78bfa44' }}>
-                  BUILD
-                </span>
-              )}
             </div>
             <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>
               {loading ? 'typing...' : 'online'}
             </p>
           </div>
           {/* Model toggle */}
-          {!buildMode && (
-            <button
-              onClick={() => setModel(model === 'claude-haiku-4-5' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5')}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all"
-              style={{
-                background: model === 'claude-sonnet-4-6' ? '#a78bfa22' : 'var(--vx-surface2)',
-                color: model === 'claude-sonnet-4-6' ? '#a78bfa' : 'var(--vx-text2)',
-                border: `1px solid ${model === 'claude-sonnet-4-6' ? '#a78bfa44' : 'var(--vx-border)'}`,
-              }}
-              title={model === 'claude-haiku-4-5' ? 'Switch to Sonnet (smarter, slower)' : 'Switch to Haiku (faster)'}
-            >
-              {model === 'claude-haiku-4-5' ? 'Haiku' : 'Sonnet'}
-            </button>
-          )}
+          <button
+            onClick={() => setModel(model === 'claude-haiku-4-5' ? 'claude-sonnet-4-6' : 'claude-haiku-4-5')}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all"
+            style={{
+              background: model === 'claude-sonnet-4-6' ? '#a78bfa22' : 'var(--vx-surface2)',
+              color: model === 'claude-sonnet-4-6' ? '#a78bfa' : 'var(--vx-text2)',
+              border: `1px solid ${model === 'claude-sonnet-4-6' ? '#a78bfa44' : 'var(--vx-border)'}`,
+            }}
+            title={model === 'claude-haiku-4-5' ? 'Switch to Sonnet (smarter, slower)' : 'Switch to Haiku (faster)'}
+          >
+            {model === 'claude-haiku-4-5' ? 'Haiku' : 'Sonnet'}
+          </button>
           <button onClick={() => setBuildOpen(true)} title="Build with Jarvis"
             className="p-2 rounded-xl hover:opacity-70 transition-opacity"
             style={{ color: 'var(--vx-accent)' }}>
@@ -1421,8 +1281,6 @@ export default function VertexChat({ isOpen, onClose }) {
           <SettingsPanel
             onClose={() => setShowSettings(false)}
             contextKey={contextKey}
-            buildMode={buildMode}
-            onToggleBuildMode={toggleBuildMode}
           />
         )}
 
