@@ -5,6 +5,7 @@ import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, ImagePlus,
 import JarvisBuild, { ApprovalModal } from '@/components/JarvisBuild';
 import { runAgentTask, approveAgentCommand, isAgentConfigured, REPO_WEB } from '@/api/jarvisAgent';
 import { localClient } from '@/api/localDb';
+import { supabase } from '@/api/supabaseClient';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
 import {
@@ -33,9 +34,10 @@ function buildSystemPrompt(contextKey, personality) {
 
 ${ctx}
 
-You are a single entity with two abilities, and you present as ONE Jarvis (never refer to "the other Jarvis" or "a developer"):
+You are a single entity, and you present as ONE Jarvis (never refer to "the other Jarvis" or "a developer"). You are aware of EVERYTHING Stephan has made in this app:
 1. Assistant: help manage van builds (phases, tasks, parts), SOPs, inventory/parts stock, and contacts — using your tools.
-2. Engineer: you can change THIS app's own code and deploy it. When Stephan asks to add a feature, change the UI, fix a bug, or modify how the app works, use the build_app tool. Your engineering work streams right into this same chat, so you stay aware of everything you've built. Never claim you can't code — you can; use build_app.
+2. Memory of his creations: he builds AI Rooms and agents inside this app, and talks to them. You can see all of it — use list_rooms, list_agents (their names, emojis, descriptions, and persona prompts), and get_conversation (what was said with an agent). Whenever he asks what he's made, what an agent is/does, or to recall a conversation, look it up with these tools rather than guessing or saying you can't see it. The data is live, so you're always up to date.
+3. Engineer: you can change THIS app's own code and deploy it. When Stephan asks to add a feature, change the UI, fix a bug, or modify how the app works, use the build_app tool. Your engineering work streams right into this same chat. Never claim you can't code — you can; use build_app.
 
 When the user wants to create a record, use the show_form tool — prefill any fields you already know.
 When you navigate somewhere or create a record, a card will appear automatically — just describe what you did concisely.
@@ -104,9 +106,24 @@ const TOOLS = [
       type: 'object',
       required: ['page'],
       properties: {
-        page: { type: 'string', enum: ['Builds', 'SOPList', 'PartsLibrary', 'Contacts', 'Inventory'] },
+        page: { type: 'string', enum: ['Builds', 'SOPList', 'PartsLibrary', 'Contacts', 'Inventory', 'Rooms'] },
       },
     },
+  },
+  {
+    name: 'list_rooms',
+    description: "List the AI Rooms the user has created (name, color, attached app). Use to know what rooms exist.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'list_agents',
+    description: "List the AI agents the user created — their name, emoji, description, and persona prompt. Optionally filter by room name. Use whenever the user asks about agents they've made or what an agent does.",
+    input_schema: { type: 'object', properties: { room: { type: 'string', description: 'Optional room name to filter by' } } },
+  },
+  {
+    name: 'get_conversation',
+    description: "Read recent conversation history with one of the user's agents by its exact name (or 'vertex' for the default assistant). Use to recall what was discussed in a room/with an agent.",
+    input_schema: { type: 'object', required: ['agent_name'], properties: { agent_name: { type: 'string' }, limit: { type: 'number' } } },
   },
   {
     name: 'build_app',
@@ -157,6 +174,31 @@ async function execTool(name, input, { formResolve, navigate }) {
     case 'navigate_to': {
       navigate(`/${input.page}`);
       return { navigated: true, page: input.page };
+    }
+    case 'list_rooms': {
+      const { data } = await supabase.from('ai_rooms').select('id, name, color, app').order('created_at');
+      return (data || []).map(r => ({ id: r.id, name: r.name, app: r.app || null }));
+    }
+    case 'list_agents': {
+      const { data: agents } = await supabase.from('ai_agents').select('name, emoji, description, prompt, room_id').order('created_at');
+      let rows = agents || [];
+      if (input.room) {
+        const { data: rooms } = await supabase.from('ai_rooms').select('id, name');
+        const match = (rooms || []).find(r => r.name?.toLowerCase() === input.room.toLowerCase());
+        rows = match ? rows.filter(a => a.room_id === match.id) : [];
+      }
+      return rows.map(a => ({ name: a.name, emoji: a.emoji, description: a.description, prompt: (a.prompt || '').slice(0, 600) }));
+    }
+    case 'get_conversation': {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return { error: 'Not signed in — conversation history is per account.' };
+      const { data } = await supabase.from('chat_history')
+        .select('role, text, created_at')
+        .eq('user_id', user.id)
+        .eq('agent_name', input.agent_name)
+        .order('created_at', { ascending: false })
+        .limit(Math.min(input.limit || 30, 100));
+      return (data || []).reverse().map(r => ({ role: r.role, text: r.text }));
     }
     default:
       return { error: `Unknown tool: ${name}` };
@@ -265,6 +307,9 @@ function ToolCallChip({ toolName }) {
     get_stock: 'Checking stock',
     show_form: 'Preparing form',
     navigate_to: 'Navigating',
+    list_rooms: 'Checking your rooms',
+    list_agents: 'Checking your agents',
+    get_conversation: 'Reading the conversation',
     build_app: 'Building',
   };
   return (
@@ -571,7 +616,9 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildT
     while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
 
     const voiceSystem = buildVoiceSystemPrompt(systemPrompt);
-    const voiceTools = TOOLS.filter(t => t.name === 'build_app'); // voice can build, nothing UI-bound
+    // Voice can build + recall everything Stephan made; nothing UI-bound (no forms).
+    const voiceToolNames = new Set(['build_app', 'list_rooms', 'list_agents', 'get_conversation']);
+    const voiceTools = TOOLS.filter(t => voiceToolNames.has(t.name));
     let voice = pickVoice();
     const onVoices = () => { voice = pickVoice(); };
     if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = onVoices;
@@ -602,7 +649,8 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildT
                 const summary = await onBuildRef.current(b.input.task);
                 results.push({ type: 'tool_result', tool_use_id: b.id, content: summary });
               } else {
-                results.push({ type: 'tool_result', tool_use_id: b.id, content: 'That tool is only available in the chat view.' });
+                const out = await execTool(b.name, b.input, {});
+                results.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(out) });
               }
             }
             workingApi.push({ role: 'user', content: results });
