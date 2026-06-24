@@ -87,6 +87,23 @@ export default function Home() {
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
+      {/* Test banner */}
+      <div
+        className="fixed top-0 left-0 right-0 z-50 text-center"
+        style={{
+          paddingTop: `calc(0.5rem + env(safe-area-inset-top))`,
+          paddingBottom: '0.5rem',
+          background: 'rgba(168,85,247,0.92)',
+          color: '#fff',
+          fontSize: 13,
+          fontWeight: 600,
+          letterSpacing: 0.3,
+          boxShadow: '0 2px 12px rgba(0,0,0,0.3)',
+        }}
+      >
+        🚧 Test Banner — this is a test
+      </div>
+
       {/* Shortcuts grid */}
       <HomeShortcuts />
 
