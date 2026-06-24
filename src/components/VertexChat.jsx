@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus, AudioLines, PhoneOff, Hammer } from 'lucide-react';
-import JarvisBuild from '@/components/JarvisBuild';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus, AudioLines, PhoneOff, Hammer, ExternalLink } from 'lucide-react';
+import JarvisBuild, { ApprovalModal } from '@/components/JarvisBuild';
+import { runAgentTask, approveAgentCommand, isAgentConfigured, REPO_WEB } from '@/api/jarvisAgent';
 import { localClient } from '@/api/localDb';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
@@ -117,13 +118,15 @@ function buildSystemPrompt(contextKey, personality) {
     contacts:  'The user is on the Contacts page.',
   }[contextKey] || (contextKey.startsWith('build_') ? `The user is viewing a specific build. Focus on this build's phases, tasks, and parts.` : '');
 
-  return `You are Jarvis, the intelligent assistant inside the Vertex Vans shop management app. ${tone}
+  return `You are Jarvis — Stephan's one personal AI. ${tone}
 
 ${ctx}
 
-You help manage: van builds (phases, tasks, parts), SOPs (standard operating procedures), inventory/parts stock, and contacts.
+You are a single entity with two abilities, and you present as ONE Jarvis (never refer to "the other Jarvis" or "a developer"):
+1. Assistant: help manage van builds (phases, tasks, parts), SOPs, inventory/parts stock, and contacts — using your tools.
+2. Engineer: you can change THIS app's own code and deploy it. When Stephan asks to add a feature, change the UI, fix a bug, or modify how the app works, use the build_app tool. Your engineering work streams right into this same chat, so you stay aware of everything you've built. Never claim you can't code — you can; use build_app.
 
-When the user wants to create something, use the show_form tool — prefill any fields you already know from the conversation.
+When the user wants to create a record, use the show_form tool — prefill any fields you already know.
 When you navigate somewhere or create a record, a card will appear automatically — just describe what you did concisely.
 For lists, be brief. Lead with the most relevant item.`;
 }
@@ -191,6 +194,17 @@ const TOOLS = [
       required: ['page'],
       properties: {
         page: { type: 'string', enum: ['Builds', 'SOPList', 'PartsLibrary', 'Contacts', 'Inventory'] },
+      },
+    },
+  },
+  {
+    name: 'build_app',
+    description: "Build, change, fix, or add to THIS app's own code, then deploy it. Use whenever the user wants a new feature, a UI change, a bug fix, or any modification to how the app itself works (not data inside it). You and the build engine are the same Jarvis — hand it a complete, specific instruction and its work streams into this chat. Don't say you can't code; use this.",
+    input_schema: {
+      type: 'object',
+      required: ['task'],
+      properties: {
+        task: { type: 'string', description: 'A complete, specific instruction of what to build or change in the app.' },
       },
     },
   },
@@ -349,6 +363,7 @@ function ToolCallChip({ toolName }) {
     read_file: 'Reading file',
     write_file: 'Writing file',
     list_files: 'Listing files',
+    build_app: 'Building',
   };
   return (
     <div className="flex justify-start">
@@ -385,6 +400,29 @@ function ActionCard({ data, navigate, onClose }) {
             Open <ChevronRight className="w-4 h-4" />
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Result card for a coding/deploy task run by the Jarvis Agent.
+function DeployCard({ m }) {
+  return (
+    <div className="flex justify-start">
+      <div className="rounded-2xl rounded-tl-sm p-4 max-w-[88%] space-y-2 border"
+        style={{ background: 'var(--vx-surface)', borderColor: 'var(--vx-border)' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-lg">🚀</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--vx-text2)' }}>{m.changed ? 'Built & deployed' : 'Done'}</span>
+        </div>
+        {m.text && <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--vx-text)' }}>{m.text}</p>}
+        {m.changed && m.branch && m.branch !== 'main' && (
+          <a href={`${REPO_WEB}/tree/${m.branch}`} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--vx-accent)' }}>
+            <ExternalLink className="w-3.5 h-3.5" /> Preview: {m.branch} (Vercel is building it)
+          </a>
+        )}
+        {m.changed && m.branch === 'main' && <p className="text-xs" style={{ color: 'var(--vx-accent)' }}>Pushed to main — deploying live.</p>}
       </div>
     </div>
   );
@@ -621,13 +659,14 @@ function pickVoice() {
   return voices.find(v => /^en[-_]/i.test(v.lang)) || voices[0];
 }
 
-function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose }) {
+function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildTask, onClose }) {
   const [status, setStatus] = useState('connecting'); // connecting|listening|thinking|speaking|unsupported|blocked
   const [transcript, setTranscript] = useState('');    // what the user is saying now
   const [lastReply, setLastReply] = useState('');      // Jarvis's latest spoken line
 
   // Latest props for the long-lived loop without re-running the effect.
   const onTurnRef = useRef(onTurn); onTurnRef.current = onTurn;
+  const onBuildRef = useRef(onBuildTask); onBuildRef.current = onBuildTask;
   const modelRef = useRef(model);   modelRef.current = model;
 
   // The whole conversation loop lives in one effect with stable local closures —
@@ -655,6 +694,7 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
     while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
 
     const voiceSystem = buildVoiceSystemPrompt(systemPrompt);
+    const voiceTools = TOOLS.filter(t => t.name === 'build_app'); // voice can build, nothing UI-bound
     let voice = pickVoice();
     const onVoices = () => { voice = pickVoice(); };
     if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = onVoices;
@@ -672,12 +712,32 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onClose 
       try { rec && rec.stop(); } catch {} // pause the mic while we think + speak
       workingApi.push({ role: 'user', content: text });
       try {
-        const resp = await callClaude(workingApi, voiceSystem, [], modelRef.current);
-        const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-          || "Sorry, I didn't catch that — could you say it again?";
-        workingApi.push({ role: 'assistant', content: reply });
-        onTurnRef.current?.(text, reply);
-        if (active) speak(reply);
+        // Loop so a spoken request can trigger a build (build_app tool), then
+        // speak the result — the build's progress streams into the shared chat.
+        for (let guard = 0; guard < 6; guard++) {
+          const resp = await callClaude(workingApi, voiceSystem, voiceTools, modelRef.current);
+          if (resp.stop_reason === 'tool_use') {
+            workingApi.push({ role: 'assistant', content: resp.content });
+            const results = [];
+            for (const b of resp.content.filter(x => x.type === 'tool_use')) {
+              if (b.name === 'build_app' && onBuildRef.current) {
+                if (active) { setStatus('thinking'); setLastReply(`Building: ${b.input.task}`); }
+                const summary = await onBuildRef.current(b.input.task);
+                results.push({ type: 'tool_result', tool_use_id: b.id, content: summary });
+              } else {
+                results.push({ type: 'tool_result', tool_use_id: b.id, content: 'That tool is only available in the chat view.' });
+              }
+            }
+            workingApi.push({ role: 'user', content: results });
+            continue;
+          }
+          const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+            || "Sorry, I didn't catch that — could you say it again?";
+          workingApi.push({ role: 'assistant', content: reply });
+          onTurnRef.current?.(text, reply);
+          if (active) speak(reply);
+          break;
+        }
       } catch (err) {
         const detail = err?.message || 'unknown error';
         const spoken = /api key/i.test(detail)
@@ -876,6 +936,9 @@ export default function VertexChat({ isOpen, onClose }) {
   const [buildMode, setBuildMode] = useState(() => localStorage.getItem('vx_build_mode') === 'true');
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [buildOpen, setBuildOpen] = useState(false);
+  const [pendingApproval, setPendingApproval] = useState(null); // { id, command }
+  const [approvalPassword, setApprovalPassword] = useState('');
+  const agentSessionRef = useRef(null); // continuity with the coding engine
 
   const toggleBuildMode = (v) => {
     setBuildMode(v);
@@ -942,6 +1005,55 @@ export default function VertexChat({ isOpen, onClose }) {
   // Base prompt for voice mode (agent persona or the contextual Jarvis prompt;
   // never Build Mode — voice shouldn't edit source).
   const voiceBasePrompt = agentPrompt || buildSystemPrompt(contextKey, personality);
+
+  // Run a coding task on the Jarvis Agent and stream it INTO this chat, so the
+  // build engine and the conversational Jarvis share one transcript + history.
+  // Returns a short summary string for the model's tool_result. Used by both the
+  // text tool loop and voice mode.
+  const runBuildTask = useCallback(async (task, addMessage) => {
+    // Default sink: append to chat state + persist. The text loop passes its own
+    // sink so the messages stay in its working array (which it persists at the end).
+    const add = addMessage || ((m) => setDisplayMsgs(prev => {
+      const next = [...prev, { id: `${Date.now()}-${Math.random()}`, ...m }];
+      saveDisplay(contextKey, next);
+      return next;
+    }));
+    if (!isAgentConfigured()) {
+      const msg = "Build isn't connected yet. Tap the hammer icon to add your agent URL + secret, then ask me again.";
+      add({ type: 'ai', text: msg, isError: true });
+      return msg;
+    }
+    add({ type: 'buildstep', text: `🔨 Building: ${task}` });
+    try {
+      const result = await runAgentTask({
+        prompt: task,
+        sessionId: agentSessionRef.current,
+        onEvent: (ev) => {
+          if (ev.kind === 'status') add({ type: 'buildstep', text: ev.text });
+          else if (ev.kind === 'say') add({ type: 'ai', text: ev.text });
+          else if (ev.kind === 'tool') add({ type: 'buildstep', text: `🔧 ${ev.input ? `${ev.name} · ${ev.input}` : ev.name}`, mono: true });
+          else if (ev.kind === 'approval') setPendingApproval({ id: ev.id, command: ev.command });
+          else if (ev.kind === 'error') add({ type: 'ai', text: ev.text, isError: true });
+        },
+      });
+      agentSessionRef.current = result.sessionId || agentSessionRef.current;
+      add({ type: 'deploy', branch: result.branch, changed: result.changed, text: result.summary || (result.changed ? 'Done.' : 'No changes were needed.') });
+      return result.changed
+        ? `Build complete. ${result.summary} Pushed to ${result.branch === 'main' ? 'main (deploying live)' : `preview branch ${result.branch}`}.`
+        : `No code changes were needed. ${result.summary}`;
+    } catch (e) {
+      const msg = `Build failed: ${e?.message || e}`;
+      add({ type: 'ai', text: msg, isError: true });
+      return msg;
+    }
+  }, [contextKey]);
+
+  const respondApproval = useCallback(async (approve) => {
+    const a = pendingApproval; const pw = approvalPassword;
+    setPendingApproval(null); setApprovalPassword('');
+    if (!a) return;
+    try { await approveAgentCommand(approve ? { id: a.id, password: pw } : { id: a.id, deny: true }); } catch { /* stream surfaces it */ }
+  }, [pendingApproval, approvalPassword]);
 
   // Form submitted
   const handleFormSubmit = async (formData) => {
@@ -1046,8 +1158,11 @@ export default function VertexChat({ isOpen, onClose }) {
           // Execute tools (sequentially for show_form which needs user input)
           const toolResults = [];
           for (const block of toolBlocks) {
-            // Set up form resolve if needed
-            if (block.name === 'show_form') {
+            if (block.name === 'build_app') {
+              const pushBuild = (m) => { currentDisplay = [...currentDisplay, { id: `${Date.now()}-${Math.random()}`, ...m }]; setDisplayMsgs(currentDisplay); };
+              const summary = await runBuildTask(block.input.task, pushBuild);
+              toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: summary });
+            } else if (block.name === 'show_form') {
               formResolveRef.current = null;
               const result = await new Promise(resolve => {
                 formResolveRef.current = resolve;
@@ -1216,6 +1331,10 @@ export default function VertexChat({ isOpen, onClose }) {
             if (msg.type === 'ai') return <AIBubble key={msg.id} text={msg.text} isError={msg.isError} agentEmoji={agentEmoji} />;
             if (msg.type === 'tool') return <ToolCallChip key={msg.id} toolName={msg.toolName} />;
             if (msg.type === 'action') return <ActionCard key={msg.id} data={msg.data} navigate={navigate} onClose={onClose} />;
+            if (msg.type === 'buildstep') return (
+              <div key={msg.id} className={`text-xs px-2 ${msg.mono ? 'font-mono truncate' : ''}`} style={{ color: 'var(--vx-text2)' }}>{msg.text}</div>
+            );
+            if (msg.type === 'deploy') return <DeployCard key={msg.id} m={msg} />;
             return null;
           })}
 
@@ -1321,7 +1440,7 @@ export default function VertexChat({ isOpen, onClose }) {
       {/* Jarvis Build — talks to the coding-agent backend */}
       <JarvisBuild isOpen={buildOpen} onClose={() => setBuildOpen(false)} />
 
-      {/* Voice Mode — full-screen spoken conversation */}
+      {/* Voice Mode — full-screen spoken conversation (can also trigger builds) */}
       {voiceOpen && (
         <VoiceMode
           name={agentName || 'Jarvis'}
@@ -1330,7 +1449,18 @@ export default function VertexChat({ isOpen, onClose }) {
           model={model}
           seedApi={apiMsgs}
           onTurn={commitVoiceTurn}
+          onBuildTask={runBuildTask}
           onClose={() => setVoiceOpen(false)}
+        />
+      )}
+
+      {/* Password approval — top level so it overlays the chat AND voice mode */}
+      {pendingApproval && (
+        <ApprovalModal
+          pending={pendingApproval}
+          password={approvalPassword}
+          setPassword={setApprovalPassword}
+          onRespond={respondApproval}
         />
       )}
     </>
