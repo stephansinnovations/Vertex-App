@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus, AudioLines, PhoneOff } from 'lucide-react';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, Code2, ImagePlus, AudioLines, PhoneOff, Hammer } from 'lucide-react';
+import JarvisBuild from '@/components/JarvisBuild';
 import { localClient } from '@/api/localDb';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
@@ -874,6 +875,7 @@ export default function VertexChat({ isOpen, onClose }) {
   const [departments, setDepartments] = useState([]);
   const [buildMode, setBuildMode] = useState(() => localStorage.getItem('vx_build_mode') === 'true');
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [buildOpen, setBuildOpen] = useState(false);
 
   const toggleBuildMode = (v) => {
     setBuildMode(v);
@@ -1178,6 +1180,11 @@ export default function VertexChat({ isOpen, onClose }) {
               {model === 'claude-haiku-4-5' ? 'Haiku' : 'Sonnet'}
             </button>
           )}
+          <button onClick={() => setBuildOpen(true)} title="Build with Jarvis"
+            className="p-2 rounded-xl hover:opacity-70 transition-opacity"
+            style={{ color: 'var(--vx-accent)' }}>
+            <Hammer className="w-[18px] h-[18px]" />
+          </button>
           <button onClick={() => setVoiceOpen(true)} title="Talk to Jarvis"
             className="p-2 rounded-xl hover:opacity-70 transition-opacity"
             style={{ color: 'var(--vx-accent)' }}>
@@ -1310,6 +1317,9 @@ export default function VertexChat({ isOpen, onClose }) {
           />
         )}
       </div>
+
+      {/* Jarvis Build — talks to the coding-agent backend */}
+      <JarvisBuild isOpen={buildOpen} onClose={() => setBuildOpen(false)} />
 
       {/* Voice Mode — full-screen spoken conversation */}
       {voiceOpen && (
