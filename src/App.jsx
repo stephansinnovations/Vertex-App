@@ -13,6 +13,7 @@ import { ShortcutProvider } from '@/lib/ShortcutContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import { ThemeProvider } from '@/lib/ThemeContext';
 import { VertexChatProvider, useVertexChat } from '@/lib/VertexChatContext';
+import { OverrideAuthProvider } from '@/lib/OverrideAuthContext';
 import VertexChat from '@/components/VertexChat';
 import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
@@ -154,6 +155,7 @@ function App() {
           <AuthProvider>
             <ShortcutProvider>
               <QueryClientProvider client={queryClientInstance}>
+                <OverrideAuthProvider>
                 <Router>
                   <div
                     style={{
@@ -179,6 +181,7 @@ function App() {
                   <FloatingSettingsButton />
                   <GlobalVertexChat />
                 </Router>
+                </OverrideAuthProvider>
                 <Toaster />
                 <GlobalErrorReporter />
               </QueryClientProvider>

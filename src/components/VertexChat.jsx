@@ -8,6 +8,7 @@ import { localClient } from '@/api/localDb';
 import { supabase } from '@/api/supabaseClient';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
 import { useVertexChat } from '@/lib/VertexChatContext';
+import { useOverrideAuth } from '@/lib/OverrideAuthContext';
 import {
   loadDisplay, loadApi, saveDisplay, saveApi, clearHistory,
   getContextKey, getContextLabel, getContextGreeting, getContextSuggestions,
@@ -833,6 +834,7 @@ export default function VertexChat({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { personality } = useTheme();
   const { agentPrompt, agentName, agentEmoji, model, setModel } = useVertexChat();
+  const overrideAuth = useOverrideAuth();
 
   const contextKey = agentPrompt ? `agent_${agentName}` : getContextKey();
   const contextLabel = agentName || getContextLabel(contextKey);
@@ -937,6 +939,15 @@ export default function VertexChat({ isOpen, onClose }) {
       saveDisplay(contextKey, next);
       return next;
     }));
+    // Gate: builds need the override password (cached 24h per device) first.
+    if (overrideAuth) {
+      const ok = await overrideAuth.ensureAuthorized(`build: ${task}`);
+      if (!ok) {
+        const msg = 'Build cancelled — override password is required to build.';
+        add({ type: 'ai', text: msg, isError: true });
+        return msg;
+      }
+    }
     if (!isAgentConfigured()) {
       const msg = "Build isn't connected yet. Tap the hammer icon to add your agent URL + secret, then ask me again.";
       add({ type: 'ai', text: msg, isError: true });
@@ -965,7 +976,7 @@ export default function VertexChat({ isOpen, onClose }) {
       add({ type: 'ai', text: msg, isError: true });
       return msg;
     }
-  }, [contextKey]);
+  }, [contextKey, overrideAuth]);
 
   const respondApproval = useCallback(async (approve) => {
     const a = pendingApproval; const pw = approvalPassword;

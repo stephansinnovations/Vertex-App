@@ -4,6 +4,7 @@ import {
   getAgentConfig, setAgentConfig, isAgentConfigured,
   runAgentTask, approveAgentCommand, REPO_WEB,
 } from '@/api/jarvisAgent';
+import { useOverrideAuth } from '@/lib/OverrideAuthContext';
 
 // Jarvis Build — the dedicated coding view. Same engine the conversational Jarvis
 // uses (via the build_app tool), so it's all one Jarvis; this is just the full
@@ -21,6 +22,7 @@ export default function JarvisBuild({ isOpen, onClose }) {
   const [pending, setPending] = useState(null); // { id, command, tool }
   const [password, setPassword] = useState('');
 
+  const overrideAuth = useOverrideAuth();
   const sessionRef = useRef(null);
   const bottomRef = useRef(null);
 
@@ -48,6 +50,11 @@ export default function JarvisBuild({ isOpen, onClose }) {
   const send = async () => {
     const prompt = input.trim();
     if (!prompt || running) return;
+    // Gate: require the override password (cached 24h per device) before building.
+    if (overrideAuth) {
+      const ok = await overrideAuth.ensureAuthorized('start this build');
+      if (!ok) return; // keep the prompt so the user can retry
+    }
     setInput('');
     push({ type: 'user', text: prompt });
     setRunning(true);

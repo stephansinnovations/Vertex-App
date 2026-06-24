@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus, Bug } from 'lucide-react';
+import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus, Bug, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSetting, setSetting } from '@/api/appSettings';
 import { useBackground, backgroundStyle } from '@/lib/BackgroundContext';
 import BackfillPicturesButton from '@/components/BackfillPicturesButton';
+import OverridePasswordSettings from '@/components/OverridePasswordSettings';
 
 const API_KEYS = [
   {
@@ -211,6 +212,15 @@ export default function Settings() {
         </div>
       ) : (
         <div className="w-full max-w-lg px-6 space-y-8">
+          {/* Security */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <ShieldCheck className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Security</h2>
+            </div>
+            <OverridePasswordSettings />
+          </div>
+
           {/* API Keys */}
           <div>
             <div className="flex items-center gap-2 mb-3 px-1">
