@@ -17,6 +17,7 @@ import VertexChat from '@/components/VertexChat';
 import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
 import FloatingSettingsButton from '@/components/FloatingSettingsButton';
+import JarvisInterrupt from '@/components/JarvisInterrupt';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import GlobalErrorReporter from '@/components/GlobalErrorReporter';
 import WorkOrderPage from './pages/WorkOrderPage';
@@ -178,6 +179,7 @@ function App() {
                   <FloatingVertexButton />
                   <FloatingSettingsButton />
                   <GlobalVertexChat />
+                  <JarvisInterrupt />
                 </Router>
                 <Toaster />
                 <GlobalErrorReporter />

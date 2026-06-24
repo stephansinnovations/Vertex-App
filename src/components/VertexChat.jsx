@@ -595,8 +595,15 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildT
   // ONE persistent recognizer (continuous), so there's no start/stop race.
   useEffect(() => {
     let active = true;
+    // Tell the global interrupt listener that Voice Mode owns the mic, so it
+    // won't start a second recognizer on the same audio.
+    if (typeof window !== 'undefined') window.__jarvisVoiceModeActive = true;
     const SR = SpeechRecognitionImpl;
-    if (!SR) { setStatus('unsupported'); return; }
+    if (!SR) {
+      setStatus('unsupported');
+      if (typeof window !== 'undefined') window.__jarvisVoiceModeActive = false;
+      return;
+    }
 
     // Seed from chat history, but flatten to plain text and drop tool_use /
     // tool_result blocks — sending those without a `tools` definition 400s. Also
@@ -742,6 +749,7 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildT
 
     return () => {
       active = false;
+      if (typeof window !== 'undefined') window.__jarvisVoiceModeActive = false;
       clearTimeout(bootT);
       clearTimeout(silenceTimer);
       try { rec && rec.abort(); } catch {}
@@ -956,6 +964,10 @@ export default function VertexChat({ isOpen, onClose }) {
         },
       });
       agentSessionRef.current = result.sessionId || agentSessionRef.current;
+      if (result.stopped) {
+        add({ type: 'buildstep', text: '⏹ Coding stopped.' });
+        return 'The build was stopped by the user before finishing.';
+      }
       add({ type: 'deploy', branch: result.branch, changed: result.changed, text: result.summary || (result.changed ? 'Done.' : 'No changes were needed.') });
       return result.changed
         ? `Build complete. ${result.summary} Pushed to ${result.branch === 'main' ? 'main (deploying live)' : `preview branch ${result.branch}`}.`

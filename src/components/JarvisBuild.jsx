@@ -54,7 +54,8 @@ export default function JarvisBuild({ isOpen, onClose }) {
     try {
       const result = await runAgentTask({ prompt, sessionId: sessionRef.current, onEvent: handleEvent });
       sessionRef.current = result.sessionId || sessionRef.current;
-      push({ type: 'done', text: result.summary || (result.changed ? 'Done.' : 'No changes were needed.'), branch: result.branch, changed: result.changed });
+      if (result.stopped) push({ type: 'status', text: '⏹ Coding stopped.' });
+      else push({ type: 'done', text: result.summary || (result.changed ? 'Done.' : 'No changes were needed.'), branch: result.branch, changed: result.changed });
     } catch (e) {
       push({ type: 'error', text: `${e?.message || e}` });
     } finally {
