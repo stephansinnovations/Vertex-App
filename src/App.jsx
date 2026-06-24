@@ -17,6 +17,7 @@ import VertexChat from '@/components/VertexChat';
 import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
 import FloatingSettingsButton from '@/components/FloatingSettingsButton';
+import ScreenTracker from '@/components/ScreenTracker';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import GlobalErrorReporter from '@/components/GlobalErrorReporter';
 import WorkOrderPage from './pages/WorkOrderPage';
@@ -156,6 +157,7 @@ function App() {
               <QueryClientProvider client={queryClientInstance}>
                 <Router>
                   <NavigationTracker />
+                  <ScreenTracker />
                   <AuthenticatedApp />
                   <FloatingVertexButton />
                   <FloatingSettingsButton />
