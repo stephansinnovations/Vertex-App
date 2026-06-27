@@ -46,6 +46,19 @@ export function mixHex(a, b, t) {
   return `#${to(ar + (br - ar) * t)}${to(ag + (bg - ag) * t)}${to(ab + (bb - ab) * t)}`;
 }
 
+// Rotate a hex color's hue by `deg` degrees (keeps saturation/brightness). Used for
+// smooth pattern color cycling. Grayscale colors (no hue) are returned unchanged.
+export function rotateHex(hex, deg) {
+  const n = parseInt((hex || '#000000').slice(1), 16);
+  const r = ((n >> 16) & 255) / 255; const g = ((n >> 8) & 255) / 255; const b = (n & 255) / 255;
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b); const d = max - min;
+  if (d < 0.005) return hex; // gray/white — nothing to rotate
+  let h = 0;
+  if (max === r) h = ((g - b) / d) % 6; else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+  h = (h * 60 + deg) % 360; if (h < 0) h += 360;
+  return hsvToHex(h, max === 0 ? 0 : d / max, max);
+}
+
 // Map a spatial pattern onto a set of 0..1 canvas positions → a phase offset (in
 // cycles) per position. Direction (degrees) sets the sweep axis. Pure + exported so
 // the pattern-preview screen and the engine compute the same thing.
@@ -183,7 +196,8 @@ class ModEngine {
     // sync: 'free' (uses rate, cycles/sec) or a SYNC_DIVISIONS key (locks to BPM).
     // `view` = the capture window over the pattern field (0..1). Flowers map into this
     // sub-rect, so shrinking/moving it zooms/pans into a different spot of the pattern.
-    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35, view: { x: 0, y: 0, w: 1, h: 1 } };
+    // colorSpeed (0..1) smoothly cycles the pattern's colors through the spectrum.
+    this.pattern = { type: 'sweep', direction: 0, amount: 1, colorA: '#8b5cf6', colorB: '#22d3ee', gradient: false, sync: 'free', rate: 0.35, colorSpeed: 0, view: { x: 0, y: 0, w: 1, h: 1 } };
     this._patternOnce = false;
     this._onceLeft = 0;
     this._onceEndsAt = 0; // wall-clock end time for a fixed-duration one-shot (0 = use _onceLeft)
@@ -191,6 +205,7 @@ class ModEngine {
     this.flowerPos = []; // global flower index -> { x, y } in 0..1 canvas space
     this.patternDrive = false; // when on, the pattern itself drives flower brightness
     this._patternPhase = 0;
+    this._colorPhase = 0; // running hue offset (degrees) for smooth color cycling
     this._startTime = 0;
     this.macros = [0, 1, 2, 3].map((i) => ({ name: `Macro ${i + 1}`, base: 0, source: NONE, amount: 1, value: 0 }));
     // Per-target parameter settings keyed by target id: 'all' | `b<bi>` | `f<gi>`.
@@ -322,8 +337,9 @@ class ModEngine {
       // The pattern itself drives brightness: a wave fades in/out across the flowers
       // by their position. With a gradient, the color blends between the two as it
       // flows (bright = colorB, dim = colorA).
-      const A = this.pattern.colorA || '#8b5cf6';
-      const B = this.pattern.colorB || A;
+      const cp = this.pattern.colorSpeed ? this._colorPhase : 0;
+      const A = cp ? rotateHex(this.pattern.colorA || '#8b5cf6', cp) : (this.pattern.colorA || '#8b5cf6');
+      const B = cp ? rotateHex(this.pattern.colorB || this.pattern.colorA || '#8b5cf6', cp) : (this.pattern.colorB || this.pattern.colorA || '#8b5cf6');
       const grad = !!(this.pattern.gradient && this.pattern.colorB);
       const hi = this.sceneBri ?? 100; // scene's max brightness
       const flash = this.kickFlash || 0; // kick punch (scene-driven)
@@ -469,6 +485,8 @@ class ModEngine {
     if (dt > 0.1) dt = 0.1;
     const prate = effectiveRate(this.pattern, this.bpm);
     this._patternPhase = (this._patternPhase + dt * prate) % 1;
+    // Smoothly cycle the pattern colors (up to ~140°/s at full knob).
+    this._colorPhase = (this._colorPhase + dt * (this.pattern.colorSpeed || 0) * 140) % 360;
     if (this._patternOnce) {
       let done;
       if (this._onceEndsAt) { done = now >= this._onceEndsAt; }

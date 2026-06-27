@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useReducer, useState, useMemo } from 'react';
 import { Play, Square, Zap } from 'lucide-react';
-import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
+import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, rotateHex, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
+import Knob from '@/components/Knob';
 
 // Two-color pairs that blend nicely.
 const COLOR_PAIRS = [
@@ -67,7 +68,7 @@ export default function PatternScreen() {
   // Snapshot the current working pattern (what gets saved to a pad).
   const snapshot = () => ({
     type: p.type, direction: p.direction, amount: p.amount,
-    colorA: p.colorA, colorB: p.colorB, gradient: p.gradient, sync: p.sync, rate: p.rate,
+    colorA: p.colorA, colorB: p.colorB, gradient: p.gradient, sync: p.sync, rate: p.rate, colorSpeed: p.colorSpeed || 0,
   });
 
   const setType = (type) => { modEngine.pattern.type = type; if (!modEngine.pattern.amount) modEngine.pattern.amount = 1; modEngine.applyOnce(); bump(); };
@@ -91,6 +92,7 @@ export default function PatternScreen() {
     setTimeout(() => setFlashType((cur) => (cur === t ? '' : cur)), 360);
     bump();
   };
+  const setColorSpeed = (v) => { modEngine.pattern.colorSpeed = v; modEngine.applyOnce(); bump(); };
   const setColorA = (c) => { modEngine.pattern.colorA = c; modEngine.applyOnce(); bump(); };
   const setColorB = (c) => { modEngine.pattern.colorB = c; modEngine.applyOnce(); bump(); };
   const setGradient = (on) => { modEngine.pattern.gradient = on; modEngine.applyOnce(); bump(); };
@@ -139,6 +141,7 @@ export default function PatternScreen() {
     let raf;
     let last = performance.now();
     let phase = 0;
+    let colorPhase = 0;
     const cvs = canvasRef.current;
     const W = cvs ? cvs.width : 600;
     const H = cvs ? cvs.height : 260;
@@ -154,12 +157,14 @@ export default function PatternScreen() {
       // detected BPM (modEngine.bpm) / division, so the preview visibly locks to the song.
       const prate = Math.max(0.05, effectiveRate(pat, modEngine.bpm));
       phase = (phase + dt * prate) % 1;
+      colorPhase = (colorPhase + dt * (pat.colorSpeed || 0) * 140) % 360;
       const ctx = canvasRef.current && canvasRef.current.getContext('2d');
       if (!ctx) return;
       ctx.clearRect(0, 0, W, H);
       const offs = computePatternOffsets({ ...pat, amount: pat.amount || 1 }, gridPositions);
-      const A = pat.colorA || '#8b5cf6';
-      const B = pat.colorB || A;
+      const cp = pat.colorSpeed ? colorPhase : 0;
+      const A = cp ? rotateHex(pat.colorA || '#8b5cf6', cp) : (pat.colorA || '#8b5cf6');
+      const B = cp ? rotateHex(pat.colorB || pat.colorA || '#8b5cf6', cp) : (pat.colorB || pat.colorA || '#8b5cf6');
       const grad = !!(pat.gradient && pat.colorB);
       for (let i = 0; i < gridPositions.length; i += 1) {
         const w = 0.5 + 0.5 * Math.sin(2 * Math.PI * (phase - offs[i]));
@@ -357,9 +362,16 @@ export default function PatternScreen() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wide text-white/40">Colors</span>
-          <label className="flex items-center gap-1.5 text-[11px] text-white/60 cursor-pointer select-none">
-            <input type="checkbox" checked={!!p.gradient} onChange={(e) => setGradient(e.target.checked)} style={{ accentColor: '#36d6c3' }} /> Blend two
-          </label>
+          <div className="flex items-center gap-3">
+            {/* Smoothly cycles the colors through the spectrum */}
+            <div className="flex items-center gap-1.5">
+              <Knob value={p.colorSpeed || 0} onChange={setColorSpeed} size={28} format={(v) => (v < 0.01 ? 'off' : `${Math.round(v * 100)}%`)} />
+              <span className="text-[9px] uppercase tracking-wide text-white/40 leading-tight">Color<br />speed</span>
+            </div>
+            <label className="flex items-center gap-1.5 text-[11px] text-white/60 cursor-pointer select-none">
+              <input type="checkbox" checked={!!p.gradient} onChange={(e) => setGradient(e.target.checked)} style={{ accentColor: '#36d6c3' }} /> Blend two
+            </label>
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {COLOR_PAIRS.map(([a, b]) => {
