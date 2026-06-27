@@ -155,24 +155,6 @@ function App() {
             <ShortcutProvider>
               <QueryClientProvider client={queryClientInstance}>
                 <Router>
-                  <div
-                    style={{
-                      position: 'fixed',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      zIndex: 9999,
-                      background: '#7c3aed',
-                      color: '#fff',
-                      textAlign: 'center',
-                      fontWeight: 700,
-                      fontSize: '18px',
-                      padding: '10px',
-                      letterSpacing: '0.05em',
-                    }}
-                  >
-                    Test Banner
-                  </div>
                   <NavigationTracker />
                   <AuthenticatedApp />
                   <FloatingVertexButton />
