@@ -72,6 +72,7 @@ export class AudioReactor {
     this.kickModel = kickModel; // shared, persisted adaptive kick detector
     this.kickEnv = 0; // kick meter envelope (fast attack, slow release)
     this.lastKick = 0;
+    this.gain = 1; // input gain / sensitivity (set from the UI)
     this.onFrame = null; // ({ level, bass, beat, bands, kick, kickHit }) => void
   }
 
@@ -130,8 +131,10 @@ export class AudioReactor {
       total += bins[i];
       if (i < bassEnd) bass += bins[i];
     }
-    const bassNorm = bass / (bassEnd * 255);
-    const level = total / (n * 255);
+    // Input gain (sensitivity) — boosts a quiet source so detection + meters respond.
+    const g = this.gain || 1;
+    const bassNorm = Math.min(1, (bass / (bassEnd * 255)) * g);
+    const level = Math.min(1, (total / (n * 255)) * g);
 
     // Adaptive beat detection: flag when instantaneous bass jumps well above its
     // running average, with a debounce so we don't double-trigger.
@@ -186,7 +189,7 @@ export class AudioReactor {
     // decides a hit from its learned running statistics (no fixed thresholds), so it
     // locks onto the kick of any track and improves the more it listens.
     const kickEnergy = bandEnergy(40, 120);
-    const { hit: kickHit } = this.kickModel.update(kickOnset, kickEnergy, now - this.lastKick > 110);
+    const { hit: kickHit } = this.kickModel.update(kickOnset * g, kickEnergy * g, now - this.lastKick > 110);
     if (kickHit) this.lastKick = now;
     this.kickEnv *= 0.84;
     if (kickHit) this.kickEnv = 1;

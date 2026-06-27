@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useReducer } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Check, Settings, Plus, Fingerprint } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Mic, MonitorSpeaker, Music, Play, Square, RefreshCw, Sparkles, Settings, Plus, Fingerprint } from 'lucide-react';
 import {
   isBluetoothSupported,
   connectFlowers,
@@ -187,8 +187,10 @@ export default function MusicApp() {
 
   // --- Tempo-detection (Sync to music) state ---
   const [syncing, setSyncing] = useState(false);
+  const [locked, setLocked] = useState(false); // BPM tracker is confident
   const [audioSource, setAudioSource] = useState('mic'); // 'mic' | 'tab'
   const [level, setLevel] = useState(0);
+  const [gain, setGain] = useState(1); // input gain / sensitivity
   const reactorRef = useRef(null);
   const trackerRef = useRef(null);
   const wakeLockRef = useRef(null);
@@ -301,6 +303,7 @@ export default function MusicApp() {
       reactorRef.current?.stop();
       reactorRef.current = null;
       setSyncing(false);
+      setLocked(false);
       setLevel(0);
       resetSyncMeters();
       modEngine.emit();
@@ -321,11 +324,13 @@ export default function MusicApp() {
           lastEmit = now;
           modEngine.onSection(phaseLearner.push({ level: lvl, bass: bands?.bass, perc: bands?.drums, mel: bands?.melody, kick: modEngine.kick }));
           setLevel(lvl);
+          setLocked(!!trackerRef.current?.confident);
           modEngine.emit();
         }
       };
-      reactor.onEnded = () => { setSyncing(false); setLevel(0); reactorRef.current = null; resetSyncMeters(); modEngine.emit(); };
+      reactor.onEnded = () => { setSyncing(false); setLocked(false); setLevel(0); reactorRef.current = null; resetSyncMeters(); modEngine.emit(); };
       await reactor.start(audioSource);
+      reactor.gain = gain;
       reactorRef.current = reactor;
       modEngine.detecting = true;
       setSyncing(true);
@@ -352,6 +357,7 @@ export default function MusicApp() {
           reactorRef.current?.stop();
           reactorRef.current = null;
           setSyncing(false);
+          setLocked(false);
           setLevel(0);
           modEngine.detecting = false;
           modEngine.audioLevel = 0;
@@ -387,6 +393,9 @@ export default function MusicApp() {
   }, [syncing]);
 
   useEffect(() => () => { reactorRef.current?.stop(); }, []);
+
+  // Live gain → push to the running reactor.
+  useEffect(() => { if (reactorRef.current) reactorRef.current.gain = gain; }, [gain]);
 
   // Live readouts for the sync meters / phase tag (recomputed each engine emit).
   const bpm = modEngine.bpm || 120;
@@ -442,10 +451,12 @@ export default function MusicApp() {
           {/* Sync to music — one press enables it; gear opens source/scene/learning settings */}
           <div className="flex items-center gap-1.5">
             <button onClick={handleSyncToggle}
-              className={`relative overflow-hidden flex flex-col items-center justify-center px-5 py-1.5 rounded-full text-xs font-medium transition ${syncing ? 'bg-[#36d6c3] text-black' : 'bg-white/5 text-white/70 hover:text-white'}`}>
+              className={`relative overflow-hidden flex flex-col items-center justify-center px-5 py-1.5 rounded-full text-xs font-medium transition ${syncing ? (locked ? 'bg-[#36d6c3] text-black' : 'bg-[#36d6c3]/40 text-white') : 'bg-white/5 text-white/70 hover:text-white'}`}>
               <span className="flex items-center gap-1.5">
-                {syncing ? <Check className="w-3.5 h-3.5" /> : <Music className="w-3.5 h-3.5" />}
-                {syncing ? 'Synced' : 'Sync to music'}
+                {!syncing ? <Music className="w-3.5 h-3.5" />
+                  : locked ? <span className="w-2 h-2 rounded-full bg-black" style={{ opacity: 0.3 + 0.7 * beatFill, transform: `scale(${1 + 0.6 * beatFill})` }} />
+                    : <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {!syncing ? 'Sync to music' : locked ? `Locked · ${bpm}` : 'Listening…'}
               </span>
               <span className="mt-1 w-24 h-1 rounded-full bg-black/20 overflow-hidden">
                 <span className="block h-full rounded-full transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%`, background: syncing ? '#0b0d11' : '#36d6c3' }} />
@@ -466,7 +477,13 @@ export default function MusicApp() {
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: syncing ? phaseCol : 'rgba(255,255,255,0.3)' }} />
             {syncing ? phaseLabel : 'Section'}
           </span>
-          {syncing && <span className="text-[11px] text-[#36d6c3] w-full text-center">Alright, it&apos;s synced ✓ — reading the beat from {audioSource === 'tab' ? 'this browser tab' : 'the microphone'}. Anything set to “Sync to BPM” now follows the music.</span>}
+          {syncing && (
+            <span className="text-[11px] text-[#36d6c3] w-full text-center">
+              {locked
+                ? <>Locked to the beat ✓ — {bpm} BPM from {audioSource === 'tab' ? 'this tab' : 'the mic'}. Anything set to “Sync to BPM” now follows the music.</>
+                : 'Listening for the beat… (watch the KICK meter bounce in time)'}
+            </span>
+          )}
           {testMode && <span className="text-[11px] text-[#36d6c3]/80 w-full text-center">Pretending an ESP32 is connected — no hardware needed.</span>}
         </div>
 
@@ -517,7 +534,11 @@ export default function MusicApp() {
         {/* Bottom: Patterns + One Shots (top) · LFO full-width below · macros + params */}
         <div className="flex flex-col gap-5">
           {/* Pattern + One-shot box (single, tabbed) */}
-          <div className="w-full lg:max-w-lg"><PatternScreen /></div>
+          <div className="w-full lg:max-w-lg"><PatternScreen
+            syncing={syncing} locked={locked} onToggleSync={handleSyncToggle}
+            audioSource={audioSource} onSetSource={setAudioSource}
+            gain={gain} onSetGain={setGain} level={level} bpm={bpm}
+          /></div>
 
           {/* LFO module — full width, below the pattern boxes */}
           <div className="w-full min-w-0"><LfoModule /></div>
@@ -627,6 +648,18 @@ export default function MusicApp() {
               className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold transition ${syncing ? 'bg-white text-black' : 'bg-[#36d6c3] text-black hover:bg-[#36d6c3]/90'}`}>
               {syncing ? `Stop syncing · ${bpm} BPM` : 'Start syncing'}
             </button>
+            {/* Gain (input sensitivity) + live level bar */}
+            <div className="flex flex-col gap-1.5">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-wide text-white/40">
+                <span>Gain · sensitivity</span><span className="text-white/60">{gain.toFixed(1)}×</span>
+              </div>
+              <input type="range" min="0.3" max="4" step="0.1" value={gain} onChange={(e) => setGain(Number(e.target.value))}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${((gain - 0.3) / 3.7) * 100}%, rgba(255,255,255,0.12) ${((gain - 0.3) / 3.7) * 100}%)` }} />
+              <div className="h-2 rounded-full bg-white/10 overflow-hidden" title="Live input level">
+                <div className="h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
+              </div>
+            </div>
             {syncing && (
               <div className="flex items-center justify-between gap-3 rounded-2xl bg-black/30 border border-white/8 px-4 py-3">
                 <SyncMeters kick={modEngine.kick} beatFill={beatFill} bpm={bpm} />

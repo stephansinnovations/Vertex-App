@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useReducer, useState, useMemo } from 'react';
-import { Play, Square, Zap, Circle, Bot, Trash2 } from 'lucide-react';
+import { Play, Square, Zap, Circle, Bot, Trash2, Music, Mic, MonitorSpeaker } from 'lucide-react';
 import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, rotateHex, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
 import { classifyTarget, summarize, quantize, dueEvents, TARGET_COLORS } from '@/api/jamLearner';
 import Knob from '@/components/Knob';
@@ -36,7 +36,10 @@ const ROWS = 28;
 // shape it, plus one finger pad of save slots. A Pattern / One-shot tab switches what a
 // saved pad does when tapped (loop it vs fire a ~1 s burst); the pads themselves don't
 // change between tabs.
-export default function PatternScreen() {
+export default function PatternScreen({
+  syncing = false, locked = false, onToggleSync, audioSource = 'mic', onSetSource,
+  gain = 1, onSetGain, level = 0, bpm = 120,
+} = {}) {
   const [, bump] = useReducer((x) => x + 1, 0);
   const [mode, setMode] = useState('pattern'); // 'pattern' | 'oneshot' | 'jam'
   const [pads, setPads] = useState(loadPads);
@@ -329,6 +332,33 @@ export default function PatternScreen() {
       {/* Jam tab: call-and-response — record your taps, AI replays them on-beat. */}
       {mode === 'jam' && (
         <div className="flex flex-col gap-2 rounded-xl bg-black/30 border border-white/8 p-2.5">
+          {/* Music sync — same options as the top "Sync to music" button */}
+          <div className="flex flex-col gap-1.5 pb-2 border-b border-white/8">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={() => onToggleSync && onToggleSync()}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition ${syncing ? (locked ? 'bg-[#36d6c3] text-black' : 'bg-[#36d6c3]/40 text-white') : 'bg-white/10 text-white/80 hover:bg-white/20'}`}>
+                {!syncing ? <><Music className="w-3.5 h-3.5" /> Sync to music</> : locked ? `🔒 Locked · ${bpm}` : '◌ Listening…'}
+              </button>
+              <div className="flex items-center gap-1 p-0.5 rounded-full bg-white/5">
+                {[['mic', 'Mic', Mic], ['tab', 'Tab', MonitorSpeaker]].map(([id, label, Icon]) => (
+                  <button key={id} onClick={() => !syncing && onSetSource && onSetSource(id)} disabled={syncing}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] transition disabled:opacity-50 ${audioSource === id ? 'bg-white/15 text-white' : 'text-white/50 hover:text-white/80'}`}>
+                    <Icon className="w-3 h-3" /> {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {/* Gain + live level bar */}
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] uppercase tracking-wide text-white/40">Gain</span>
+              <input type="range" min="0.3" max="4" step="0.1" value={gain} onChange={(e) => onSetGain && onSetGain(Number(e.target.value))}
+                className="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                style={{ accentColor: '#36d6c3', background: `linear-gradient(to right,#36d6c3 ${((gain - 0.3) / 3.7) * 100}%, rgba(255,255,255,0.12) ${((gain - 0.3) / 3.7) * 100}%)` }} />
+              <span className="w-9 h-2 rounded-full bg-white/10 overflow-hidden" title="Live input level">
+                <span className="block h-full rounded-full bg-[#36d6c3] transition-[width] duration-75" style={{ width: `${Math.min(100, Math.round(level * 140))}%` }} />
+              </span>
+            </div>
+          </div>
           <div className="flex items-center gap-2">
             {!recording ? (
               <button onClick={startRecord} disabled={aiPlaying}
