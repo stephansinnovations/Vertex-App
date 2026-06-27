@@ -467,6 +467,7 @@ export default function MusicApp() {
             {syncing ? phaseLabel : 'Section'}
           </span>
           {syncing && <span className="text-[11px] text-[#36d6c3] w-full text-center">Alright, it&apos;s synced ✓ — reading the beat from {audioSource === 'tab' ? 'this browser tab' : 'the microphone'}. Anything set to “Sync to BPM” now follows the music.</span>}
+          {testMode && <span className="text-[11px] text-[#36d6c3]/80 w-full text-center">Pretending an ESP32 is connected — no hardware needed.</span>}
         </div>
 
         {/* Visualization + transport */}
