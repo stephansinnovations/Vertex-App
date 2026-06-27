@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useReducer, useState, useMemo } from 'react';
-import { Play, Square, Zap } from 'lucide-react';
+import { Play, Square, Zap, Circle, Bot, Trash2 } from 'lucide-react';
 import { modEngine, PATTERN_TYPES, computePatternOffsets, mixHex, rotateHex, SYNC_NAMES, effectiveRate } from '@/api/modEngine';
+import { classifyTarget, summarize, quantize, dueEvents, TARGET_COLORS } from '@/api/jamLearner';
 import Knob from '@/components/Knob';
 
 // Two-color pairs that blend nicely.
@@ -37,10 +38,21 @@ const ROWS = 28;
 // change between tabs.
 export default function PatternScreen() {
   const [, bump] = useReducer((x) => x + 1, 0);
-  const [mode, setMode] = useState('pattern'); // 'pattern' | 'oneshot'
+  const [mode, setMode] = useState('pattern'); // 'pattern' | 'oneshot' | 'jam'
   const [pads, setPads] = useState(loadPads);
   const [activePad, setActivePad] = useState(-1);
   const [flashType, setFlashType] = useState(''); // one-shot button just pressed
+  // Jam (call-and-response): record the human's taps, learn the target, AI replays it on-beat.
+  const [recording, setRecording] = useState(false);
+  const [hits, setHits] = useState([]);
+  const [aiPlaying, setAiPlaying] = useState(false);
+  const recStartRef = useRef(0);
+  const hitsRef = useRef([]);
+  const quantRef = useRef(null);
+  const aiStartRef = useRef(0);
+  const aiPrevRef = useRef(0);
+  hitsRef.current = hits;
+  const jamSummary = summarize(hits);
   const dialRef = useRef(null);
   const draggingDir = useRef(false);
   const canvasRef = useRef(null);
@@ -86,12 +98,52 @@ export default function PatternScreen() {
 
   // One-shot tab: fire a single effect of the given type once (using the current colors,
   // direction and spread), then it goes dark — without changing the working pattern.
+  // In Jam mode it also records the tap + what it was going for (kick/snare/beat).
   const fireType = (t) => {
-    modEngine.oneShot({ ...snapshot(), type: t }, 1 + (p.amount || 0) * 0.35);
+    const effect = { ...snapshot(), type: t };
+    modEngine.oneShot(effect, 1 + (p.amount || 0) * 0.35);
     setFlashType(t);
     setTimeout(() => setFlashType((cur) => (cur === t ? '' : cur)), 360);
+    if (mode === 'jam' && recording) {
+      const ctx = { kick: modEngine.kick || 0, snare: modEngine.bands?.drums || 0 };
+      setHits((h) => [...h, { tMs: performance.now() - recStartRef.current, effect, ...ctx, target: classifyTarget(ctx) }]);
+    }
     bump();
   };
+
+  // Jam transport.
+  const startRecord = () => { setAiPlaying(false); setHits([]); recStartRef.current = performance.now(); setRecording(true); };
+  const stopRecord = () => setRecording(false);
+  const aiStop = () => setAiPlaying(false);
+  const aiPlay = () => {
+    const q = quantize(hitsRef.current, modEngine.bpm || 120, 2);
+    if (!q.events.length) return;
+    quantRef.current = q;
+    aiStartRef.current = modEngine.lastBeatMs || performance.now(); // anchor to a real beat
+    aiPrevRef.current = -1e-4;
+    setRecording(false);
+    setAiPlaying(true);
+  };
+  const clearJam = () => { setAiPlaying(false); setRecording(false); setHits([]); };
+
+  // AI scheduler: loop the quantized hits locked to the live BPM, firing each on-beat.
+  useEffect(() => {
+    if (!aiPlaying) return undefined;
+    let raf;
+    const tick = () => {
+      raf = requestAnimationFrame(tick);
+      const q = quantRef.current;
+      if (!q || !q.events.length) return;
+      const beatMs = 60000 / (modEngine.bpm || 120);
+      const cur = ((performance.now() - aiStartRef.current) / beatMs) % q.loopBeats;
+      const due = dueEvents(q.events, aiPrevRef.current, cur);
+      const dur = Math.max(0.25, (60 / (modEngine.bpm || 120)) * 0.5);
+      due.forEach((e) => modEngine.oneShot({ ...e.effect }, dur));
+      aiPrevRef.current = cur;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [aiPlaying]);
   const setColorSpeed = (v) => { modEngine.pattern.colorSpeed = v; modEngine.applyOnce(); bump(); };
   const setColorA = (c) => { modEngine.pattern.colorA = c; modEngine.applyOnce(); bump(); };
   const setColorB = (c) => { modEngine.pattern.colorB = c; modEngine.applyOnce(); bump(); };
@@ -222,21 +274,21 @@ export default function PatternScreen() {
       {/* Tabs + transport */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1 p-0.5 rounded-full bg-white/5">
-          {[['pattern', 'Pattern'], ['oneshot', 'One-shot']].map(([m, label]) => (
+          {[['pattern', 'Pattern'], ['oneshot', 'One-shot'], ['jam', 'Jam']].map(([m, label]) => (
             <button key={m} onClick={() => setMode(m)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition ${mode === m ? 'bg-white text-black' : 'text-white/50 hover:text-white/80'}`}>
               {label}
             </button>
           ))}
         </div>
-        {mode === 'pattern' ? (
+        {mode === 'pattern' && (
           <button onClick={togglePlay} title="Loop this pattern on the bouquets"
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition ${playing ? 'bg-[#36d6c3] text-black' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}>
             {playing ? <><Square className="w-3 h-3" fill="currentColor" /> Stop</> : <><Play className="w-3 h-3" fill="currentColor" /> Play</>}
           </button>
-        ) : (
-          <span className="text-[10px] text-white/35 pr-1">tap an effect to fire it once</span>
         )}
+        {mode === 'oneshot' && <span className="text-[10px] text-white/35 pr-1">tap an effect to fire it once</span>}
+        {mode === 'jam' && <span className="text-[10px] text-white/35 pr-1">play it · then let the AI take over</span>}
       </div>
 
       {/* Dense live preview + direction dial */}
@@ -274,12 +326,62 @@ export default function PatternScreen() {
         </div>
       </div>
 
-      {/* One-shot tab: one button per effect — tap fires that effect once, then dark. */}
-      {mode === 'oneshot' ? (
+      {/* Jam tab: call-and-response — record your taps, AI replays them on-beat. */}
+      {mode === 'jam' && (
+        <div className="flex flex-col gap-2 rounded-xl bg-black/30 border border-white/8 p-2.5">
+          <div className="flex items-center gap-2">
+            {!recording ? (
+              <button onClick={startRecord} disabled={aiPlaying}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#ff2d55] text-white hover:bg-[#ff2d55]/90 transition disabled:opacity-40">
+                <Circle className="w-3 h-3" fill="currentColor" /> Record
+              </button>
+            ) : (
+              <button onClick={stopRecord}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-black transition">
+                <Square className="w-3 h-3" fill="currentColor" /> Stop &amp; learn
+              </button>
+            )}
+            {!aiPlaying ? (
+              <button onClick={aiPlay} disabled={recording || hits.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#36d6c3] text-black hover:bg-[#36d6c3]/90 transition disabled:opacity-40">
+                <Bot className="w-3.5 h-3.5" /> AI takes over
+              </button>
+            ) : (
+              <button onClick={aiStop}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-black transition">
+                <Square className="w-3 h-3" fill="currentColor" /> Stop AI
+              </button>
+            )}
+            {hits.length > 0 && !recording && !aiPlaying && (
+              <button onClick={clearJam} title="Clear" className="ml-auto p-1.5 rounded-full text-white/40 hover:text-white/80 transition"><Trash2 className="w-3.5 h-3.5" /></button>
+            )}
+          </div>
+          {/* Status */}
+          <span className="text-[11px] text-white/55">
+            {recording ? 'Recording your moves — tap the effects to the music…'
+              : aiPlaying ? 'AI is looping your groove, locked to the beat 🤖'
+              : hits.length ? <>Learned {jamSummary.total} hit{jamSummary.total === 1 ? '' : 's'} — you were going for the <span style={{ color: TARGET_COLORS[jamSummary.top] }} className="font-semibold uppercase">{jamSummary.top}</span>. Hit “AI takes over”.</>
+              : 'Record a groove on the pads below, then the AI replays it perfectly on-beat.'}
+          </span>
+          {/* Hit timeline — dots colored by what each tap was going for */}
+          {hits.length > 0 && (
+            <div className="relative h-6 rounded bg-white/5 overflow-hidden">
+              {hits.map((h, i) => {
+                const span = (hits[hits.length - 1].tMs - hits[0].tMs) || 1;
+                const x = ((h.tMs - hits[0].tMs) / span) * 96 + 2;
+                return <span key={i} className="absolute top-1/2 -translate-y-1/2 w-2 h-2 rounded-full" style={{ left: `${x}%`, background: TARGET_COLORS[h.target], boxShadow: `0 0 6px ${TARGET_COLORS[h.target]}` }} />;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* One-shot + Jam: one button per effect — tap fires that effect once. */}
+      {(mode === 'oneshot' || mode === 'jam') ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase tracking-widest text-white/40">One-shots</span>
-            <span className="text-[9px] text-white/30">tap = fire that effect once</span>
+            <span className="text-[10px] uppercase tracking-widest text-white/40">{mode === 'jam' ? 'Your pads' : 'One-shots'}</span>
+            <span className="text-[9px] text-white/30">{mode === 'jam' ? 'tap to play — recorded while armed' : 'tap = fire that effect once'}</span>
           </div>
           <div className="grid grid-cols-5 gap-1.5 touch-none select-none">
             {PATTERN_TYPES.map((t) => (
