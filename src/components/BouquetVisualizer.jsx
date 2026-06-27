@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Zap, ZapOff, Plus, Trash2, X, Check } from 'lucide-react';
-import { isConnected, getFlowerCount, getDeviceCount, isTestMode, onStatus, flashFlower } from '@/api/flowerBle';
+import { isConnected, getFlowerCount, getDeviceCount, isTestMode, onStatus, flashFlower, getLiveFlowers } from '@/api/flowerBle';
 import { loadLayout, saveLayout, newBouquet, SHAPES } from '@/api/flowerLayout';
 import { onFlowerState, getFlowerState } from '@/api/flowerState';
 
@@ -79,6 +79,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
   const [live, setLive] = useState(getFlowerState());
   const [connected, setConnected] = useState(isConnected());
   const [flowerCount, setFlowerCount] = useState(getFlowerCount());
+  const [liveFlowers, setLiveFlowers] = useState(getLiveFlowers()); // per-global-index: has a live board?
   const [head, setHead] = useState(0);
   const [editing, setEditing] = useState(null); // { bi, fi }
   const [draft, setDraft] = useState(null);
@@ -125,6 +126,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
     const sync = () => {
       setConnected(isConnected());
       setFlowerCount(getFlowerCount());
+      setLiveFlowers(getLiveFlowers());
       // Auto-grow the layout so there's one bouquet per connected ESP32: when you
       // "Add ESP32" and a new board comes online, append a bouquet for it (its 3
       // channels map to the new bouquet's flowers, in connect order). Real mode only —
@@ -250,7 +252,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
       )}
       {layout.bouquets.map((b, bi) => {
         const bSelected = selected === `b${bi}`;
-        const bConnected = connected && starts[bi] < flowerCount;
+        const bConnected = connected && (liveFlowers[starts[bi]] ?? starts[bi] < flowerCount);
         const n = b.flowers.length;
         return (
           <div
@@ -282,7 +284,7 @@ export default function BouquetVisualizer({ selected = 'all', onSelect, onLayout
                   <div key={fi} data-fi={fi} onDoubleClick={(e) => { e.stopPropagation(); openEdit(bi, fi); }}
                     className="absolute cursor-grab active:cursor-grabbing" style={{ left: fx, top: fy, transform: 'translate(-50%, -50%)' }}>
                     <FlowerView flower={f} gi={gi} head={head} isWave={isWave}
-                      connected={connected && gi < flowerCount}
+                      connected={connected && (liveFlowers[gi] ?? gi < flowerCount)}
                       liveColor={pf?.color ?? live.color} brightness={pf?.brightness ?? live.brightness}
                       selected={selected === `f${gi}`} flashing={flashGi === gi} />
                   </div>

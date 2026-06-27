@@ -18,6 +18,7 @@ import {
   getDeviceCount,
   identifyFlowers,
   clearIdentify,
+  setBouquetLayout,
 } from '@/api/flowerBle';
 import { AudioReactor, BpmTracker } from '@/api/audioReactive';
 import { phaseLearner, kickModel, phaseColor, resetMusicModel } from '@/api/musicML';
@@ -139,6 +140,9 @@ export default function MusicApp() {
   // per-bouquet/per-flower params) and its canvas position (for the spatial pattern).
   const handleLayout = useCallback((l, positions) => {
     setLayout(l);
+    // Tell the BLE layer the bouquet order + flower counts so each board is routed to
+    // its own bouquet by name (remembered placement, any connect order).
+    setBouquetLayout(l.bouquets.map((b) => ({ name: b.name, count: b.flowers.length })));
     const map = [];
     l.bouquets.forEach((b, bi) => b.flowers.forEach(() => map.push(bi)));
     modEngine.setFlowerMap(map);

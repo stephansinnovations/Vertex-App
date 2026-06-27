@@ -59,6 +59,76 @@ function allCmdChars() {
   return conns.flatMap((c) => c.cmdChars);
 }
 
+// --- Board placement memory ---------------------------------------------------
+// Remember which physical ESP32 drives which bouquet, so reconnecting in ANY order
+// still maps each board to the same bouquet (no re-identifying). A board is matched to
+// a bouquet by a remembered assignment (device.id → bouquet name) or, failing that, its
+// advertised firmware name ("Bouquet N"). The assignment persists across reloads.
+const SLOTS_KEY = 'flowerBoardSlots.v1';
+let boardSlots = {};
+try { boardSlots = JSON.parse(localStorage.getItem(SLOTS_KEY) || '{}') || {}; } catch { boardSlots = {}; }
+function persistSlots() { try { localStorage.setItem(SLOTS_KEY, JSON.stringify(boardSlots)); } catch { /* ignore */ } }
+
+let bouquetDefs = []; // [{ name, count }] in layout order — the placement target
+// Called by the app whenever the layout loads/changes (names + flower counts in order).
+export function setBouquetLayout(defs) {
+  bouquetDefs = Array.isArray(defs) ? defs.map((d) => ({ name: String(d?.name ?? ''), count: Math.max(0, d?.count | 0) })) : [];
+}
+
+// The bouquet name a connected board maps to (remembered assignment wins over the
+// board's advertised name).
+function boardBouquetName(conn) { return (conn.device && (boardSlots[conn.device.id] || conn.device.name)) || ''; }
+
+// Manually pin a board (by device id) to a bouquet name; remembered across reconnects.
+export function assignBoard(deviceId, bouquetName) {
+  if (!deviceId) return;
+  boardSlots[deviceId] = bouquetName;
+  persistSlots();
+  emitStatus(isConnected() ? 'connected' : 'disconnected');
+}
+
+function totalLayoutFlowers() { return bouquetDefs.reduce((s, d) => s + d.count, 0); }
+
+// Pure placement resolver (exported for testing). `boards` = [{ name, count, ref }] in
+// connect order (name already resolved to a bouquet name); `defs` = [{ name, count }] in
+// layout order. Returns [{ ref, offset, count }] giving each board the GLOBAL flower
+// offset of its matched bouquet, so a board always drives the same bouquet regardless of
+// connect order. Falls back to connect-order concatenation when there's no layout or no
+// board name matches any bouquet.
+export function resolvePlacements(boards, defs) {
+  const concat = () => { let off = 0; return boards.map((b) => { const p = { ref: b.ref, offset: off, count: b.count }; off += b.count; return p; }); };
+  if (!defs || !defs.length) return concat();
+  const offsets = []; let acc = 0;
+  for (const d of defs) { offsets.push(acc); acc += d.count; }
+  const placed = [];
+  for (const b of boards) { const bi = defs.findIndex((d) => d.name === b.name); if (bi >= 0) placed.push({ ref: b.ref, offset: offsets[bi], count: defs[bi].count }); }
+  return placed.length ? placed : concat();
+}
+
+// Each connected board → its global flower offset (start index of its matched bouquet).
+function boardPlacements() {
+  const boards = conns.filter((c) => c.cmdChars.length).map((c) => ({ name: boardBouquetName(c), count: c.cmdChars.length, ref: c }));
+  return resolvePlacements(boards, bouquetDefs).map((p) => ({ conn: p.ref, offset: p.offset, count: p.count }));
+}
+
+// Global-flower-indexed array of command characteristics (null where no board is live),
+// so callers can address flower `gi` to the right board no matter the connect order.
+function globalChars() {
+  if (!bouquetDefs.length) return allCmdChars();
+  const arr = new Array(totalLayoutFlowers()).fill(null);
+  for (const { conn: c, offset, count } of boardPlacements()) {
+    const n = Math.min(count, c.cmdChars.length);
+    for (let i = 0; i < n; i += 1) arr[offset + i] = c.cmdChars[i];
+  }
+  return arr;
+}
+
+// Boolean per global flower index: is a live board behind it? (Viz connection badges.)
+export function getLiveFlowers() {
+  if (testMode) return new Array(testFlowerCount).fill(true);
+  return globalChars().map((ch) => !!ch);
+}
+
 // Discover and return the flower command + frame characteristics for one server.
 async function discoverChars(server) {
   const service = await server.getPrimaryService(SERVICE_UUID);
@@ -108,7 +178,10 @@ export function isConnected() {
 // the reported layout total so every flower shows as connected.
 export function getFlowerCount() {
   if (testMode) return testFlowerCount;
-  return realConnected() ? allCmdChars().length : 0;
+  if (!realConnected()) return 0;
+  // With a known layout, the engine addresses ALL flowers (offline bouquets stay dark);
+  // each board is routed to its own bouquet's slots regardless of connect order.
+  return bouquetDefs.length ? totalLayoutFlowers() : allCmdChars().length;
 }
 
 // Number of physically connected ESP32 boards (bouquets). Drives the "Add ESP32"
@@ -184,6 +257,13 @@ export async function connectFlowers() {
   const { cmdChars, frameChar } = await discoverChars(server);
   conn.cmdChars = cmdChars;
   conn.frameChar = frameChar;
+
+  // Remember this board's placement by its advertised name (if it matches a bouquet),
+  // so future reconnects in any order map it back to the same bouquet automatically.
+  if (device.id && device.name && !boardSlots[device.id] && bouquetDefs.some((d) => d.name === device.name)) {
+    boardSlots[device.id] = device.name;
+    persistSlots();
+  }
 
   // eslint-disable-next-line no-console
   console.log('[flowerBle] connected to', device.name, '| flowers:', cmdChars.length, '| total boards:', getDeviceCount());
@@ -267,9 +347,10 @@ export function sendReactive(command) {
 export function sendReactivePerFlower(cmds) {
   if (_reactiveBusy || !isConnected()) return false;
   _reactiveBusy = true;
-  const chars = allCmdChars();
+  const chars = globalChars();
   (async () => {
     for (let i = 0; i < chars.length; i += 1) {
+      if (!chars[i]) continue; // no live board at this global flower index
       const cmd = cmds[i] || cmds[cmds.length - 1];
       if (!cmd) continue;
       const packets = splitIntoPackets(JSON.stringify(cmd));
@@ -308,12 +389,10 @@ function hexToRgb(hex) {
 // address boards identically.
 function frameWritesForBoards(frames) {
   const writes = [];
-  let offset = 0;
-  for (const c of conns) {
-    const n = c.cmdChars.length;
-    if (!n || !c.frameChar) { offset += n; continue; }
+  for (const { conn: c, offset, count } of boardPlacements()) {
+    const n = Math.min(count, c.cmdChars.length);
+    if (!n || !c.frameChar) continue;
     const slice = frames.slice(offset, offset + n);
-    offset += n;
     const bytes = new Uint8Array(slice.length * 4);
     for (let i = 0; i < slice.length; i += 1) {
       const f = slice[i] || {};
@@ -353,7 +432,7 @@ async function writeCmdToChar(char, cmd, withResponse = false) {
 // roughly when the board has acked it — i.e. ~one BLE round-trip. Returns null if that
 // flower has no real channel (e.g. test mode).
 export function flashFlower(index, ms = 280) {
-  const char = allCmdChars()[index];
+  const char = globalChars()[index];
   if (!isConnected() || !char) return null;
   const p = writeCmdToChar(char, { co: '#ffffff', br: '100' }, true);
   setTimeout(() => {
@@ -395,8 +474,9 @@ export async function identifyFlowers(colors) {
     await Promise.all(frameWritesForBoards(frames)).catch(() => {});
   } else {
     // No binary frame char: stop motion + set each flower's solid color over JSON.
-    const chars = allCmdChars();
+    const chars = globalChars();
     for (let i = 0; i < chars.length; i += 1) {
+      if (!chars[i]) continue;
       const p = perFlower[i] || { color: '#000000', brightness: 0 };
       // eslint-disable-next-line no-await-in-loop
       await writeCmdToChar(chars[i], { mo: [], br: String(p.brightness), co: p.color }, true);
