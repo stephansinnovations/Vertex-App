@@ -19,6 +19,7 @@ import FloatingVertexButton from '@/components/FloatingVertexButton';
 import FloatingRoomsButton from '@/components/FloatingRoomsButton';
 import FloatingSettingsButton from '@/components/FloatingSettingsButton';
 import { JarvisAmbientProvider } from '@/lib/JarvisAmbient';
+import ScreenTracker from '@/components/ScreenTracker';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import GlobalErrorReporter from '@/components/GlobalErrorReporter';
 import WorkOrderPage from './pages/WorkOrderPage';
@@ -159,6 +160,7 @@ function App() {
                 <Router>
                   <JarvisAmbientProvider>
                     <NavigationTracker />
+                    <ScreenTracker />
                     <AuthenticatedApp />
                     <FloatingVertexButton />
                     <FloatingRoomsButton />
