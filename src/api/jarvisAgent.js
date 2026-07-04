@@ -141,3 +141,19 @@ export async function approveAgentCommand({ id, password, deny }) {
     body: JSON.stringify(deny ? { id, deny: true } : { id, password }),
   });
 }
+
+// One-tap "Make it live": ask the agent to merge a finished jarvis/* preview
+// branch into main and push — Vercel then deploys it. Throws with the server's
+// reason on failure (merge conflict, mid-build, etc.).
+export async function deployBranch(branch) {
+  const { url, secret } = getAgentConfig();
+  if (!url || !secret) throw new Error('Jarvis Build is not connected.');
+  const res = await fetch(`${url}/deploy`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${secret}` },
+    body: JSON.stringify({ branch }),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `Deploy failed (${res.status})`);
+  return body;
+}

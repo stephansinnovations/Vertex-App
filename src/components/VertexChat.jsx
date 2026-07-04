@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, ImagePlus, AudioLines, PhoneOff, Hammer, ExternalLink } from 'lucide-react';
 import JarvisBuild, { ApprovalModal } from '@/components/JarvisBuild';
-import { runAgentTask, approveAgentCommand, isAgentConfigured, REPO_WEB } from '@/api/jarvisAgent';
+import { runAgentTask, approveAgentCommand, isAgentConfigured, deployBranch, REPO_WEB } from '@/api/jarvisAgent';
 import { localClient } from '@/api/localDb';
 import { supabase } from '@/api/supabaseClient';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
@@ -126,6 +126,15 @@ export const TOOLS = [
     input_schema: { type: 'object', required: ['agent_name'], properties: { agent_name: { type: 'string' }, limit: { type: 'number' } } },
   },
   {
+    name: 'make_live',
+    description: "Merge a finished jarvis/* preview branch into main so it deploys to the live app. Use when the user approves a build going live (e.g. 'yes, make it live'). The branch name comes from the build_app result.",
+    input_schema: {
+      type: 'object',
+      required: ['branch'],
+      properties: { branch: { type: 'string', description: 'The jarvis/* preview branch to deploy' } },
+    },
+  },
+  {
     name: 'build_app',
     description: "Build, change, fix, or add to THIS app's own code, then deploy it. Use whenever the user wants a new feature, a UI change, a bug fix, or any modification to how the app itself works (not data inside it). You and the build engine are the same Jarvis — hand it a complete, specific instruction and its work streams into this chat. Don't say you can't code; use this.",
     input_schema: {
@@ -188,6 +197,14 @@ export async function execTool(name, input, { formResolve, navigate }) {
         rows = match ? rows.filter(a => a.room_id === match.id) : [];
       }
       return rows.map(a => ({ name: a.name, emoji: a.emoji, description: a.description, prompt: (a.prompt || '').slice(0, 600) }));
+    }
+    case 'make_live': {
+      try {
+        await deployBranch(input.branch);
+        return { deployed: true, note: 'Merged to main — Vercel is deploying it now (~1 min).' };
+      } catch (e) {
+        return { error: e?.message || 'Deploy failed' };
+      }
     }
     case 'get_conversation': {
       const { data: { user } } = await supabase.auth.getUser();
@@ -310,6 +327,7 @@ function ToolCallChip({ toolName }) {
     list_rooms: 'Checking your rooms',
     list_agents: 'Checking your agents',
     get_conversation: 'Reading the conversation',
+    make_live: 'Deploying to live',
     build_app: 'Building',
   };
   return (
@@ -354,20 +372,52 @@ function ActionCard({ data, navigate, onClose }) {
 
 // Result card for a coding/deploy task run by the Jarvis Agent.
 function DeployCard({ m }) {
+  const [deployState, setDeployState] = useState('idle'); // idle|deploying|live|error
+  const [deployErr, setDeployErr] = useState('');
+
+  const makeLive = async () => {
+    setDeployState('deploying');
+    try {
+      await deployBranch(m.branch);
+      setDeployState('live');
+    } catch (e) {
+      setDeployErr(e?.message || 'Deploy failed');
+      setDeployState('error');
+    }
+  };
+
   return (
     <div className="flex justify-start">
       <div className="rounded-2xl rounded-tl-sm p-4 max-w-[88%] space-y-2 border"
         style={{ background: 'var(--vx-surface)', borderColor: 'var(--vx-border)' }}>
         <div className="flex items-center gap-2">
           <span className="text-lg">🚀</span>
-          <span className="text-xs font-medium" style={{ color: 'var(--vx-text2)' }}>{m.changed ? 'Built & deployed' : 'Done'}</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--vx-text2)' }}>{m.changed ? 'Build finished' : 'Done'}</span>
         </div>
         {m.text && <p className="text-sm whitespace-pre-wrap" style={{ color: 'var(--vx-text)' }}>{m.text}</p>}
         {m.changed && m.branch && m.branch !== 'main' && (
-          <a href={`${REPO_WEB}/tree/${m.branch}`} target="_blank" rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--vx-accent)' }}>
-            <ExternalLink className="w-3.5 h-3.5" /> Preview: {m.branch} (Vercel is building it)
-          </a>
+          <>
+            {deployState === 'idle' && (
+              <button onClick={makeLive}
+                className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold transition-opacity hover:opacity-85"
+                style={{ background: 'var(--vx-accent)', color: 'var(--vx-accent-fg)' }}>
+                Make it live
+              </button>
+            )}
+            {deployState === 'deploying' && (
+              <p className="text-xs animate-pulse" style={{ color: 'var(--vx-accent)' }}>Merging & deploying…</p>
+            )}
+            {deployState === 'live' && (
+              <p className="text-xs font-semibold" style={{ color: '#34d399' }}>✓ Live — Vercel is deploying it now (~1 min).</p>
+            )}
+            {deployState === 'error' && (
+              <p className="text-xs" style={{ color: '#f87171' }}>{deployErr}</p>
+            )}
+            <a href={`${REPO_WEB}/tree/${m.branch}`} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs" style={{ color: 'var(--vx-text2)' }}>
+              <ExternalLink className="w-3.5 h-3.5" /> {m.branch}
+            </a>
+          </>
         )}
         {m.changed && m.branch === 'main' && <p className="text-xs" style={{ color: 'var(--vx-accent)' }}>Pushed to main — deploying live.</p>}
       </div>
@@ -624,7 +674,7 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildT
 
     const voiceSystem = buildVoiceSystemPrompt(systemPrompt);
     // Voice can build + recall everything Stephan made; nothing UI-bound (no forms).
-    const voiceToolNames = new Set(['build_app', 'list_rooms', 'list_agents', 'get_conversation']);
+    const voiceToolNames = new Set(['build_app', 'make_live', 'list_rooms', 'list_agents', 'get_conversation']);
     const voiceTools = TOOLS.filter(t => voiceToolNames.has(t.name));
     let voice = pickVoice();
     const onVoices = () => { voice = pickVoice(); };
@@ -970,7 +1020,7 @@ export default function VertexChat({ isOpen, onClose }) {
       }
       add({ type: 'deploy', branch: result.branch, changed: result.changed, text: result.summary || (result.changed ? 'Done.' : 'No changes were needed.') });
       return result.changed
-        ? `Build complete. ${result.summary} Pushed to ${result.branch === 'main' ? 'main (deploying live)' : `preview branch ${result.branch}`}.`
+        ? `Build complete. ${result.summary} Pushed to ${result.branch === 'main' ? 'main (deploying live)' : `preview branch ${result.branch}. Ask Stephan if he wants it live; if he says yes, call make_live with that branch`}.`
         : `No code changes were needed. ${result.summary}`;
     } catch (e) {
       const msg = `Build failed: ${e?.message || e}`;

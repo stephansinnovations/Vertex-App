@@ -77,7 +77,7 @@ export function JarvisAmbientProvider({ children }) {
     while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
 
     const voiceSystem = buildVoiceSystemPrompt(buildSystemPrompt(AMBIENT_CTX, 'direct'));
-    const names = new Set(['build_app', 'list_rooms', 'list_agents', 'get_conversation', 'navigate_to']);
+    const names = new Set(['build_app', 'make_live', 'list_rooms', 'list_agents', 'get_conversation', 'navigate_to']);
     const voiceTools = TOOLS.filter(t => names.has(t.name));
 
     let voice = pickVoice();
@@ -143,7 +143,7 @@ export function JarvisAmbientProvider({ children }) {
         }
         commitDisplay({ type: 'deploy', branch: result.branch, changed: result.changed, text: result.summary || 'Done.' });
         return result.changed
-          ? `Build complete. Pushed to ${result.branch === 'main' ? 'main, deploying live' : 'a preview branch — check the chat for the link'}. ${result.summary?.slice(0, 300) || ''}`
+          ? `Build complete. Pushed to ${result.branch === 'main' ? 'main, deploying live' : `preview branch ${result.branch}. Ask Stephan if he wants it live; if he says yes, call make_live with that branch`}. ${result.summary?.slice(0, 300) || ''}`
           : `No code changes were needed. ${result.summary?.slice(0, 300) || ''}`;
       } catch (e) {
         commitDisplay({ type: 'ai', text: `Build failed: ${e?.message || e}`, isError: true });
