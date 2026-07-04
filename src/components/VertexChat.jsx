@@ -16,7 +16,7 @@ import vertexLogo from '@/assets/Vertex-logo.webp';
 
 // ── System prompt ────────────────────────────────────────────────────────────
 
-function buildSystemPrompt(contextKey, personality) {
+export function buildSystemPrompt(contextKey, personality) {
   const tone = {
     direct:         'Be brief, direct, and action-oriented. No filler.',
     conversational: 'Be warm, friendly, and natural.',
@@ -46,7 +46,7 @@ For lists, be brief. Lead with the most relevant item.`;
 
 // Wraps the normal prompt with voice-conversation rules: short, spoken-friendly,
 // no markdown. Used by the live Voice Mode (speech in, speech out).
-function buildVoiceSystemPrompt(base) {
+export function buildVoiceSystemPrompt(base) {
   return `${base}
 
 You are in a live VOICE conversation — the user is speaking to you and your reply is read aloud. Keep answers short and natural for the ear: usually one to three sentences. Plain spoken language only — no markdown, no bullet lists, no headings, no emoji, no code blocks. If something genuinely needs detail, give the gist and offer to go deeper. Be warm, quick, and direct.`;
@@ -54,7 +54,7 @@ You are in a live VOICE conversation — the user is speaking to you and your re
 
 // ── Tools ────────────────────────────────────────────────────────────────────
 
-const TOOLS = [
+export const TOOLS = [
   {
     name: 'list_sops',
     description: 'List SOPs, optionally filtered by department.',
@@ -140,7 +140,7 @@ const TOOLS = [
 
 // ── Tool executor ────────────────────────────────────────────────────────────
 
-async function execTool(name, input, { formResolve, navigate }) {
+export async function execTool(name, input, { formResolve, navigate }) {
   switch (name) {
     case 'list_sops': {
       const all = await localClient.entities.SOP.filter(input.group ? { group: input.group } : {});
@@ -210,7 +210,7 @@ async function execTool(name, input, { formResolve, navigate }) {
 // Cache API key in memory so we don't hit Supabase on every message
 let _cachedAnthropicKey = null;
 
-async function callClaude(messages, systemPrompt, tools, model = 'claude-haiku-4-5') {
+export async function callClaude(messages, systemPrompt, tools, model = 'claude-haiku-4-5') {
   const isLocalhost = window.location.hostname === 'localhost';
   const url = isLocalhost
     ? '/api/claude/v1/messages'
@@ -567,7 +567,7 @@ function SettingsPanel({ onClose, contextKey }) {
 const SpeechRecognitionImpl =
   typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
 
-function pickVoice() {
+export function pickVoice() {
   const synth = window.speechSynthesis;
   if (!synth) return null;
   const voices = synth.getVoices() || [];

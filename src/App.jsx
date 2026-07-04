@@ -16,7 +16,9 @@ import { VertexChatProvider, useVertexChat } from '@/lib/VertexChatContext';
 import VertexChat from '@/components/VertexChat';
 import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
+import FloatingRoomsButton from '@/components/FloatingRoomsButton';
 import FloatingSettingsButton from '@/components/FloatingSettingsButton';
+import { JarvisAmbientProvider } from '@/lib/JarvisAmbient';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import GlobalErrorReporter from '@/components/GlobalErrorReporter';
 import WorkOrderPage from './pages/WorkOrderPage';
@@ -155,11 +157,14 @@ function App() {
             <ShortcutProvider>
               <QueryClientProvider client={queryClientInstance}>
                 <Router>
-                  <NavigationTracker />
-                  <AuthenticatedApp />
-                  <FloatingVertexButton />
-                  <FloatingSettingsButton />
-                  <GlobalVertexChat />
+                  <JarvisAmbientProvider>
+                    <NavigationTracker />
+                    <AuthenticatedApp />
+                    <FloatingVertexButton />
+                    <FloatingRoomsButton />
+                    <FloatingSettingsButton />
+                    <GlobalVertexChat />
+                  </JarvisAmbientProvider>
                 </Router>
                 <Toaster />
                 <GlobalErrorReporter />
