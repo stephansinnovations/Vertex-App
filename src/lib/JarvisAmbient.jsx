@@ -58,6 +58,9 @@ export function JarvisAmbientProvider({ children }) {
     if (!enabled) { setStatus('off'); return; }
     let active = true;
     if (!SR) { setStatus('unsupported'); return; }
+    // Ambient owns the mic — tell JarvisInterrupt's voice listener to stand down
+    // so two recognizers never fight over the same audio.
+    window.__jarvisVoiceModeActive = true;
 
     // Seed conversation from the shared history (text-only, merged, user-first).
     const toText = (c) => typeof c === 'string' ? c
@@ -134,6 +137,10 @@ export function JarvisAmbientProvider({ children }) {
           },
         });
         agentSessionRef.current = result.sessionId || agentSessionRef.current;
+        if (result.stopped) {
+          commitDisplay({ type: 'buildstep', text: '⏹ Coding stopped.' });
+          return 'The build was stopped before finishing.';
+        }
         commitDisplay({ type: 'deploy', branch: result.branch, changed: result.changed, text: result.summary || 'Done.' });
         return result.changed
           ? `Build complete. Pushed to ${result.branch === 'main' ? 'main, deploying live' : 'a preview branch — check the chat for the link'}. ${result.summary?.slice(0, 300) || ''}`
@@ -229,6 +236,7 @@ export function JarvisAmbientProvider({ children }) {
 
     return () => {
       active = false;
+      window.__jarvisVoiceModeActive = false;
       clearTimeout(bootT);
       clearTimeout(silenceTimer);
       try { rec && rec.abort(); } catch { /* gone */ }
