@@ -5,6 +5,8 @@
 // Config (URL + secret) lives in localStorage per device. The secret grants code
 // execution, so it never goes near shared storage.
 
+import { supabase } from '@/api/supabaseClient';
+
 const LS_URL = 'jarvis_agent_url';
 const LS_SECRET = 'jarvis_agent_secret';
 export const REPO_WEB = 'https://github.com/stephansinnovations/Vertex-App';
@@ -13,6 +15,19 @@ const clean = (u) => (u || '').replace(/\/+$/, '');
 
 export function getAgentConfig() {
   return { url: clean(localStorage.getItem(LS_URL)), secret: localStorage.getItem(LS_SECRET) || '' };
+}
+
+// The tunnel's URL changes whenever it restarts, so the agent publishes its
+// current one to shared_state (key 'jarvis_agent') and we prefer that. Falls
+// back to whatever was last saved locally. Only the URL lives in shared
+// storage — the secret stays on this device.
+async function resolveAgentUrl() {
+  try {
+    const { data } = await supabase.from('shared_state').select('value').eq('key', 'jarvis_agent').maybeSingle();
+    const url = clean(data?.value?.url || '');
+    if (url) { localStorage.setItem(LS_URL, url); return url; }
+  } catch { /* offline / table missing — use the cached one */ }
+  return clean(localStorage.getItem(LS_URL));
 }
 export function setAgentConfig(url, secret) {
   localStorage.setItem(LS_URL, clean(url));
@@ -57,7 +72,8 @@ export async function cancelAgentTask() {
   for (const ctrl of [...activeTasks]) { try { ctrl.abort(); } catch { /* ignore */ } }
   activeTasks.clear();
   emitActivity();
-  const { url, secret } = getAgentConfig();
+  const { secret } = getAgentConfig();
+  const url = await resolveAgentUrl();
   if (url && secret) {
     // Fire-and-forget — don't block the UI, and don't surface a 404 if the
     // backend predates the /stop route (the client-side abort already halted us).
@@ -74,7 +90,8 @@ export async function cancelAgentTask() {
 // Resolves with the final { summary, branch, changed, sessionId, stopped }.
 // `stopped` is true when the user interrupted it via cancelAgentTask().
 export async function runAgentTask({ prompt, sessionId, onEvent }) {
-  const { url, secret } = getAgentConfig();
+  const { secret } = getAgentConfig();
+  const url = await resolveAgentUrl();
   if (!url || !secret) throw new Error("Jarvis Build isn't connected yet — open Build and add the agent URL + secret.");
 
   const ctrl = new AbortController();
@@ -134,7 +151,8 @@ export async function runAgentTask({ prompt, sessionId, onEvent }) {
 }
 
 export async function approveAgentCommand({ id, password, deny }) {
-  const { url, secret } = getAgentConfig();
+  const { secret } = getAgentConfig();
+  const url = await resolveAgentUrl();
   await fetch(`${url}/approve`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${secret}` },
@@ -146,7 +164,8 @@ export async function approveAgentCommand({ id, password, deny }) {
 // branch into main and push — Vercel then deploys it. Throws with the server's
 // reason on failure (merge conflict, mid-build, etc.).
 export async function deployBranch(branch) {
-  const { url, secret } = getAgentConfig();
+  const { secret } = getAgentConfig();
+  const url = await resolveAgentUrl();
   if (!url || !secret) throw new Error('Jarvis Build is not connected.');
   const res = await fetch(`${url}/deploy`, {
     method: 'POST',
