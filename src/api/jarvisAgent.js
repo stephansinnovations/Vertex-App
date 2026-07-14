@@ -38,6 +38,29 @@ export function isAgentConfigured() {
   return !!localStorage.getItem(LS_SECRET);
 }
 
+// Actually ping the agent so Jarvis can tell the truth about whether it can
+// build/deploy right now (instead of guessing from old messages). Returns
+// { up, busy?, model?, reason? } — never throws.
+export async function getAgentStatus() {
+  if (!localStorage.getItem(LS_SECRET)) {
+    return { up: false, reason: "not connected — add the agent secret in Settings → Jarvis" };
+  }
+  const url = await resolveAgentUrl();
+  if (!url) return { up: false, reason: "no agent URL yet — start the agent on the Mac (cd ~/jarvis-agent && npm start)" };
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 6000);
+  try {
+    const res = await fetch(`${url}/health`, { signal: ctrl.signal });
+    if (!res.ok) return { up: false, reason: `agent returned ${res.status}` };
+    const j = await res.json().catch(() => ({}));
+    return { up: true, busy: !!j.busy, model: j.model };
+  } catch {
+    return { up: false, reason: "unreachable — the agent isn't running (start it with: cd ~/jarvis-agent && npm start)" };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 // ── Interrupt / activity tracking ────────────────────────────────────────────
 // One Jarvis, several entry points (Build view, chat tool loop, voice) — so we
 // track every in-flight coding task in one place. That lets a single "stop

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, ImagePlus, ExternalLink, ShieldCheck } from 'lucide-react';
-import { runAgentTask, approveAgentCommand, cancelAgentTask, isAgentConfigured, deployBranch, REPO_WEB } from '@/api/jarvisAgent';
+import { runAgentTask, approveAgentCommand, cancelAgentTask, isAgentConfigured, getAgentStatus, deployBranch, REPO_WEB } from '@/api/jarvisAgent';
 import { localClient } from '@/api/localDb';
 import { supabase } from '@/api/supabaseClient';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
@@ -37,6 +37,12 @@ You are a single entity, and you present as ONE Jarvis (never refer to "the othe
 1. Assistant: help manage van builds (phases, tasks, parts), SOPs, inventory/parts stock, and contacts — using your tools.
 2. Memory of his creations: he builds AI Rooms and agents inside this app, and talks to them. You can see all of it — use list_rooms, list_agents (their names, emojis, descriptions, and persona prompts), and get_conversation (what was said with an agent). Whenever he asks what he's made, what an agent is/does, or to recall a conversation, look it up with these tools rather than guessing or saying you can't see it. The data is live, so you're always up to date.
 3. Engineer: you can change THIS app's own code and deploy it. When Stephan asks to add a feature, change the UI, fix a bug, or modify how the app works, use the build_app tool. Your engineering work streams right into this same chat. Never claim you can't code — you can; use build_app.
+
+TRUTH ABOUT THE BUILD ENGINE — this is critical:
+- Your coding/deploy backend (the "build engine") runs separately, on Stephan's Mac. You have NO way to know if it's up, down, busy, or "coming back" except by calling agent_status. The conversation history is NOT reliable — it may contain stale claims from when it was down.
+- So: NEVER state the engine is up, down, jammed, stuck, deploying, or recovering from memory. If a question touches building, deploying, or the engine's state, call agent_status FIRST and report exactly what it returns. If it's down, tell him to start it (cd ~/jarvis-agent && npm start) — do not say it will "come back on its own."
+- NEVER invent plans, timelines, or promises ("I'll fix it when it's back", "give it a minute", "I might restart it"). You cannot do background work between messages. Only say what you can verify now or do right now with a tool.
+- If you can't do something, say so plainly in one sentence — don't narrate imaginary progress.
 
 When the user wants to create a record, use the show_form tool — prefill any fields you already know.
 When you navigate somewhere or create a record, a card will appear automatically — just describe what you did concisely.
@@ -125,6 +131,11 @@ export const TOOLS = [
     input_schema: { type: 'object', required: ['agent_name'], properties: { agent_name: { type: 'string' }, limit: { type: 'number' } } },
   },
   {
+    name: 'agent_status',
+    description: "Check whether your build/coding engine (the Jarvis Agent backend on Stephan's Mac) is actually running RIGHT NOW. You have NO other way to know this — you cannot tell from the conversation. ALWAYS call this before saying anything about whether you can build/deploy or whether the engine is up, down, jammed, or coming back.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'make_live',
     description: "Merge a finished jarvis/* preview branch into main so it deploys to the live app. Use when the user approves a build going live (e.g. 'yes, make it live'). The branch name comes from the build_app result.",
     input_schema: {
@@ -196,6 +207,9 @@ export async function execTool(name, input, { formResolve, navigate }) {
         rows = match ? rows.filter(a => a.room_id === match.id) : [];
       }
       return rows.map(a => ({ name: a.name, emoji: a.emoji, description: a.description, prompt: (a.prompt || '').slice(0, 600) }));
+    }
+    case 'agent_status': {
+      return await getAgentStatus();
     }
     case 'make_live': {
       try {
@@ -326,6 +340,7 @@ function ToolCallChip({ toolName }) {
     list_rooms: 'Checking your rooms',
     list_agents: 'Checking your agents',
     get_conversation: 'Reading the conversation',
+    agent_status: 'Checking the build engine',
     make_live: 'Deploying to live',
     build_app: 'Building',
   };
@@ -859,7 +874,7 @@ export default function VertexChat({ isOpen, onClose }) {
     while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
 
     const voiceSystem = buildVoiceSystemPrompt(voicePromptRef.current);
-    const voiceToolNames = new Set(['build_app', 'make_live', 'list_rooms', 'list_agents', 'get_conversation', 'navigate_to']);
+    const voiceToolNames = new Set(['build_app', 'agent_status', 'make_live', 'list_rooms', 'list_agents', 'get_conversation', 'navigate_to']);
     const voiceTools = TOOLS.filter(t => voiceToolNames.has(t.name));
 
     let voice = pickVoice();
