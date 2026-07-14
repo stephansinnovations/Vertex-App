@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { OctagonX, CheckCircle2 } from 'lucide-react';
 import { subscribeAgentActivity, cancelAgentTask } from '@/api/jarvisAgent';
+import { useVertexChat } from '@/lib/VertexChatContext';
 
 // Global "stop coding" control. Always mounted; shows itself only while Jarvis is
 // actually running a build (any entry point — Build view, chat tool loop, voice),
@@ -18,6 +19,11 @@ const SpeechRecognitionImpl =
 const STOP_PHRASES = ['stop coding', 'cancel build'];
 
 export default function JarvisInterrupt() {
+  const { voiceStatus } = useVertexChat();
+  // When the Jarvis sheet's voice engine owns the mic, we must NOT run a second
+  // recognizer (Chrome allows one per page → they'd abort each other). This is
+  // REACTIVE (a dep below), so if voice turns on mid-build we tear our mic down.
+  const voiceLive = !['off', 'blocked', 'unsupported'].includes(voiceStatus);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false); // showing "Coding stopped"
   const [voiceArmed, setVoiceArmed] = useState(false);  // mic actively listening
@@ -37,7 +43,8 @@ export default function JarvisInterrupt() {
   // the mic, to avoid two recognizers fighting over the same audio).
   useEffect(() => {
     if (!busy || !SpeechRecognitionImpl) return;
-    if (typeof window !== 'undefined' && window.__jarvisVoiceModeActive) return;
+    // Stand down while the Jarvis voice engine owns the mic (reactive via deps).
+    if (voiceLive || (typeof window !== 'undefined' && window.__jarvisVoiceModeActive)) return;
 
     let active = true;
     const rec = new SpeechRecognitionImpl();
@@ -62,7 +69,7 @@ export default function JarvisInterrupt() {
       setVoiceArmed(false);
       try { rec.abort(); } catch { /* ignore */ }
     };
-  }, [busy, handleStop]);
+  }, [busy, voiceLive, handleStop]);
 
   if (confirming) {
     return (

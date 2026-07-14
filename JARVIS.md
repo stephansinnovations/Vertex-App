@@ -14,58 +14,58 @@ Van-build shop management app. React + Vite, deploys to Vercel on push to `main`
 - Finish with a short plain-English summary + what to check.
 - Keep style consistent with the existing glass / dark-zinc + blur aesthetic.
 
-## How things are wired
-- **Entry:** `src/App.jsx`. Providers nest: ErrorBoundary → Theme → Background →
-  VertexChat → Auth → Shortcut → QueryClient → Router → **JarvisAmbientProvider**.
-  Inside: `NavigationTracker`, `ScreenTracker`, `AuthenticatedApp` (the `<Routes>`),
-  `FloatingVertexButton`, `FloatingRoomsButton`, `FloatingSettingsButton`,
-  `GlobalVertexChat`, `JarvisInterrupt`.
-- **Routing:** all routes are declared explicitly in `App.jsx`. `pages.config.js` is
-  auto-generated (only `mainPage` editable). No Layout wrapper — global UI must be a
-  component rendered in `App.jsx`.
-- **Auth:** `useAuth()` from `@/lib/AuthContext` → `{ isAuthenticated, isAdmin, … }`.
-- **Chat/agents:** `useVertexChat()` from `@/lib/VertexChatContext`; `open(prompt, name,
-  emoji, entity)` launches a chat; `entityMode` switches EntityChat/VertexChat.
-- **Rooms:** `/AIRoom?room=<id>`; rooms in Supabase `ai_rooms`, agents in `ai_agents`.
+## ONE JARVIS (unified 2026-07-12)
+There is exactly one Jarvis surface. The floating orb is the one button:
+- **Tap the orb** → the chat sheet opens LISTENING (voice hot). Tap again → dismissed.
+  Saying "goodbye" also dismisses. **Long-press** → opens quiet (no mic).
+- **Parts Library exception:** tap = scan-a-part (`vertex:scan-part` event);
+  long-press = Jarvis listening.
+- **The sheet** (`src/components/VertexChat.jsx`) is everything: typed + spoken turns in
+  one transcript, build progress streamed inline, DeployCard with **Make it live**,
+  ApprovalModal (password gate), Settings panel. No separate Build view, no full-screen
+  voice mode, no ambient strip — those were deleted (JarvisBuild.jsx, JarvisAmbient.jsx).
+- **Voice engine** lives inside VertexChat: one persistent SpeechRecognition
+  (continuous, 1.1s-silence send), TTS replies for spoken turns only, states
+  off|listening|thinking|speaking|building|blocked|unsupported. Sets
+  `window.__jarvisVoiceModeActive` while live (JarvisInterrupt reads it to stand down).
+  Voice tools: build_app, make_live, list_rooms, list_agents, get_conversation,
+  navigate_to (no forms by voice).
+- **Context plumbing** (`src/lib/VertexChatContext.jsx`): `open(prompt, name, emoji,
+  entity, listen)` — 5th arg opens listening; `voiceWanted`/`setVoiceWanted` (the sheet's
+  mic button toggles it), `voiceStatus`/`setVoiceStatus` (engine reports; the orb pulses
+  cyan with it: speaking 0.7s, listening 1.6s, building 1.1s).
+- **Agent connection setup** moved to Settings → Jarvis (fields `jarvis_agent_secret` +
+  `jarvis_agent_url`, localStorage-backed via `local: true`). The URL auto-discovers from
+  Supabase `shared_state` key `jarvis_agent` (the agent publishes its tunnel URL);
+  `isAgentConfigured()` = secret present.
 
-## The "Jarvis" coding-agent feature (build-the-app-from-inside-the-app)
-- **API layer:** `src/api/jarvisAgent.js` — talks to the backend agent (`~/jarvis-agent`
-  on Stephan's Mac via Cloudflare tunnel). Config per-device in localStorage
-  (`jarvis_agent_url`, `jarvis_agent_secret`).
-  - `runAgentTask({prompt, sessionId, onEvent})` → POST `/jarvis`, streams SSE
-    (`status`/`say`/`tool`/`approval`/`done`/`error`) → `{summary, branch, changed,
-    sessionId, stopped}`.
-  - `approveAgentCommand({id, password, deny})` → POST `/approve` (risky commands need
-    the password override; shared `ApprovalModal`).
-  - **Interrupt:** `cancelAgentTask()` aborts in-flight tasks (AbortController +
-    best-effort POST `/stop`); `subscribeAgentActivity(cb)` / `isAgentBusy()` report
-    build state; `stopped: true` on interruption.
-- **Entry points, one engine:**
-  1. `src/components/JarvisBuild.jsx` — full-screen Build view (z-[60]); exports `ApprovalModal` (z-[80]).
-  2. `src/components/VertexChat.jsx` — conversational Jarvis; `build_app` tool streams builds
-     into the chat. Exports the shared brain: `callClaude`, `TOOLS`, `execTool`,
-     `buildSystemPrompt`, `buildVoiceSystemPrompt`, `pickVoice`.
-  3. **Voice Mode** (inside VertexChat) — full-screen listen→Claude→speak loop; sets
-     `window.__jarvisVoiceModeActive` while it owns the mic.
-  4. **Ambient Jarvis** (`src/lib/JarvisAmbient.jsx`) — the floating orb toggles an
-     always-listening voice entity app-wide (cyan orb + caption strip, no takeover);
-     shares the 'home' chat history; speaks build milestones only.
-- **Global interrupt UI:** `src/components/JarvisInterrupt.jsx` — red "Stop coding"
-  button (z-[70]) only while a build runs + voice phrases "stop coding"/"cancel build"
-  (stands down while Voice Mode owns the mic).
+## The coding engine (build-the-app-from-inside-the-app)
+- **API layer:** `src/api/jarvisAgent.js` — talks to `~/jarvis-agent` on Stephan's Mac
+  (Cloudflare tunnel). `runAgentTask` streams SSE (status/say/tool/approval/done/error) →
+  `{summary, branch, changed, sessionId, stopped}`; `approveAgentCommand`;
+  `deployBranch(branch)` = one-tap Make-it-live (merge jarvis/* → main → Vercel);
+  `cancelAgentTask()` aborts + POST /stop; `subscribeAgentActivity` drives JarvisInterrupt.
+- Builds land on `jarvis/*` preview branches; the DeployCard's **Make it live** button
+  (or the make_live tool by voice) merges to main.
+- **Global interrupt:** `src/components/JarvisInterrupt.jsx` — red "Stop coding" button
+  while a build runs + voice phrases "stop coding"/"cancel build".
 
-## Floating / global UI positions (avoid collisions)
-- **Vertex orb** (`FloatingVertexButton`): bottom-center, z-30. Tap = toggle ambient
-  Jarvis; long-press = chat; on /PartsLibrary tap = scan-a-part.
-- **Rooms shortcut** (`FloatingRoomsButton`): bottom-right, z-30, admin-only.
-- **Settings gear** (`FloatingSettingsButton`): draggable, default top-right, z-40.
-- **Screen tracker** (`ScreenTracker`): top-left glass pill, z-40, pointer-events-none.
-  Breadcrumb `Page › Room › Agent` (room from `ai_rooms` when `?room=`; agent when chat open).
-- **Ambient caption strip:** fixed, bottom≈96, z-40.
-- Z ladder: orb/rooms 30 · gear/tracker/strip 40 · chat 50 · Build/Voice 60 · interrupt 70 · approval 80.
+## Global UI / mounts (`src/App.jsx`, inside Router)
+NavigationTracker · ScreenTracker (top-left breadcrumb `Page › Room › Agent`) ·
+AuthenticatedApp · FloatingVertexButton (the orb, bottom-center z-30) ·
+FloatingRoomsButton · FloatingSettingsButton · GlobalVertexChat (entityMode ?
+EntityChat : VertexChat) · JarvisInterrupt.
+Z ladder: orb/rooms 30 · gear/tracker 40 · sheet 50 · interrupt 70 · approval 80.
+
+## Histories
+- localStorage `vxd_<ctx>`/`vxa_<ctx>` via `src/lib/vertexChatStorage.js` — ctx from
+  getContextKey() ('home', 'builds', 'build_<id>', …) or `agent_<name>`. Voice and text
+  share the same ctx history (one transcript).
+- Supabase `chat_history` — EntityChat (room agents from AIRoom) + the get_conversation tool.
 
 ## Decisions / notes
-- Two `SpeechRecognition` instances must never share the mic — coordinate via
+- Two SpeechRecognition instances must never share the mic — coordinate via
   `window.__jarvisVoiceModeActive`.
-- The backend agent's `/stop` route is best-effort from the client; the client-side abort
-  halts the stream regardless.
+- Spoken replies only for spoken turns; typed turns answer silently.
+- VertexChat still exports callClaude/TOOLS/execTool/buildSystemPrompt/
+  buildVoiceSystemPrompt/pickVoice for reuse.

@@ -7,6 +7,10 @@ const Ctx = createContext({
   agentEmoji: null,
   model: 'claude-haiku-4-5',
   setModel: () => {},
+  voiceWanted: false,
+  setVoiceWanted: () => {},
+  voiceStatus: 'off',
+  setVoiceStatus: () => {},
   open: () => {},
   close: () => {},
 });
@@ -25,11 +29,19 @@ export function VertexChatProvider({ children }) {
 
   const [entityMode, setEntityMode] = useState(false);
 
-  const open = (prompt = null, name = null, emoji = null, entity = false) => {
+  // One Jarvis: the sheet can open "listening" (voiceWanted) — the orb's default.
+  // voiceStatus is reported back by the sheet's voice engine so the floating orb
+  // can pulse with Jarvis's live state (off|listening|thinking|speaking|building|
+  // blocked|unsupported).
+  const [voiceWanted, setVoiceWanted] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState('off');
+
+  const open = (prompt = null, name = null, emoji = null, entity = false, listen = false) => {
     setAgentPrompt(prompt);
     setAgentName(name);
     setAgentEmoji(emoji);
     setEntityMode(entity);
+    setVoiceWanted(listen && !entity);
     setIsOpen(true);
   };
 
@@ -38,10 +50,16 @@ export function VertexChatProvider({ children }) {
     setAgentPrompt(null);
     setAgentName(null);
     setAgentEmoji(null);
+    setVoiceWanted(false);
   };
 
   return (
-    <Ctx.Provider value={{ isOpen, agentPrompt, agentName, agentEmoji, entityMode, model, setModel: handleSetModel, open, close }}>
+    <Ctx.Provider value={{
+      isOpen, agentPrompt, agentName, agentEmoji, entityMode,
+      model, setModel: handleSetModel,
+      voiceWanted, setVoiceWanted, voiceStatus, setVoiceStatus,
+      open, close,
+    }}>
       {children}
     </Ctx.Provider>
   );

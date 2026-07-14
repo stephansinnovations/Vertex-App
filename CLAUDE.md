@@ -41,6 +41,14 @@ Van-build shop management app. React + Vite. Deploys to Vercel on push to `main`
   `/api/claude/v1/messages` (forwards `anthropic-beta`). **Gemini** for parts vision +
   web lookup (`api/geminiParts.js`), called **direct from the browser** with `geminiApiKey`
   from Settings (no proxy). Keys live in Settings (`app_settings`), readable by all members.
+- **Jarvis = ONE surface** (see `JARVIS.md` for the full map): the floating orb tap-opens
+  the chat sheet listening (voice engine inside `VertexChat.jsx`; tap again/"goodbye"
+  dismisses; long-press = quiet; Parts page tap stays scan). Coding runs through
+  `api/jarvisAgent.js` → the `~/jarvis-agent` server (tunnel URL auto-discovered from
+  `shared_state` key `jarvis_agent`); builds land on `jarvis/*` preview branches with a
+  one-tap **Make it live** (or the `make_live` tool). Agent secret lives in
+  Settings → Jarvis (localStorage). `window.__jarvisVoiceModeActive` guards the mic
+  between the sheet's engine and `JarvisInterrupt`.
 - **Backgrounds:** `BackgroundContext` applies a CSS/image background to `document.body`,
   library + active choice persisted in localStorage.
 - **Parts Library UI** (`pages/PartsLibrary.jsx`) is a single Amazon-style "store" theme:

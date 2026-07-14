@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus, Bug } from 'lucide-react';
+import { ArrowLeft, Key, Link2, Check, X, Edit2, ExternalLink, Lightbulb, ChevronRight, Image as ImageIcon, Plus, Bug, Bot } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getSetting, setSetting } from '@/api/appSettings';
 import { useBackground, backgroundStyle } from '@/lib/BackgroundContext';
@@ -38,7 +38,28 @@ const SHEET_LINKS = [
   },
 ];
 
-const ALL_FIELDS = [...API_KEYS, ...SHEET_LINKS];
+// Jarvis coding-engine connection. Stored per-device in localStorage (the
+// secret grants code execution on Stephan's Mac, so it never goes in Supabase).
+// The URL is normally auto-discovered from shared_state; this is the fallback.
+const JARVIS_FIELDS = [
+  {
+    key: 'jarvis_agent_secret',
+    label: 'Agent Secret',
+    placeholder: 'JARVIS_SECRET from ~/jarvis-agent/.env',
+    secret: true,
+    local: true,
+    hint: "lets Jarvis edit & deploy this app — start the agent with npm start in ~/jarvis-agent",
+  },
+  {
+    key: 'jarvis_agent_url',
+    label: 'Agent URL',
+    placeholder: 'auto-discovered when the agent is running',
+    local: true,
+    hint: 'usually fills itself in — the agent publishes its tunnel URL',
+  },
+];
+
+const ALL_FIELDS = [...API_KEYS, ...SHEET_LINKS, ...JARVIS_FIELDS];
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -236,6 +257,20 @@ export default function Settings() {
               style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
             >
               {SHEET_LINKS.map((f, i) => renderField(f, i === SHEET_LINKS.length - 1))}
+            </div>
+          </div>
+
+          {/* Jarvis — coding-engine connection */}
+          <div>
+            <div className="flex items-center gap-2 mb-3 px-1">
+              <Bot className="w-4 h-4 text-gray-400" />
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Jarvis</h2>
+            </div>
+            <div
+              className="w-full rounded-2xl overflow-hidden border border-zinc-800 bg-zinc-900/40"
+              style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.6)' }}
+            >
+              {JARVIS_FIELDS.map((f, i) => renderField(f, i === JARVIS_FIELDS.length - 1))}
             </div>
           </div>
 

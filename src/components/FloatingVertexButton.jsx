@@ -1,19 +1,16 @@
 import React, { useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useVertexChat } from '@/lib/VertexChatContext';
-import { useJarvisAmbient } from '@/lib/JarvisAmbient';
 import { motion } from 'framer-motion';
 import { Camera } from 'lucide-react';
 
 const LONG_PRESS_MS = 500;
 
-// The floating orb IS Jarvis: tap toggles ambient voice (cyan + pulsing while
-// she's live), long-press opens the chat sheet. On the Parts Library the tap
-// stays the scan-a-part trigger (long-press = chat there too; enable Jarvis
-// from any other page).
+// The floating orb IS Jarvis — the one button. Tap: open Jarvis listening (tap
+// again to dismiss). Long-press: open quiet (no mic). On the Parts Library the
+// tap stays the scan-a-part shortcut and long-press opens Jarvis listening.
 export default function FloatingVertexButton() {
-  const { open } = useVertexChat();
-  const { enabled, status, toggle } = useJarvisAmbient();
+  const { isOpen, open, close, voiceWanted, voiceStatus } = useVertexChat();
   const { pathname } = useLocation();
 
   const timerRef = useRef(null);
@@ -24,13 +21,19 @@ export default function FloatingVertexButton() {
 
   const isPartsLibrary = pathname === '/PartsLibrary';
 
+  const openListening = () => open(null, null, null, false, true);
+  const toggleJarvis = () => { if (isOpen) close(); else openListening(); };
+
   const startPress = () => {
     firedRef.current = false;
     setPressing(true);
     timerRef.current = setTimeout(() => {
       firedRef.current = true;
       setPressing(false);
-      open();
+      // Long-press: on Parts, Jarvis listening (tap is taken by scan);
+      // elsewhere, open quiet — voice stays off until the mic button.
+      if (isPartsLibrary) openListening();
+      else if (!isOpen) open();
     }, LONG_PRESS_MS);
   };
 
@@ -41,7 +44,7 @@ export default function FloatingVertexButton() {
       // Dispatch synchronously so the file/camera input opens within this user
       // gesture (browsers require that for programmatic input.click()).
       if (isPartsLibrary) window.dispatchEvent(new CustomEvent('vertex:scan-part'));
-      else toggle();
+      else toggleJarvis();
     }
     firedRef.current = false;
   };
@@ -52,10 +55,10 @@ export default function FloatingVertexButton() {
     firedRef.current = false;
   };
 
-  // Purple when idle; cyan while Jarvis is live. Pulse speed follows her state.
-  const live = enabled;
+  // Purple when idle; cyan while Jarvis is live. Pulse speed follows his state.
+  const live = isOpen && voiceWanted && !['off', 'blocked', 'unsupported'].includes(voiceStatus);
   const glowColor = live ? 'rgba(56,189,248,' : 'rgba(139,92,246,';
-  const pulseDur = status === 'speaking' ? 0.7 : status === 'listening' ? 1.6 : 3;
+  const pulseDur = voiceStatus === 'speaking' ? 0.7 : voiceStatus === 'listening' ? 1.6 : voiceStatus === 'building' ? 1.1 : 3;
 
   return (
     <button
@@ -65,6 +68,7 @@ export default function FloatingVertexButton() {
       onContextMenu={e => e.preventDefault()}
       className="fixed bottom-6 left-1/2 z-30 select-none"
       style={{ transform: `translateX(-50%) scale(${pressing ? 0.88 : 1})`, transition: 'transform 0.15s ease' }}
+      aria-label={live ? 'Dismiss Jarvis' : 'Talk to Jarvis'}
     >
       <div className="relative flex items-center justify-center">
         {/* Outer pulsing glow */}

@@ -1,6 +1,6 @@
-// Shared client for the Jarvis Agent backend (~/jarvis-agent). Used by both the
-// dedicated Build view (JarvisBuild) and the conversational/voice Jarvis (via the
-// build_app tool) so coding tasks all flow through one place — one Jarvis.
+// Client for the Jarvis Agent backend (~/jarvis-agent) — the engine that lets
+// Jarvis edit and deploy this app. All coding tasks flow through here (the
+// build_app tool in the one Jarvis chat), by voice or text.
 //
 // Config (URL + secret) lives in localStorage per device. The secret grants code
 // execution, so it never goes near shared storage.
@@ -34,8 +34,8 @@ export function setAgentConfig(url, secret) {
   localStorage.setItem(LS_SECRET, secret);
 }
 export function isAgentConfigured() {
-  const c = getAgentConfig();
-  return !!(c.url && c.secret);
+  // The URL auto-discovers from shared_state; the secret is the real gate.
+  return !!localStorage.getItem(LS_SECRET);
 }
 
 // ── Interrupt / activity tracking ────────────────────────────────────────────

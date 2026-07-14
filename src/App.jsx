@@ -18,7 +18,6 @@ import EntityChat from '@/components/EntityChat';
 import FloatingVertexButton from '@/components/FloatingVertexButton';
 import FloatingRoomsButton from '@/components/FloatingRoomsButton';
 import FloatingSettingsButton from '@/components/FloatingSettingsButton';
-import { JarvisAmbientProvider } from '@/lib/JarvisAmbient';
 import ScreenTracker from '@/components/ScreenTracker';
 import JarvisInterrupt from '@/components/JarvisInterrupt';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -159,16 +158,14 @@ function App() {
             <ShortcutProvider>
               <QueryClientProvider client={queryClientInstance}>
                 <Router>
-                  <JarvisAmbientProvider>
-                    <NavigationTracker />
-                    <ScreenTracker />
-                    <AuthenticatedApp />
-                    <FloatingVertexButton />
-                    <FloatingRoomsButton />
-                    <FloatingSettingsButton />
-                    <GlobalVertexChat />
-                    <JarvisInterrupt />
-                  </JarvisAmbientProvider>
+                  <NavigationTracker />
+                  <ScreenTracker />
+                  <AuthenticatedApp />
+                  <FloatingVertexButton />
+                  <FloatingRoomsButton />
+                  <FloatingSettingsButton />
+                  <GlobalVertexChat />
+                  <JarvisInterrupt />
                 </Router>
                 <Toaster />
                 <GlobalErrorReporter />

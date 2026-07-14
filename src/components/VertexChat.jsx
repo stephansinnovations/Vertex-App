@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, ImagePlus, AudioLines, PhoneOff, Hammer, ExternalLink } from 'lucide-react';
-import JarvisBuild, { ApprovalModal } from '@/components/JarvisBuild';
-import { runAgentTask, approveAgentCommand, isAgentConfigured, deployBranch, REPO_WEB } from '@/api/jarvisAgent';
+import { X, Settings, Mic, MicOff, Send, Trash2, ChevronRight, Check, ImagePlus, ExternalLink, ShieldCheck } from 'lucide-react';
+import { runAgentTask, approveAgentCommand, cancelAgentTask, isAgentConfigured, deployBranch, REPO_WEB } from '@/api/jarvisAgent';
 import { localClient } from '@/api/localDb';
 import { supabase } from '@/api/supabaseClient';
 import { useTheme, THEMES, PERSONALITIES } from '@/lib/ThemeContext';
@@ -609,10 +608,7 @@ function SettingsPanel({ onClose, contextKey }) {
   );
 }
 
-// ── Voice Mode ───────────────────────────────────────────────────────────────
-// Hands-free spoken conversation: Web Speech recognition (listen) → Claude →
-// speech synthesis (Jarvis talks back) → listen again. Shares the chat's history
-// via `seedApi` (snapshot at open) and writes each turn back through `onTurn`.
+// ── Speech utilities ─────────────────────────────────────────────────────────
 
 const SpeechRecognitionImpl =
   typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
@@ -631,256 +627,34 @@ export function pickVoice() {
   return voices.find(v => /^en[-_]/i.test(v.lang)) || voices[0];
 }
 
-function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildTask, onClose }) {
-  const [status, setStatus] = useState('connecting'); // connecting|listening|thinking|speaking|unsupported|blocked
-  const [transcript, setTranscript] = useState('');    // what the user is saying now
-  const [lastReply, setLastReply] = useState('');      // Jarvis's latest spoken line
+const VOICE_STATUS_LABEL = {
+  listening: 'listening…',
+  thinking: 'thinking…',
+  speaking: 'speaking…',
+  building: 'building…',
+  blocked: 'microphone blocked',
+  unsupported: 'voice needs Chrome',
+};
 
-  // Latest props for the long-lived loop without re-running the effect.
-  const onTurnRef = useRef(onTurn); onTurnRef.current = onTurn;
-  const onBuildRef = useRef(onBuildTask); onBuildRef.current = onBuildTask;
-  const modelRef = useRef(model);   modelRef.current = model;
+// ── Approval modal (password gate for risky agent commands) ──────────────────
 
-  // The whole conversation loop lives in one effect with stable local closures —
-  // ONE persistent recognizer (continuous), so there's no start/stop race.
-  useEffect(() => {
-    let active = true;
-    // Tell the global interrupt listener that Voice Mode owns the mic, so it
-    // won't start a second recognizer on the same audio.
-    if (typeof window !== 'undefined') window.__jarvisVoiceModeActive = true;
-    const SR = SpeechRecognitionImpl;
-    if (!SR) {
-      setStatus('unsupported');
-      if (typeof window !== 'undefined') window.__jarvisVoiceModeActive = false;
-      return;
-    }
-
-    // Seed from chat history, but flatten to plain text and drop tool_use /
-    // tool_result blocks — sending those without a `tools` definition 400s. Also
-    // merge consecutive same-role turns and ensure we start with a user turn.
-    const toText = (c) => typeof c === 'string'
-      ? c
-      : Array.isArray(c) ? c.filter(b => b.type === 'text').map(b => b.text).join(' ').trim() : '';
-    const workingApi = [];
-    for (const m of (seedApi || [])) {
-      if (m.role !== 'user' && m.role !== 'assistant') continue;
-      const text = toText(m.content);
-      if (!text) continue;
-      const last = workingApi[workingApi.length - 1];
-      if (last && last.role === m.role) last.content += `\n${text}`;
-      else workingApi.push({ role: m.role, content: text });
-    }
-    while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
-
-    const voiceSystem = buildVoiceSystemPrompt(systemPrompt);
-    // Voice can build + recall everything Stephan made; nothing UI-bound (no forms).
-    const voiceToolNames = new Set(['build_app', 'make_live', 'list_rooms', 'list_agents', 'get_conversation']);
-    const voiceTools = TOOLS.filter(t => voiceToolNames.has(t.name));
-    let voice = pickVoice();
-    const onVoices = () => { voice = pickVoice(); };
-    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = onVoices;
-
-    let mode = 'idle';   // idle|listening|thinking|speaking|blocked
-    let rec = null;
-    let pending = '';    // finalized speech awaiting send
-    let interimTxt = ''; // in-flight (not yet final) speech
-    let silenceTimer = null;
-
-    async function handleUtterance(text) {
-      mode = 'thinking';
-      if (active) { setStatus('thinking'); setTranscript(text); }
-      clearTimeout(silenceTimer);
-      try { rec && rec.stop(); } catch {} // pause the mic while we think + speak
-      workingApi.push({ role: 'user', content: text });
-      try {
-        // Loop so a spoken request can trigger a build (build_app tool), then
-        // speak the result — the build's progress streams into the shared chat.
-        for (let guard = 0; guard < 6; guard++) {
-          const resp = await callClaude(workingApi, voiceSystem, voiceTools, modelRef.current);
-          if (resp.stop_reason === 'tool_use') {
-            workingApi.push({ role: 'assistant', content: resp.content });
-            const results = [];
-            for (const b of resp.content.filter(x => x.type === 'tool_use')) {
-              if (b.name === 'build_app' && onBuildRef.current) {
-                if (active) { setStatus('thinking'); setLastReply(`Building: ${b.input.task}`); }
-                const summary = await onBuildRef.current(b.input.task);
-                results.push({ type: 'tool_result', tool_use_id: b.id, content: summary });
-              } else {
-                const out = await execTool(b.name, b.input, {});
-                results.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(out) });
-              }
-            }
-            workingApi.push({ role: 'user', content: results });
-            continue;
-          }
-          const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
-            || "Sorry, I didn't catch that — could you say it again?";
-          workingApi.push({ role: 'assistant', content: reply });
-          onTurnRef.current?.(text, reply);
-          if (active) speak(reply);
-          break;
-        }
-      } catch (err) {
-        const detail = err?.message || 'unknown error';
-        const spoken = /api key/i.test(detail)
-          ? "I need an Anthropic API key set in the app's Settings before I can answer."
-          : "Something went wrong reaching the server. Check the connection and try again.";
-        // Show the raw error on screen (not spoken) so failures are diagnosable.
-        if (active) { setLastReply(`${spoken}\n\n${detail}`); speak(spoken); }
-      }
-    }
-
-    function trySend() {
-      const text = `${pending} ${interimTxt}`.trim();
-      if (text && mode === 'listening') { pending = ''; interimTxt = ''; handleUtterance(text); }
-    }
-
-    function ensureRec() {
-      if (rec) return rec;
-      rec = new SR();
-      rec.lang = 'en-US';
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.onresult = (e) => {
-        let interim = '', finalChunk = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript;
-          if (e.results[i].isFinal) finalChunk += t; else interim += t;
-        }
-        if (finalChunk) pending = `${pending} ${finalChunk}`.trim();
-        interimTxt = interim;
-        if (active) setTranscript(`${pending} ${interim}`.trim());
-        // Send once the user pauses (~1.1s with no new words).
-        clearTimeout(silenceTimer);
-        silenceTimer = setTimeout(trySend, 1100);
-      };
-      rec.onerror = (e) => {
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          mode = 'blocked';
-          if (active) setStatus('blocked');
-        }
-        // no-speech / aborted / network → onend recovers
-      };
-      rec.onend = () => {
-        if (active && mode === 'listening') { try { rec.start(); } catch {} }
-      };
-      return rec;
-    }
-
-    function startListening() {
-      if (!active) return;
-      mode = 'listening';
-      pending = ''; interimTxt = '';
-      if (active) { setStatus('listening'); setTranscript(''); }
-      const r = ensureRec();
-      try { r.start(); } catch {} // throws if already running — harmless
-    }
-
-    function speak(text) {
-      mode = 'speaking';
-      if (active) { setStatus('speaking'); setLastReply(text); }
-      const synth = window.speechSynthesis;
-      if (!synth) { startListening(); return; }
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      if (voice) u.voice = voice;
-      u.rate = 1.02;
-      let done = false;
-      const finish = () => { if (done) return; done = true; if (active) startListening(); };
-      u.onend = finish;
-      u.onerror = finish;
-      // Chrome sometimes never fires onend — fall back on a length-based timer.
-      setTimeout(finish, Math.min(20000, 1600 + text.length * 60));
-      synth.speak(u);
-    }
-
-    const greeting = `Hey, I'm ${name || 'Jarvis'}. I'm listening — what do you need?`;
-    const bootT = setTimeout(() => { if (active) speak(greeting); }, 350);
-
-    return () => {
-      active = false;
-      if (typeof window !== 'undefined') window.__jarvisVoiceModeActive = false;
-      clearTimeout(bootT);
-      clearTimeout(silenceTimer);
-      try { rec && rec.abort(); } catch {}
-      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {}
-      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const STATUS_LABEL = {
-    connecting: 'Connecting…',
-    listening: 'Listening…',
-    thinking: 'Thinking…',
-    speaking: 'Speaking…',
-    unsupported: 'Voice not supported',
-    blocked: 'Microphone blocked',
-  };
-
-  const orbScale = status === 'speaking' ? [1, 1.18, 1] : status === 'listening' ? [1, 1.08, 1] : 1;
-  const orbDur = status === 'speaking' ? 0.6 : 1.6;
-
+export function ApprovalModal({ pending, password, setPassword, onRespond }) {
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col items-center justify-between py-16 px-6"
-      style={{ background: 'radial-gradient(ellipse at 50% 35%, #0d1a2e 0%, #05070d 70%, #000 100%)' }}>
-      {/* Title */}
-      <div className="flex flex-col items-center gap-1">
-        <p className="text-white/90 text-lg font-semibold tracking-wide">{name || 'Jarvis'}</p>
-        <p className="text-sky-300/70 text-sm">{STATUS_LABEL[status]}</p>
+    <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center bg-black/70 p-4">
+      <div className="w-full max-w-md rounded-2xl border border-amber-400/30 bg-zinc-900 p-5 space-y-4">
+        <div className="flex items-center gap-2 text-amber-300">
+          <ShieldCheck className="w-5 h-5" />
+          <p className="font-semibold text-sm">Jarvis needs approval to run this</p>
+        </div>
+        <pre className="text-xs text-amber-100 bg-black/50 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap break-words">{pending.command}</pre>
+        <input value={password} onChange={e => setPassword(e.target.value)} type="password" autoFocus
+          onKeyDown={e => { if (e.key === 'Enter') onRespond(true); }} placeholder="Override password"
+          className="w-full bg-black/40 border border-white/15 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-amber-400" />
+        <div className="flex gap-2">
+          <button onClick={() => onRespond(true)} disabled={!password} className="flex-1 bg-amber-500 text-black font-semibold py-2.5 rounded-xl disabled:opacity-40">Allow once</button>
+          <button onClick={() => onRespond(false)} className="px-5 py-2.5 rounded-xl border border-white/15 text-white/80">Deny</button>
+        </div>
       </div>
-
-      {/* Orb */}
-      <div className="relative flex items-center justify-center" style={{ width: 220, height: 220 }}>
-        <motion.div
-          className="absolute rounded-full pointer-events-none"
-          animate={{ opacity: status === 'thinking' ? [0.3, 0.6, 0.3] : [0.35, 0.7, 0.35], scale: [1, 1.3, 1] }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ width: 220, height: 220, background: 'radial-gradient(circle, rgba(56,189,248,0.55), transparent 70%)', filter: 'blur(24px)' }}
-        />
-        <motion.div
-          animate={{ scale: orbScale }}
-          transition={{ duration: orbDur, repeat: Infinity, ease: 'easeInOut' }}
-          className="rounded-full flex items-center justify-center relative"
-          style={{
-            width: 150, height: 150,
-            background: 'radial-gradient(circle at 35% 28%, rgba(186,230,253,0.95), rgba(2,132,199,0.95))',
-            boxShadow: '0 0 60px rgba(56,189,248,0.7), inset 0 3px 0 rgba(255,255,255,0.6), inset 0 -3px 8px rgba(3,70,120,0.55)',
-            border: '1px solid rgba(186,230,253,0.4)',
-          }}>
-          <span style={{ fontSize: 56 }}>{emoji || '🤖'}</span>
-        </motion.div>
-      </div>
-
-      {/* Captions */}
-      <div className="w-full max-w-md min-h-[96px] flex flex-col items-center justify-end gap-3 text-center">
-        {status === 'unsupported' ? (
-          <p className="text-white/60 text-sm leading-relaxed">
-            Live voice needs the Web Speech API — open the app in Chrome (desktop or Android) to talk to {name || 'Jarvis'}.
-            You can still type in the chat.
-          </p>
-        ) : status === 'blocked' ? (
-          <p className="text-white/70 text-sm leading-relaxed">
-            Your browser blocked the microphone. Click the camera/mic icon in the address bar, choose
-            “Always allow”, then close and reopen voice.
-          </p>
-        ) : (
-          <>
-            {lastReply && <p className="text-white/85 text-base leading-snug whitespace-pre-line">{lastReply}</p>}
-            {transcript && <p className="text-sky-300/80 text-sm italic">“{transcript}”</p>}
-          </>
-        )}
-      </div>
-
-      {/* End call */}
-      <button
-        onClick={onClose}
-        aria-label="End voice session"
-        className="w-16 h-16 rounded-full flex items-center justify-center active:scale-90 transition-transform"
-        style={{ background: '#dc2626', boxShadow: '0 8px 24px rgba(220,38,38,0.5)' }}
-      >
-        <PhoneOff className="w-7 h-7 text-white" />
-      </button>
     </div>
   );
 }
@@ -890,16 +664,24 @@ function VoiceMode({ name, emoji, systemPrompt, model, seedApi, onTurn, onBuildT
 export default function VertexChat({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { personality } = useTheme();
-  const { agentPrompt, agentName, agentEmoji, model, setModel } = useVertexChat();
+  const {
+    agentPrompt, agentName, agentEmoji, model, setModel,
+    voiceWanted, setVoiceWanted, voiceStatus, setVoiceStatus,
+  } = useVertexChat();
 
-  const contextKey = agentPrompt ? `agent_${agentName}` : getContextKey();
+  const liveContextKey = agentPrompt ? `agent_${agentName}` : getContextKey();
+  // While a voice session is live it FREEZES the context to the one it started
+  // in, so navigating (by voice or hand) mid-conversation can't tear the engine
+  // down, swap the transcript, or reset Jarvis's memory. Cleared when voice ends.
+  const [voiceCtx, setVoiceCtx] = useState(null);
+  const contextKey = voiceCtx || liveContextKey;
   const contextLabel = agentName || getContextLabel(contextKey);
   const greeting = agentName ? `Hey! I'm ${agentName} ${agentEmoji || ''}` : getContextGreeting(contextKey);
 
   const [displayMsgs, setDisplayMsgs] = useState(() => loadDisplay(contextKey));
   const [apiMsgs, setApiMsgs] = useState(() => loadApi(contextKey));
 
-  // Reload messages when switching agents
+  // Reload messages when switching agents / pages
   const prevContextKey = React.useRef(contextKey);
   React.useEffect(() => {
     if (prevContextKey.current !== contextKey) {
@@ -911,20 +693,17 @@ export default function VertexChat({ isOpen, onClose }) {
   }, [contextKey]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [pendingForm, setPendingForm] = useState(null);
   const [pendingImages, setPendingImages] = useState([]); // [{dataUrl, mediaType}]
   const [departments, setDepartments] = useState([]);
-  const [voiceOpen, setVoiceOpen] = useState(false);
-  const [buildOpen, setBuildOpen] = useState(false);
+  const [voiceHeard, setVoiceHeard] = useState('');   // live transcript while listening
   const [pendingApproval, setPendingApproval] = useState(null); // { id, command }
   const [approvalPassword, setApprovalPassword] = useState('');
   const agentSessionRef = useRef(null); // continuity with the coding engine
 
   const bottomRef = useRef(null);
   const textareaRef = useRef(null);
-  const recognitionRef = useRef(null);
   const formResolveRef = useRef(null);
 
   // A proxy object so execTool can call setPendingForm
@@ -996,7 +775,7 @@ export default function VertexChat({ isOpen, onClose }) {
       return next;
     }));
     if (!isAgentConfigured()) {
-      const msg = "Build isn't connected yet. Tap the hammer icon to add your agent URL + secret, then ask me again.";
+      const msg = "Build isn't connected yet. Add your agent secret in Settings → Jarvis (and start the agent on the Mac), then ask me again.";
       add({ type: 'ai', text: msg, isError: true });
       return msg;
     }
@@ -1009,7 +788,10 @@ export default function VertexChat({ isOpen, onClose }) {
           if (ev.kind === 'status') add({ type: 'buildstep', text: ev.text });
           else if (ev.kind === 'say') add({ type: 'ai', text: ev.text });
           else if (ev.kind === 'tool') add({ type: 'buildstep', text: `🔧 ${ev.input ? `${ev.name} · ${ev.input}` : ev.name}`, mono: true });
-          else if (ev.kind === 'approval') setPendingApproval({ id: ev.id, command: ev.command });
+          else if (ev.kind === 'approval') {
+            setPendingApproval({ id: ev.id, command: ev.command });
+            voiceHooksRef.current?.onApproval?.();
+          }
           else if (ev.kind === 'error') add({ type: 'ai', text: ev.text, isError: true });
         },
       });
@@ -1034,7 +816,229 @@ export default function VertexChat({ isOpen, onClose }) {
     setPendingApproval(null); setApprovalPassword('');
     if (!a) return;
     try { await approveAgentCommand(approve ? { id: a.id, password: pw } : { id: a.id, deny: true }); } catch { /* stream surfaces it */ }
+    // Un-wedge the voice session that paused itself to show the prompt.
+    voiceHooksRef.current?.resumeListening?.();
   }, [pendingApproval, approvalPassword]);
+
+  // ── The voice engine — one persistent recognizer, folded into the sheet ─────
+  // Runs while the sheet is open with voice on (orb tap = "open listening").
+  // Spoken turns get spoken replies; typed turns stay silent. Status is reported
+  // up through the context so the floating orb pulses with Jarvis's state.
+  const modelRef = useRef(model); modelRef.current = model;
+  const voicePromptRef = useRef(voiceBasePrompt); voicePromptRef.current = voiceBasePrompt;
+  const commitTurnRef = useRef(commitVoiceTurn); commitTurnRef.current = commitVoiceTurn;
+  const runBuildRef = useRef(runBuildTask); runBuildRef.current = runBuildTask;
+  const navRef = useRef(navigate); navRef.current = navigate;
+  const onCloseRef = useRef(onClose); onCloseRef.current = onClose;
+  const voiceHooksRef = useRef(null); // { onApproval } while the engine is live
+
+  useEffect(() => {
+    if (!isOpen || !voiceWanted) { setVoiceStatus('off'); setVoiceHeard(''); setVoiceCtx(null); return; }
+    if (!SpeechRecognitionImpl) { setVoiceStatus('unsupported'); return; }
+    let active = true;
+    window.__jarvisVoiceModeActive = true;
+    // Freeze the context for this whole session (see contextKey above) so
+    // navigation can't restart the engine or reset the conversation.
+    const sessionCtx = contextKey;
+    setVoiceCtx(sessionCtx);
+
+    // Seed from this chat's history: text-only, merged same-role turns, user-first
+    // (tool_use/tool_result blocks would 400 without matching tool definitions).
+    const toText = (c) => typeof c === 'string'
+      ? c
+      : Array.isArray(c) ? c.filter(b => b.type === 'text').map(b => b.text).join(' ').trim() : '';
+    const workingApi = [];
+    for (const m of loadApi(sessionCtx)) {
+      if (m.role !== 'user' && m.role !== 'assistant') continue;
+      const text = toText(m.content);
+      if (!text) continue;
+      const last = workingApi[workingApi.length - 1];
+      if (last && last.role === m.role) last.content += `\n${text}`;
+      else workingApi.push({ role: m.role, content: text });
+    }
+    while (workingApi.length && workingApi[0].role !== 'user') workingApi.shift();
+
+    const voiceSystem = buildVoiceSystemPrompt(voicePromptRef.current);
+    const voiceToolNames = new Set(['build_app', 'make_live', 'list_rooms', 'list_agents', 'get_conversation', 'navigate_to']);
+    const voiceTools = TOOLS.filter(t => voiceToolNames.has(t.name));
+
+    let voice = pickVoice();
+    const onVoices = () => { voice = pickVoice(); };
+    if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = onVoices;
+
+    let mode = 'idle';   // idle|listening|thinking|speaking|building|blocked
+    let rec = null;
+    let pending = '';    // finalized speech awaiting send
+    let interimTxt = ''; // in-flight (not yet final) speech
+    let silenceTimer = null;
+
+    const setStat = (s) => { if (active) setVoiceStatus(s); };
+
+    function speak(text, resume = true) {
+      mode = 'speaking';
+      setStat('speaking');
+      const synth = window.speechSynthesis;
+      if (!synth) { if (resume) startListening(); return; }
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice;
+      u.rate = 1.02;
+      let done = false;
+      const started = Date.now();
+      const finish = () => {
+        if (done) return;
+        // Never open the mic while Jarvis is still talking (else he transcribes
+        // himself and answers himself). Poll until synth stops, with a hard cap
+        // so a stuck onend can't wedge us permanently.
+        if (resume && synth.speaking && Date.now() - started < 22000) { setTimeout(finish, 250); return; }
+        done = true;
+        if (active && resume) startListening();
+      };
+      u.onend = finish;
+      u.onerror = finish;
+      // Chrome sometimes never fires onend — length-based fallback kicks off the poll.
+      setTimeout(finish, Math.min(18000, 1400 + text.length * 55));
+      synth.speak(u);
+    }
+
+    voiceHooksRef.current = {
+      // A risky command needs the on-screen password. Stop the mic and speak the
+      // prompt without auto-resuming; respondApproval calls resumeListening after.
+      onApproval: () => {
+        if (!active) return;
+        try { rec && rec.stop(); } catch { /* not running */ }
+        mode = 'speaking';
+        speak('I need your password to approve a command — it is on screen.', false);
+      },
+      resumeListening: () => { if (active) startListening(); },
+    };
+
+    async function handleUtterance(text) {
+      const norm = text.toLowerCase().replace(/[^a-z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+      // Spoken dismiss — same as tapping the orb again.
+      if (/^(goodbye|bye|go away|dismiss|close)( jarvis)?$/.test(norm)) {
+        speak('Bye.', false);
+        setTimeout(() => { if (active) onCloseRef.current?.(); }, 700);
+        return;
+      }
+      // Spoken stop for a running build.
+      if (/^(stop coding|cancel build|stop building|stop the build)$/.test(norm)) {
+        cancelAgentTask();
+        speak('Stopped.');
+        return;
+      }
+      mode = 'thinking';
+      setStat('thinking');
+      if (active) setVoiceHeard(text);
+      clearTimeout(silenceTimer);
+      try { rec && rec.stop(); } catch { /* not running */ } // pause the mic while we think + speak
+      workingApi.push({ role: 'user', content: text });
+      try {
+        // Loop so a spoken request can run tools (incl. builds) before replying.
+        for (let guard = 0; guard < 6; guard++) {
+          const resp = await callClaude(workingApi, voiceSystem, voiceTools, modelRef.current);
+          if (!active) return; // dismissed while thinking — don't act on the result
+          if (resp.stop_reason === 'tool_use') {
+            workingApi.push({ role: 'assistant', content: resp.content });
+            const results = [];
+            for (const b of resp.content.filter(x => x.type === 'tool_use')) {
+              if (!active) return; // never START a tool (deploy/build) after dismiss
+              if (b.name === 'build_app') {
+                mode = 'building';
+                setStat('building');
+                speak("On it — I'll tell you when it's done.", false);
+                const summary = await runBuildRef.current(b.input.task);
+                results.push({ type: 'tool_result', tool_use_id: b.id, content: summary });
+              } else {
+                const out = await execTool(b.name, b.input, { navigate: navRef.current });
+                results.push({ type: 'tool_result', tool_use_id: b.id, content: JSON.stringify(out) });
+              }
+            }
+            workingApi.push({ role: 'user', content: results });
+            continue;
+          }
+          const reply = resp.content.filter(b => b.type === 'text').map(b => b.text).join('').trim()
+            || "Sorry, I didn't catch that — could you say it again?";
+          workingApi.push({ role: 'assistant', content: reply });
+          commitTurnRef.current?.(text, reply);
+          if (active) { setVoiceHeard(''); speak(reply); }
+          break;
+        }
+      } catch (err) {
+        if (!active) return;
+        const detail = err?.message || 'unknown error';
+        const spoken = /api key/i.test(detail)
+          ? "I need an Anthropic API key set in the app's Settings before I can answer."
+          : 'Something went wrong reaching the server.';
+        commitTurnRef.current?.(text, `${spoken}\n\n${detail}`);
+        setVoiceHeard(''); speak(spoken);
+      }
+    }
+
+    function trySend() {
+      const text = `${pending} ${interimTxt}`.trim();
+      if (text && mode === 'listening') { pending = ''; interimTxt = ''; handleUtterance(text); }
+    }
+
+    function ensureRec() {
+      if (rec) return rec;
+      rec = new SpeechRecognitionImpl();
+      rec.lang = 'en-US';
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.onresult = (e) => {
+        let interim = '', finalChunk = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const t = e.results[i][0].transcript;
+          if (e.results[i].isFinal) finalChunk += t; else interim += t;
+        }
+        if (finalChunk) pending = `${pending} ${finalChunk}`.trim();
+        interimTxt = interim;
+        if (active) setVoiceHeard(`${pending} ${interim}`.trim());
+        // Send once the user pauses (~1.1s with no new words).
+        clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(trySend, 1100);
+      };
+      rec.onerror = (e) => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+          mode = 'blocked';
+          setStat('blocked');
+        }
+        // no-speech / aborted / network → onend recovers
+      };
+      rec.onend = () => {
+        if (active && mode === 'listening') { try { rec.start(); } catch { /* already running */ } }
+      };
+      return rec;
+    }
+
+    function startListening() {
+      if (!active) return;
+      mode = 'listening';
+      pending = ''; interimTxt = '';
+      setStat('listening');
+      if (active) setVoiceHeard('');
+      const r = ensureRec();
+      try { r.start(); } catch { /* already running — harmless */ }
+    }
+
+    const bootT = setTimeout(() => { if (active) speak("I'm listening."); }, 300);
+
+    return () => {
+      active = false;
+      window.__jarvisVoiceModeActive = false;
+      voiceHooksRef.current = null;
+      clearTimeout(bootT);
+      clearTimeout(silenceTimer);
+      try { rec && rec.abort(); } catch { /* gone */ }
+      try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch { /* gone */ }
+      if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = null;
+      setVoiceStatus('off');
+      setVoiceHeard('');
+      setVoiceCtx(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, voiceWanted]);
 
   // Form submitted
   const handleFormSubmit = async (formData) => {
@@ -1180,29 +1184,21 @@ export default function VertexChat({ isOpen, onClose }) {
     }
   };
 
-  // Voice input
-  const toggleMic = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
-    if (isListening) {
-      recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
-    }
-    const rec = new SR();
-    rec.continuous = true;
-    rec.interimResults = true;
-    rec.onresult = (e) => {
-      const t = Array.from(e.results).map(r => r[0].transcript).join('');
-      setInput(t);
-    };
-    rec.onend = () => setIsListening(false);
-    rec.start();
-    recognitionRef.current = rec;
-    setIsListening(true);
-  };
+  // The mic button toggles the live voice session (the engine above).
+  const voiceLive = voiceWanted && !['off', 'blocked', 'unsupported'].includes(voiceStatus);
 
-  if (!isOpen) return null;
+  // Even with the sheet closed, a build (started before dismiss) can still ask
+  // for the override password — surface the modal so it isn't lost.
+  if (!isOpen) {
+    return pendingApproval ? (
+      <ApprovalModal
+        pending={pendingApproval}
+        password={approvalPassword}
+        setPassword={setApprovalPassword}
+        onRespond={respondApproval}
+      />
+    ) : null;
+  }
 
   return (
     <>
@@ -1226,12 +1222,22 @@ export default function VertexChat({ isOpen, onClose }) {
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-3 border-b flex-shrink-0"
           style={{ borderColor: 'var(--vx-border)' }}>
-          {/* Agent avatar — pulsing presence */}
-          <div className="relative flex-shrink-0">
-            <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden"
+          {/* Live orb — Jarvis's presence; pulses with voice state */}
+          <div className="relative flex-shrink-0 flex items-center justify-center" style={{ width: 40, height: 40 }}>
+            {voiceLive && (
+              <motion.div
+                className="absolute rounded-full pointer-events-none"
+                animate={{ opacity: [0.35, 0.8, 0.35], scale: [1, 1.35, 1] }}
+                transition={{ duration: voiceStatus === 'speaking' ? 0.7 : voiceStatus === 'listening' ? 1.6 : 2.6, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ width: 40, height: 40, background: 'radial-gradient(circle, rgba(56,189,248,0.7), transparent 70%)', filter: 'blur(7px)' }}
+              />
+            )}
+            <div className="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden relative"
               style={{
-                background: agentEmoji ? 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)' : 'transparent',
-                boxShadow: agentEmoji ? '0 0 12px rgba(139,92,246,0.3)' : 'none',
+                background: voiceLive
+                  ? 'radial-gradient(circle at 35% 28%, rgba(186,230,253,0.95), rgba(2,132,199,0.95))'
+                  : agentEmoji ? 'radial-gradient(circle at 35% 35%, #2a2a2a, #111)' : 'transparent',
+                boxShadow: voiceLive ? '0 0 14px rgba(56,189,248,0.8)' : agentEmoji ? '0 0 12px rgba(139,92,246,0.3)' : 'none',
               }}>
               {agentEmoji
                 ? <span className="text-xl">{agentEmoji}</span>
@@ -1239,8 +1245,8 @@ export default function VertexChat({ isOpen, onClose }) {
               }
             </div>
             {/* Live dot */}
-            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-green-400 border-2"
-              style={{ borderColor: 'var(--vx-bg)' }} />
+            <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2"
+              style={{ borderColor: 'var(--vx-bg)', background: voiceLive ? '#38bdf8' : '#4ade80' }} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -1248,8 +1254,10 @@ export default function VertexChat({ isOpen, onClose }) {
                 {agentName || 'Jarvis'}
               </p>
             </div>
-            <p className="text-xs" style={{ color: 'var(--vx-text2)' }}>
-              {loading ? 'typing...' : 'online'}
+            <p className="text-xs" style={{ color: voiceLive ? '#7dd3fc' : 'var(--vx-text2)' }}>
+              {voiceWanted && VOICE_STATUS_LABEL[voiceStatus]
+                ? VOICE_STATUS_LABEL[voiceStatus]
+                : loading ? 'typing...' : 'online'}
             </p>
           </div>
           {/* Model toggle */}
@@ -1264,16 +1272,6 @@ export default function VertexChat({ isOpen, onClose }) {
             title={model === 'claude-haiku-4-5' ? 'Switch to Sonnet (smarter, slower)' : 'Switch to Haiku (faster)'}
           >
             {model === 'claude-haiku-4-5' ? 'Haiku' : 'Sonnet'}
-          </button>
-          <button onClick={() => setBuildOpen(true)} title="Build with Jarvis"
-            className="p-2 rounded-xl hover:opacity-70 transition-opacity"
-            style={{ color: 'var(--vx-accent)' }}>
-            <Hammer className="w-[18px] h-[18px]" />
-          </button>
-          <button onClick={() => setVoiceOpen(true)} title="Talk to Jarvis"
-            className="p-2 rounded-xl hover:opacity-70 transition-opacity"
-            style={{ color: 'var(--vx-accent)' }}>
-            <AudioLines className="w-[18px] h-[18px]" />
           </button>
           <button onClick={() => setShowSettings(v => !v)} className="p-2 rounded-xl hover:opacity-70 transition-opacity"
             style={{ color: 'var(--vx-text2)' }}>
@@ -1330,6 +1328,19 @@ export default function VertexChat({ isOpen, onClose }) {
               ))}
             </div>
           )}
+          {voiceWanted && voiceStatus === 'blocked' && (
+            <p className="text-xs mb-2" style={{ color: '#fca5a5' }}>
+              Microphone blocked — click the mic icon in the address bar, allow it, then toggle voice again.
+            </p>
+          )}
+          {voiceWanted && voiceStatus === 'unsupported' && (
+            <p className="text-xs mb-2" style={{ color: 'var(--vx-text2)' }}>
+              Live voice needs Chrome (desktop or Android). You can still type.
+            </p>
+          )}
+          {voiceLive && voiceHeard && (
+            <p className="text-xs mb-2 italic truncate" style={{ color: '#7dd3fc' }}>“{voiceHeard}”</p>
+          )}
           <div className="flex items-end gap-2">
             {/* Image upload */}
             <input type="file" id="chat-img-upload" accept="image/*" multiple className="hidden"
@@ -1368,14 +1379,15 @@ export default function VertexChat({ isOpen, onClose }) {
                 lineHeight: '1.4',
               }}
             />
-            <button onClick={toggleMic}
-              className={`p-2.5 rounded-2xl transition-all flex-shrink-0 ${isListening ? 'animate-pulse' : ''}`}
+            <button onClick={() => setVoiceWanted(!voiceWanted)}
+              title={voiceWanted ? 'Turn voice off' : 'Talk to Jarvis'}
+              className={`p-2.5 rounded-2xl transition-all flex-shrink-0 ${voiceLive ? 'animate-pulse' : ''}`}
               style={{
-                background: isListening ? 'var(--vx-accent)' : 'var(--vx-surface)',
-                color: isListening ? 'var(--vx-accent-fg)' : 'var(--vx-text2)',
-                border: `1px solid var(--vx-border)`,
+                background: voiceLive ? '#0284c7' : 'var(--vx-surface)',
+                color: voiceLive ? '#e0f2fe' : 'var(--vx-text2)',
+                border: `1px solid ${voiceLive ? '#38bdf8' : 'var(--vx-border)'}`,
               }}>
-              {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+              {voiceWanted ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
             </button>
             <button onClick={() => sendMessage()}
               disabled={loading || (!input.trim() && pendingImages.length === 0)}
@@ -1405,24 +1417,7 @@ export default function VertexChat({ isOpen, onClose }) {
         )}
       </div>
 
-      {/* Jarvis Build — talks to the coding-agent backend */}
-      <JarvisBuild isOpen={buildOpen} onClose={() => setBuildOpen(false)} />
-
-      {/* Voice Mode — full-screen spoken conversation (can also trigger builds) */}
-      {voiceOpen && (
-        <VoiceMode
-          name={agentName || 'Jarvis'}
-          emoji={agentEmoji}
-          systemPrompt={voiceBasePrompt}
-          model={model}
-          seedApi={apiMsgs}
-          onTurn={commitVoiceTurn}
-          onBuildTask={runBuildTask}
-          onClose={() => setVoiceOpen(false)}
-        />
-      )}
-
-      {/* Password approval — top level so it overlays the chat AND voice mode */}
+      {/* Password approval — top level so it overlays everything */}
       {pendingApproval && (
         <ApprovalModal
           pending={pendingApproval}
