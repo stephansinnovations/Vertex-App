@@ -65,6 +65,19 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
 
+// Landing page ("/"): the AI Rooms view is the home screen. Non-admin members can't
+// see Rooms (it's admin-gated and would bounce them back to "/" in a loop), so they
+// fall back to the legacy Home page.
+const HomeLanding = () => {
+  const { isAdmin } = useAuth();
+  if (isAdmin) return <RoomsView />;
+  return (
+    <LayoutWrapper currentPageName={mainPageKey}>
+      <MainPage />
+    </LayoutWrapper>
+  );
+};
+
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isAuthenticated } = useAuth();
   const isLoginPage = window.location.pathname === '/Login';
@@ -87,11 +100,7 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <Routes>
-      <Route path="/" element={
-        <LayoutWrapper currentPageName={mainPageKey}>
-          <MainPage />
-        </LayoutWrapper>
-      } />
+      <Route path="/" element={<HomeLanding />} />
       {Object.entries(Pages).map(([path, Page]) => {
         const page = <Page />;
         return (

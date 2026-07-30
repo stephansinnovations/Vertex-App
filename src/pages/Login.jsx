@@ -58,10 +58,9 @@ export default function Login() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <img src={vertexLogo} alt="Vertex" className="w-16 h-16 object-contain rounded-2xl mb-4"
+          <img src={vertexLogo} alt="Stephan's Innovations" className="w-16 h-16 object-contain rounded-2xl mb-4"
             style={{ filter: 'invert(1) brightness(0.9)' }} />
-          <h1 className="text-2xl font-bold text-white">Vertex App</h1>
-          <p className="text-gray-500 text-sm mt-1">Van Build Shop Management</p>
+          <h1 className="text-2xl font-bold text-white">Stephan's Innovations</h1>
         </div>
 
         {/* Card */}
