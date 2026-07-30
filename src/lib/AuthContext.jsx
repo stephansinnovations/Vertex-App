@@ -33,14 +33,33 @@ export const AuthProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        setIsAuthenticated(true);
-        loadProfile(session.user);
-      }
+    // getSession() reads the stored session and may hit the network to refresh an
+    // expired token. If that hangs (or the stored token is corrupt and it rejects),
+    // we must NOT stay on the loading screen forever — fail open to /Login so the
+    // app is always reachable. onAuthStateChange still promotes us if a session
+    // resolves afterward.
+    let settled = false;
+    const finishAuth = () => {
+      if (settled) return;
+      settled = true;
       setIsLoadingAuth(false);
-    });
+    };
+
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user) {
+          setUser(session.user);
+          setIsAuthenticated(true);
+          loadProfile(session.user);
+        }
+      })
+      .catch((err) => {
+        console.error('getSession failed; continuing to login', err);
+      })
+      .finally(finishAuth);
+
+    // Hard safety net: never let the loading screen outlast the session check.
+    const authTimeout = setTimeout(finishAuth, 8000);
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
@@ -55,7 +74,10 @@ export const AuthProvider = ({ children }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(authTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const isBootstrapAdmin = user?.email?.toLowerCase() === ADMIN_EMAIL;
