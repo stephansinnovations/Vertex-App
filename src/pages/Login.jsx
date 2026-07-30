@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { supabase } from '@/api/supabaseClient';
-import vertexLogo from '@/assets/Vertex-logo.webp';
+import appLogo from '@/assets/logo.png';
 
 export default function Login() {
   const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'reset'
@@ -58,8 +58,7 @@ export default function Login() {
       >
         {/* Logo */}
         <div className="flex flex-col items-center mb-10">
-          <img src={vertexLogo} alt="Stephan's Innovations" className="w-16 h-16 object-contain rounded-2xl mb-4"
-            style={{ filter: 'invert(1) brightness(0.9)' }} />
+          <img src={appLogo} alt="Stephan's Innovations" className="w-16 h-16 object-contain rounded-2xl mb-4" />
           <h1 className="text-2xl font-bold text-white">Stephan's Innovations</h1>
         </div>
 
