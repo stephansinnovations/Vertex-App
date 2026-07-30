@@ -203,7 +203,7 @@ Return ONLY the prompt text, nothing else.`
   // Single tap → open chat or go home
   const handleTap = (agent) => {
     if (agent.is_default) {
-      navigate('/');
+      navigate('/Home');
       return;
     }
     setTappedId(agent.id);
@@ -367,7 +367,7 @@ Return ONLY the prompt text, nothing else.`
                 <motion.div
                   animate={tappedId === 'default' ? { scale: 0.92 } : { scale: [1, 1.05, 1] }}
                   transition={tappedId === 'default' ? {} : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-                  onClick={() => { if (isVertex) navigate('/'); else if (isMusic) navigate('/MusicApp'); }}
+                  onClick={() => { if (isVertex) navigate('/Home'); else if (isMusic) navigate('/MusicApp'); }}
                   className="relative cursor-pointer select-none"
                   style={{ touchAction: 'none' }}
                 >
